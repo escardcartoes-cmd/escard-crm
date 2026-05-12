@@ -22,10 +22,22 @@
   </form>
 </div>
 
+<!-- Barra de ações em lote -->
+<div id="bulkBar" class="bulk-bar" style="display:none">
+  <span id="bulkCount" class="bulk-bar-count"></span>
+  <button class="btn btn-danger btn-sm" onclick="excluirSelecionados()">🗑 Excluir selecionados</button>
+  <button class="btn btn-outline-inv btn-sm" onclick="exportarSelecionados()">↓ Exportar CSV</button>
+  <button class="btn btn-outline-inv btn-sm" onclick="desmarcarTodos()">✕ Desmarcar</button>
+</div>
+
 <div class="table-wrap">
   <table>
     <thead>
       <tr>
+        <th style="width:36px;padding:10px 12px">
+          <input type="checkbox" id="checkAll" onchange="toggleAll(this)"
+                 style="cursor:pointer;width:14px;height:14px">
+        </th>
         <th>Empresa</th>
         <th>CNPJ</th>
         <th>Segmento</th>
@@ -37,7 +49,18 @@
     </thead>
     <tbody>
       {% for e in empresas %}
-      <tr>
+      <tr id="row-{{ e.id }}"
+          data-nome="{{ e.nome|e }}"
+          data-cnpj="{{ e.cnpj or '' }}"
+          data-segmento="{{ e.segmento or '' }}"
+          data-porte="{{ e.porte or '' }}"
+          data-status="{{ e.status }}"
+          data-cidade="{{ e.cidade or '' }}"
+          data-estado="{{ e.estado or '' }}">
+        <td style="padding:10px 12px">
+          <input type="checkbox" class="emp-cb" value="{{ e.id }}"
+                 style="cursor:pointer;width:14px;height:14px">
+        </td>
         <td>
           <a href="{{ url_for('empresas_detalhe', id=e.id) }}"
              style="font-weight:600;color:var(--blue);text-decoration:none">{{ e.nome }}</a>
@@ -69,7 +92,7 @@
       </tr>
       {% else %}
       <tr>
-        <td colspan="7">
+        <td colspan="8">
           <div class="empty-state">
             <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
@@ -90,6 +113,77 @@
 
 {% block scripts %}
 <script>
+// ── Seleção ───────────────────────────────────────────────────────────────────
+function getSelectedIds() {
+  return [...document.querySelectorAll('.emp-cb:checked')].map(cb => parseInt(cb.value));
+}
+
+function toggleAll(cb) {
+  document.querySelectorAll('.emp-cb').forEach(c => c.checked = cb.checked);
+  updateBulkBar();
+}
+
+document.addEventListener('change', e => {
+  if (e.target.classList.contains('emp-cb')) updateBulkBar();
+});
+
+function updateBulkBar() {
+  const count = getSelectedIds().length;
+  document.getElementById('bulkBar').style.display = count > 0 ? 'flex' : 'none';
+  const n = count;
+  document.getElementById('bulkCount').textContent =
+    n === 1 ? '1 empresa selecionada' : `${n} empresas selecionadas`;
+}
+
+function desmarcarTodos() {
+  document.querySelectorAll('.emp-cb').forEach(c => c.checked = false);
+  document.getElementById('checkAll').checked = false;
+  updateBulkBar();
+}
+
+// ── Excluir em lote ───────────────────────────────────────────────────────────
+async function excluirSelecionados() {
+  const ids = getSelectedIds();
+  if (!ids.length) { alert('Selecione pelo menos uma empresa.'); return; }
+  const n = ids.length;
+  if (!confirm(`Excluir ${n} empresa${n > 1 ? 's' : ''}? Esta ação não pode ser desfeita.`)) return;
+  try {
+    const d = await fetch('/empresas/excluir-lote', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids }),
+    }).then(r => r.json());
+    if (d.ok) {
+      ids.forEach(id => document.getElementById('row-' + id)?.remove());
+      document.getElementById('checkAll').checked = false;
+      updateBulkBar();
+    } else {
+      alert('Erro ao excluir.');
+    }
+  } catch(e) { alert('Erro: ' + e.message); }
+}
+
+// ── Exportar CSV (client-side) ────────────────────────────────────────────────
+function exportarSelecionados() {
+  const ids = getSelectedIds();
+  if (!ids.length) { alert('Selecione pelo menos uma empresa.'); return; }
+  const headers = ['Nome', 'CNPJ', 'Segmento', 'Porte', 'Status', 'Cidade', 'UF'];
+  const linhas = [headers.map(h => `"${h}"`).join(',')];
+  ids.forEach(id => {
+    const row = document.getElementById('row-' + id);
+    if (!row) return;
+    const d = row.dataset;
+    linhas.push([d.nome, d.cnpj, d.segmento, d.porte, d.status, d.cidade, d.estado]
+      .map(v => `"${(v || '').replace(/"/g, '""')}"`)
+      .join(','));
+  });
+  const blob = new Blob(['﻿' + linhas.join('\n')], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = Object.assign(document.createElement('a'), { href: url, download: 'empresas_escard.csv' });
+  a.click(); URL.revokeObjectURL(url);
+}
+
+// ── Score IA ──────────────────────────────────────────────────────────────────
 function aiScore(id, nome) {
   openModal('Score do Lead — ' + nome, true);
   fetch('/ai/score/' + id, { method: 'POST' })

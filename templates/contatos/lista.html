@@ -51,9 +51,12 @@
                 WhatsApp
               </a>
               <button class="btn btn-ai btn-xs"
-                      onclick="aiWhatsapp({{ c.id }}, '{{ c.nome | replace("'","\\'")|e }}')">
+                      onclick="aiWhatsapp({{ c.id }}, '{{ c.nome | replace("'","\\'")|e }}', '{{ c.telefone }}')">
                 ✦ Mensagem IA
               </button>
+            {% endif %}
+            {% if c.email %}
+              <a href="mailto:{{ c.email }}" class="btn btn-email btn-xs">✉ Email</a>
             {% endif %}
             <a href="{{ url_for('contatos_editar', id=c.id) }}" class="btn btn-outline btn-xs">Editar</a>
             <form method="post" action="{{ url_for('contatos_excluir', id=c.id) }}" style="display:inline"
@@ -84,23 +87,4 @@
 </div>
 {% endblock %}
 
-{% block scripts %}
-<script>
-function aiWhatsapp(id, nome) {
-  openModal('Mensagem WhatsApp — ' + nome, true);
-  fetch('/ai/whatsapp/' + id, { method: 'POST' })
-    .then(r => r.json())
-    .then(d => {
-      if (d.error) { showError(d.error); return; }
-      const msg = d.mensagem || '';
-      document.getElementById('modalBody').innerHTML = `
-        <p class="text-muted text-sm mb-3">Mensagem gerada pela IA. Revise antes de enviar.</p>
-        <div class="copy-box" id="waMsgBox">${escHtml(msg)}</div>
-        <button class="btn btn-primary btn-sm"
-                onclick="copyText(document.getElementById('waMsgBox').textContent, this)">
-          Copiar mensagem
-        </button>`;
-    }).catch(e => showError(e.message));
-}
-</script>
 {% endblock %}

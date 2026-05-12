@@ -119,5 +119,27 @@
 
   <script src="{{ url_for('static', filename='js/app.js') }}"></script>
   {% block scripts %}{% endblock %}
+
+  {% if config.DEBUG %}
+  {# livereload.js — recarrega o browser quando templates/CSS/JS mudam #}
+  <script src="http://localhost:35729/livereload.js?snipver=1" async></script>
+  {# Polling — detecta reinício do servidor (mudança em .py) e recarrega #}
+  <script>
+  (function () {
+    var _t = null;
+    function ping() {
+      fetch('/dev/ping')
+        .then(function (r) { return r.json(); })
+        .then(function (d) {
+          if (_t !== null && d.t !== _t) { location.reload(); return; }
+          _t = d.t;
+          setTimeout(ping, 800);
+        })
+        .catch(function () { setTimeout(ping, 1200); });
+    }
+    setTimeout(ping, 800);
+  })();
+  </script>
+  {% endif %}
 </body>
 </html>

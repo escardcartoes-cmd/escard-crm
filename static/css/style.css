@@ -137,10 +137,20 @@ body {
 .btn-danger:hover  { background: #DC2626; }
 .btn-wa      { background: #25D366; color: #fff; }
 .btn-wa:hover      { background: #128C7E; }
+.btn-email   { background: var(--blue-mid); color: #fff; }
+.btn-email:hover   { background: var(--blue-hover); }
 .btn-ai      { background: linear-gradient(135deg, var(--blue) 0%, #7C3AED 100%); color: #fff; }
 .btn-ai:hover      { opacity: .88; }
 .btn-sm { padding: 5px 10px; font-size: 12px; }
 .btn-xs { padding: 3px 8px; font-size: 11px; }
+
+/* ── Modal action row ─────────────────────────────────────────────────────── */
+.modal-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 14px; }
+.label-mini {
+  display: block; font-size: 11px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .5px;
+  color: var(--muted); margin-bottom: 6px;
+}
 
 /* ── Table ────────────────────────────────────────────────────────────────── */
 .table-wrap {
@@ -393,6 +403,17 @@ textarea { resize: vertical; min-height: 80px; }
 .bulk-progress-wrap { background: var(--white); border: 1px solid var(--border); border-radius: var(--r); padding: 14px 18px; margin-bottom: 16px; }
 .bulk-progress-bar  { height: 6px; background: var(--border); border-radius: 99px; overflow: hidden; margin-bottom: 6px; }
 .bulk-progress-fill { height: 100%; background: var(--orange); border-radius: 99px; transition: width .3s ease; }
+
+/* ── Bulk action bar ──────────────────────────────────────────────────────── */
+.bulk-bar {
+  align-items: center; gap: 10px; flex-wrap: wrap;
+  background: var(--blue); color: #fff;
+  padding: 11px 16px; border-radius: var(--r);
+  margin-bottom: 16px; box-shadow: var(--sh-md);
+}
+.bulk-bar-count { font-size: 13px; font-weight: 600; flex: 1; min-width: 100px; }
+.btn-outline-inv { background: transparent; color: #fff; border: 1px solid rgba(255,255,255,.4); }
+.btn-outline-inv:hover { background: rgba(255,255,255,.15); }
 
 /* ── Import helpers ───────────────────────────────────────────────────────── */
 .import-info {

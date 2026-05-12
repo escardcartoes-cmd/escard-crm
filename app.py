@@ -2,6 +2,7 @@ import os
 import csv
 import io
 import json
+import time
 from dotenv import load_dotenv
 load_dotenv(override=True)
 
@@ -16,6 +17,8 @@ import ai
 
 app = Flask(__name__)
 app.secret_key = os.getenv("SECRET_KEY", "escard-crm-2024")
+
+_START_TIME = str(time.time())
 
 database.init_db()
 
@@ -105,6 +108,14 @@ def empresas_excluir(id):
     emp_model.excluir(id)
     flash("Empresa excluída.", "success")
     return redirect(url_for("empresas_lista"))
+
+
+@app.route("/empresas/excluir-lote", methods=["POST"])
+def empresas_excluir_lote():
+    ids = (request.json or {}).get("ids", [])
+    for id_ in ids:
+        emp_model.excluir(id_)
+    return jsonify({"ok": True, "excluidos": len(ids)})
 
 
 def _form_empresa(f):
@@ -608,6 +619,14 @@ def prospeccao_excluir(id):
     return redirect(url_for("prospeccao_lista"))
 
 
+@app.route("/prospeccao/excluir-lote", methods=["POST"])
+def prospeccao_excluir_lote():
+    ids = (request.json or {}).get("ids", [])
+    for id_ in ids:
+        prosp_model.excluir(id_)
+    return jsonify({"ok": True, "excluidos": len(ids)})
+
+
 @app.route("/prospeccao/exportar")
 def prospeccao_exportar():
     ids_raw = request.args.getlist("ids")
@@ -691,6 +710,35 @@ def ai_leads_email(id):
         return jsonify({"error": str(e)}), 500
 
 
+# ── Dev ping (usado pelo hot-reload do browser) ───────────────────────────────
+
+@app.route("/dev/ping")
+def dev_ping():
+    if not app.debug:
+        return "", 404
+    return jsonify({"t": _START_TIME})
+
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port)
+
+    if not os.environ.get("RAILWAY_ENVIRONMENT"):
+        # Werkzeug reinicia o processo filho quando .py muda.
+        # Só iniciamos o livereload no processo filho (WERKZEUG_RUN_MAIN="true"),
+        # não no processo pai (watcher), para evitar porta duplicada.
+        if os.environ.get("WERKZEUG_RUN_MAIN") == "true":
+            import threading
+            from livereload import Server as _LRServer
+
+            def _start_livereload():
+                lr = _LRServer()
+                lr.watch("templates/")
+                lr.watch("static/css/")
+                lr.watch("static/js/")
+                lr.serve(port=35729, host="127.0.0.1")
+
+            threading.Thread(target=_start_livereload, daemon=True).start()
+
+        app.run(debug=True, host="0.0.0.0", port=port, use_reloader=True)
+    else:
+        app.run(host="0.0.0.0", port=port)
