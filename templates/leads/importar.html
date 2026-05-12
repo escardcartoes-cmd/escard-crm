@@ -1,0 +1,175 @@
+{% extends 'base.html' %}
+{% block title %}Importar Leads — Escard CRM{% endblock %}
+{% block topbar_title %}Importar Leads{% endblock %}
+{% block topbar_actions %}
+  <a href="{{ url_for('prospeccao_lista') }}" class="btn btn-outline btn-sm">← Prospecção</a>
+{% endblock %}
+
+{% block content %}
+<div class="form-wrap">
+
+  <!-- Instruções -->
+  <div class="import-info">
+    <strong>Como importar:</strong> faça upload de um arquivo <strong>.csv</strong>, <strong>.xlsx</strong> ou <strong>.xls</strong> com cabeçalho.
+    Separadores <strong>vírgula</strong> e <strong>ponto e vírgula</strong> são detectados automaticamente.
+    Colunas reconhecidas: <em>nome, empresa, cargo, telefone, email, cidade</em>.
+    Após o upload, revise o mapeamento e confirme.
+  </div>
+
+  <!-- Upload card -->
+  <div class="card mb-4">
+    <p class="card-title">1. Selecione o arquivo CSV</p>
+    <div class="form-group">
+      <input type="file" id="csvFile" accept=".csv,.txt,.xlsx,.xls" class="form-control"
+             style="padding:6px;font-size:13px">
+    </div>
+    <button class="btn btn-primary btn-sm" onclick="previewCSV()">Pré-visualizar →</button>
+  </div>
+
+  <!-- Preview section (hidden until file is loaded) -->
+  <div id="previewSection" style="display:none">
+
+    <!-- Column mapping -->
+    <div class="card mb-4">
+      <p class="card-title">2. Confirme o mapeamento de colunas</p>
+      <p class="text-muted text-sm mb-3">O sistema tentou mapear automaticamente. Ajuste se necessário.</p>
+      <div class="import-map-grid" id="mappingGrid"></div>
+    </div>
+
+    <!-- Data preview -->
+    <div class="card mb-4">
+      <p class="card-title">3. Preview dos dados (primeiras 10 linhas)</p>
+      <div class="table-wrap" style="box-shadow:none;border:1px solid var(--border)">
+        <div id="previewTable"></div>
+      </div>
+      <p class="text-muted text-sm" style="margin-top:10px" id="previewCount"></p>
+    </div>
+
+    <!-- Confirm form -->
+    <div class="card">
+      <p class="card-title">4. Confirmar importação</p>
+      <p class="text-muted text-sm mb-3">
+        Os leads serão criados em <strong>Empresas</strong>, <strong>Contatos</strong> e no painel de <strong>Prospecção</strong>.
+        Empresas com o mesmo nome serão reutilizadas.
+      </p>
+      <form id="confirmForm" method="post"
+            action="{{ url_for('leads_importar_confirmar') }}"
+            enctype="multipart/form-data">
+        <input type="file" id="hiddenFile" name="arquivo" style="display:none">
+        <input type="hidden" name="map_nome"     id="h_nome">
+        <input type="hidden" name="map_empresa"  id="h_empresa">
+        <input type="hidden" name="map_cargo"    id="h_cargo">
+        <input type="hidden" name="map_telefone" id="h_telefone">
+        <input type="hidden" name="map_email"    id="h_email">
+        <input type="hidden" name="map_cidade"   id="h_cidade">
+        <div class="form-actions" style="border:none;padding:0">
+          <button type="button" class="btn btn-primary" onclick="confirmarImport()">
+            Confirmar importação
+          </button>
+          <button type="button" class="btn btn-outline" onclick="resetImport()">Cancelar</button>
+        </div>
+      </form>
+    </div>
+
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const CAMPOS = ['nome','empresa','cargo','telefone','email','cidade'];
+const LABELS = {
+  nome: 'Nome do contato', empresa: 'Empresa', cargo: 'Cargo',
+  telefone: 'Telefone', email: 'E-mail', cidade: 'Cidade'
+};
+
+let _colunas = [];
+let _mapa    = {};
+
+function previewCSV() {
+  const file = document.getElementById('csvFile').files[0];
+  if (!file) { alert('Selecione um arquivo CSV antes de continuar.'); return; }
+  const ext = file.name.split('.').pop().toLowerCase();
+  if (!['csv','txt','xlsx','xls'].includes(ext)) { alert('Use arquivos .csv, .xlsx ou .xls.'); return; }
+
+  const fd = new FormData();
+  fd.append('arquivo', file);
+
+  fetch('/leads/importar/preview', { method: 'POST', body: fd })
+    .then(r => r.json())
+    .then(d => {
+      if (d.error) { alert('Erro: ' + d.error); return; }
+      _colunas = d.colunas;
+      _mapa    = d.mapeamento_sugerido;
+      renderMapping(_colunas, _mapa);
+      renderPreview(_colunas, d.preview);
+
+      /* copia o arquivo para o input oculto */
+      const dt = new DataTransfer();
+      dt.items.add(file);
+      document.getElementById('hiddenFile').files = dt.files;
+
+      document.getElementById('previewSection').style.display = '';
+      document.getElementById('previewSection').scrollIntoView({ behavior: 'smooth' });
+    })
+    .catch(e => alert('Erro ao processar CSV: ' + e.message));
+}
+
+function renderMapping(colunas, mapa) {
+  const grid = document.getElementById('mappingGrid');
+  grid.innerHTML = '';
+  CAMPOS.forEach(campo => {
+    const val = mapa[campo] || '';
+    let opts = '<option value="">— não importar —</option>';
+    colunas.forEach(c => {
+      opts += `<option value="${escAttr(c)}"${c === val ? ' selected' : ''}>${escHtml(c)}</option>`;
+    });
+    grid.innerHTML += `
+      <div class="form-group" style="margin:0">
+        <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--muted)">
+          ${LABELS[campo]}
+        </label>
+        <select id="sel_${campo}" style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:var(--r-sm);font-size:13px">
+          ${opts}
+        </select>
+      </div>`;
+  });
+}
+
+function renderPreview(colunas, rows) {
+  if (!rows.length) {
+    document.getElementById('previewTable').innerHTML = '<p class="text-muted text-sm" style="padding:16px">Nenhum dado encontrado.</p>';
+    return;
+  }
+  let html = '<table><thead><tr>';
+  colunas.forEach(c => { html += `<th>${escHtml(c)}</th>`; });
+  html += '</tr></thead><tbody>';
+  rows.forEach(row => {
+    html += '<tr>';
+    colunas.forEach(c => { html += `<td style="font-size:12px">${escHtml(row[c] || '')}</td>`; });
+    html += '</tr>';
+  });
+  html += '</tbody></table>';
+  document.getElementById('previewTable').innerHTML = html;
+  document.getElementById('previewCount').textContent =
+    `Mostrando até 10 linhas de preview.`;
+}
+
+function confirmarImport() {
+  CAMPOS.forEach(f => {
+    document.getElementById('h_' + f).value =
+      document.getElementById('sel_' + f).value;
+  });
+  document.getElementById('confirmForm').submit();
+}
+
+function resetImport() {
+  document.getElementById('previewSection').style.display = 'none';
+  document.getElementById('csvFile').value = '';
+}
+
+function escAttr(s) {
+  return String(s).replace(/"/g, '&quot;');
+}
+</script>
+{% endblock %}

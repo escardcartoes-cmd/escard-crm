@@ -1,0 +1,99 @@
+{% extends 'base.html' %}
+{% set editing = empresa is not none %}
+{% block title %}{{ 'Editar' if editing else 'Nova' }} Empresa — Escard CRM{% endblock %}
+{% block topbar_title %}{{ 'Editar Empresa' if editing else 'Nova Empresa' }}{% endblock %}
+{% block topbar_actions %}
+  <a href="{{ url_for('empresas_lista') }}" class="btn btn-outline btn-sm">← Voltar</a>
+{% endblock %}
+
+{% block content %}
+<div class="form-wrap">
+  <div class="form-card">
+    <form method="post" action="{{ action }}">
+
+      <div class="form-section">
+        <div class="form-section-title">Dados Principais</div>
+        <div class="form-group">
+          <label>Nome da Empresa <span class="req">*</span></label>
+          <input type="text" name="nome" required value="{{ empresa.nome if editing else '' }}"
+                 placeholder="Ex: Tecnova Soluções Ltda">
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>CNPJ</label>
+            <input type="text" name="cnpj" value="{{ empresa.cnpj if editing else '' }}"
+                   placeholder="00.000.000/0001-00">
+          </div>
+          <div class="form-group">
+            <label>Status</label>
+            <select name="status">
+              {% for s in ['prospect','cliente','inativo'] %}
+              <option value="{{ s }}" {% if editing and empresa.status == s %}selected{% endif %}>
+                {{ s.capitalize() }}
+              </option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Segmento</label>
+            <input type="text" name="segmento" value="{{ empresa.segmento if editing else '' }}"
+                   placeholder="Ex: Varejo, Saúde, Logística…">
+          </div>
+          <div class="form-group">
+            <label>Porte</label>
+            <select name="porte">
+              <option value="">Selecione…</option>
+              {% for p in ['micro','pequena','média','grande'] %}
+              <option value="{{ p }}" {% if editing and empresa.porte == p %}selected{% endif %}>
+                {{ p.capitalize() }}
+              </option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div class="form-section">
+        <div class="form-section-title">Contato</div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Telefone</label>
+            <input type="text" name="telefone" value="{{ empresa.telefone if editing else '' }}"
+                   placeholder="(11) 9 9999-0000">
+          </div>
+          <div class="form-group">
+            <label>E-mail</label>
+            <input type="email" name="email" value="{{ empresa.email if editing else '' }}"
+                   placeholder="contato@empresa.com.br">
+          </div>
+        </div>
+      </div>
+
+      <div class="form-section">
+        <div class="form-section-title">Localização</div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Cidade</label>
+            <input type="text" name="cidade" value="{{ empresa.cidade if editing else '' }}"
+                   placeholder="São Paulo">
+          </div>
+          <div class="form-group">
+            <label>Estado (UF)</label>
+            <input type="text" name="estado" value="{{ empresa.estado if editing else '' }}"
+                   placeholder="SP" maxlength="2" style="text-transform:uppercase">
+          </div>
+        </div>
+      </div>
+
+      <div class="form-actions">
+        <button type="submit" class="btn btn-primary">
+          {{ 'Salvar alterações' if editing else 'Cadastrar empresa' }}
+        </button>
+        <a href="{{ url_for('empresas_lista') }}" class="btn btn-outline">Cancelar</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

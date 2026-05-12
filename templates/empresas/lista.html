@@ -1,0 +1,114 @@
+{% extends 'base.html' %}
+{% block title %}Empresas — Escard CRM{% endblock %}
+{% block topbar_title %}Empresas{% endblock %}
+{% block topbar_actions %}
+  <a href="{{ url_for('empresas_nova') }}" class="btn btn-primary">+ Nova Empresa</a>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <form class="search-row" method="get">
+    <input type="text" name="q" value="{{ q }}" placeholder="Buscar por nome ou CNPJ…" style="width:260px">
+    <select name="status" onchange="this.form.submit()" style="width:160px">
+      <option value="">Todos os status</option>
+      <option value="prospect" {% if status=='prospect' %}selected{% endif %}>Prospect</option>
+      <option value="cliente"  {% if status=='cliente'  %}selected{% endif %}>Cliente</option>
+      <option value="inativo"  {% if status=='inativo'  %}selected{% endif %}>Inativo</option>
+    </select>
+    <button type="submit" class="btn btn-blue btn-sm">Buscar</button>
+    {% if q or status %}
+      <a href="{{ url_for('empresas_lista') }}" class="btn btn-outline btn-sm">Limpar</a>
+    {% endif %}
+  </form>
+</div>
+
+<div class="table-wrap">
+  <table>
+    <thead>
+      <tr>
+        <th>Empresa</th>
+        <th>CNPJ</th>
+        <th>Segmento</th>
+        <th>Porte</th>
+        <th>Status</th>
+        <th>Cidade/UF</th>
+        <th>Ações</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for e in empresas %}
+      <tr>
+        <td>
+          <a href="{{ url_for('empresas_detalhe', id=e.id) }}"
+             style="font-weight:600;color:var(--blue);text-decoration:none">{{ e.nome }}</a>
+          {% if e.email %}
+            <div class="text-muted text-sm" style="margin-top:2px">{{ e.email }}</div>
+          {% endif %}
+        </td>
+        <td>{{ e.cnpj or '—' }}</td>
+        <td>{{ e.segmento or '—' }}</td>
+        <td>{{ e.porte or '—' }}</td>
+        <td><span class="badge badge-{{ e.status }}">{{ e.status }}</span></td>
+        <td>
+          {{ e.cidade or '' }}{% if e.cidade and e.estado %}/{% endif %}{{ e.estado or '—' }}
+        </td>
+        <td>
+          <div class="td-actions">
+            <a href="{{ url_for('empresas_detalhe', id=e.id) }}" class="btn btn-outline btn-xs">Ver</a>
+            <a href="{{ url_for('empresas_editar',  id=e.id) }}" class="btn btn-outline btn-xs">Editar</a>
+            <button class="btn btn-ai btn-xs"
+                    onclick="aiScore({{ e.id }}, '{{ e.nome | replace("'","\\'")|e }}')">
+              ✦ Score
+            </button>
+            <form method="post" action="{{ url_for('empresas_excluir', id=e.id) }}" style="display:inline"
+                  onsubmit="return confirm('Excluir {{ e.nome | replace("'","\\'") }}?')">
+              <button type="submit" class="btn btn-danger btn-xs">Excluir</button>
+            </form>
+          </div>
+        </td>
+      </tr>
+      {% else %}
+      <tr>
+        <td colspan="7">
+          <div class="empty-state">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16"/>
+            </svg>
+            <p>Nenhuma empresa encontrada.</p>
+            <a href="{{ url_for('empresas_nova') }}" class="btn btn-primary btn-sm" style="margin-top:10px">
+              Cadastrar primeira empresa
+            </a>
+          </div>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function aiScore(id, nome) {
+  openModal('Score do Lead — ' + nome, true);
+  fetch('/ai/score/' + id, { method: 'POST' })
+    .then(r => r.json())
+    .then(d => {
+      if (d.error) { showError(d.error); return; }
+      const s = d.score;
+      const cls = s >= 70 ? 'score-high' : s >= 40 ? 'score-mid' : 'score-low';
+      const lbl = s >= 70 ? 'Lead quente 🔥' : s >= 40 ? 'Potencial médio' : 'Lead frio';
+      const fortes = (d.pontos_fortes || []).map(p => `<li>${p}</li>`).join('');
+      const fracos  = (d.pontos_fracos  || []).map(p => `<li>${p}</li>`).join('');
+      document.getElementById('modalBody').innerHTML = `
+        <div class="score-ring ${cls}">${s}</div>
+        <p class="score-label">${lbl}</p>
+        <p style="margin-bottom:12px">${d.justificativa}</p>
+        ${fortes ? `<p class="fw-600 mb-2">Pontos fortes</p><ul style="padding-left:18px;margin-bottom:10px">${fortes}</ul>` : ''}
+        ${fracos  ? `<p class="fw-600 mb-2">Atenção</p><ul style="padding-left:18px">${fracos}</ul>` : ''}`;
+    })
+    .catch(e => showError(e.message));
+}
+</script>
+{% endblock %}

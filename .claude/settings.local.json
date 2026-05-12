@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python *)",
+      "PowerShell(New-Item *)",
+      "Bash(pip install *)",
+      "Bash(Get-ChildItem -Path \"C:\\\\escard-crm\" -Recurse -Force)",
+      "Bash(Select-Object -First 50)",
+      "Bash(Get-ChildItem -Path C:\\\\escard-crm -Recurse -Directory)",
+      "Bash(Select-Object -ExpandProperty FullName)"
+    ]
+  }
+}

@@ -1,0 +1,65 @@
+{% extends 'base.html' %}
+{% set editing = contato is not none %}
+{% block title %}{{ 'Editar' if editing else 'Novo' }} Contato — Escard CRM{% endblock %}
+{% block topbar_title %}{{ 'Editar Contato' if editing else 'Novo Contato' }}{% endblock %}
+{% block topbar_actions %}
+  <a href="{{ url_for('contatos_lista') }}" class="btn btn-outline btn-sm">← Voltar</a>
+{% endblock %}
+
+{% block content %}
+<div class="form-wrap">
+  <div class="form-card">
+    <form method="post" action="{{ action }}">
+
+      <div class="form-section">
+        <div class="form-section-title">Dados do Contato</div>
+        <div class="form-group">
+          <label>Empresa <span class="req">*</span></label>
+          <select name="empresa_id" required>
+            <option value="">Selecione a empresa…</option>
+            {% for e in empresas %}
+            <option value="{{ e.id }}"
+              {% if editing and contato.empresa_id == e.id %}selected
+              {% elif request.args.get('empresa_id')|string == e.id|string %}selected
+              {% endif %}>
+              {{ e.nome }}
+            </option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Nome completo <span class="req">*</span></label>
+            <input type="text" name="nome" required value="{{ contato.nome if editing else '' }}"
+                   placeholder="João Silva">
+          </div>
+          <div class="form-group">
+            <label>Cargo</label>
+            <input type="text" name="cargo" value="{{ contato.cargo if editing else '' }}"
+                   placeholder="Gerente de RH">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>E-mail</label>
+            <input type="email" name="email" value="{{ contato.email if editing else '' }}"
+                   placeholder="joao@empresa.com.br">
+          </div>
+          <div class="form-group">
+            <label>Telefone / WhatsApp</label>
+            <input type="text" name="telefone" value="{{ contato.telefone if editing else '' }}"
+                   placeholder="(11) 9 9999-0000">
+          </div>
+        </div>
+      </div>
+
+      <div class="form-actions">
+        <button type="submit" class="btn btn-primary">
+          {{ 'Salvar alterações' if editing else 'Cadastrar contato' }}
+        </button>
+        <a href="{{ url_for('contatos_lista') }}" class="btn btn-outline">Cancelar</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

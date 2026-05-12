@@ -1,0 +1,67 @@
+{% extends 'base.html' %}
+{% block title %}Atividades — Escard CRM{% endblock %}
+{% block topbar_title %}Atividades{% endblock %}
+{% block topbar_actions %}
+  <a href="{{ url_for('atividades_nova') }}" class="btn btn-primary">+ Registrar Atividade</a>
+{% endblock %}
+
+{% block content %}
+<div class="table-wrap">
+  <table>
+    <thead>
+      <tr>
+        <th>Data</th>
+        <th>Tipo</th>
+        <th>Empresa</th>
+        <th>Oportunidade</th>
+        <th>Descrição</th>
+        <th>Ações</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for a in atividades %}
+      <tr>
+        <td style="color:var(--muted);white-space:nowrap">{{ a.data }}</td>
+        <td><span class="badge badge-qualificado">{{ a.tipo }}</span></td>
+        <td>
+          {% if a.empresa_id %}
+            <a href="{{ url_for('empresas_detalhe', id=a.empresa_id) }}"
+               style="color:var(--blue);text-decoration:none">{{ a.empresa_nome or '—' }}</a>
+          {% else %}—{% endif %}
+        </td>
+        <td>
+          {% if a.oportunidade_id %}
+            <a href="{{ url_for('oportunidades_detalhe', id=a.oportunidade_id) }}"
+               style="color:var(--blue);text-decoration:none;font-size:12px">
+              {{ a.oportunidade_titulo or '—' }}
+            </a>
+          {% else %}—{% endif %}
+        </td>
+        <td>{{ (a.descricao or '')[:70] }}</td>
+        <td>
+          <form method="post" action="{{ url_for('atividades_excluir', id=a.id) }}"
+                onsubmit="return confirm('Excluir esta atividade?')">
+            <button type="submit" class="btn btn-danger btn-xs">Excluir</button>
+          </form>
+        </td>
+      </tr>
+      {% else %}
+      <tr>
+        <td colspan="6">
+          <div class="empty-state">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/>
+            </svg>
+            <p>Nenhuma atividade registrada.</p>
+            <a href="{{ url_for('atividades_nova') }}" class="btn btn-primary btn-sm" style="margin-top:10px">
+              Registrar primeira atividade
+            </a>
+          </div>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}
