@@ -44,7 +44,7 @@ function copyText(text, btn) {
 let _modalWaUrl   = '';
 let _modalMailUrl = '';
 
-function _openWa()   { if (_modalWaUrl)   window.open(_modalWaUrl, '_blank'); }
+function _openWa()   { if (_modalWaUrl)   window.open(_modalWaUrl, 'whatsapp_escard'); }
 function _openMail() { if (_modalMailUrl) window.location.href = _modalMailUrl; }
 
 function _copiarMsg(elId, btn) {
