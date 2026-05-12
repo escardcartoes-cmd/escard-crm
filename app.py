@@ -710,6 +710,155 @@ def ai_leads_email(id):
         return jsonify({"error": str(e)}), 500
 
 
+# ── Central de IA ────────────────────────────────────────────────────────────
+
+_IA_SYSTEM_PROMPT = (
+    "Você é a IA consultora da Escard, empresa de cartão de benefícios B2B. "
+    "Conhece profundamente todos os produtos: alimentação, refeição, combustível, "
+    "premiação, private label, Welhub (wellness), Vidalink (farmácia), "
+    "Viva+ (cultura e lazer), DM Card (carteira administrada). "
+    "Ajuda o time comercial a criar argumentos de venda, responder objeções, "
+    "sugerir produtos por perfil de empresa, criar textos de prospecção e tirar "
+    "dúvidas sobre preços e funcionalidades. "
+    "Sempre responde em português, tom consultivo e direto."
+)
+
+
+def _central_ia_context() -> str:
+    """Return text from all knowledge-base documents, trimmed to ~8000 chars."""
+    conn = database.get_connection()
+    cur  = conn.execute("SELECT nome, tipo, conteudo_texto FROM documentos_ia WHERE conteudo_texto IS NOT NULL AND conteudo_texto != ''")
+    docs = cur.fetchall()
+    conn.close()
+    if not docs:
+        return ""
+    parts = []
+    for d in docs:
+        trecho = (d["conteudo_texto"] or "")[:2000]
+        parts.append(f"[{d['nome']} — {d['tipo']}]\n{trecho}")
+    return "\n\n---\n\n".join(parts)[:8000]
+
+
+def _extrair_texto(raw: bytes, nome: str, mimetype: str) -> str:
+    ext = nome.lower().rsplit(".", 1)[-1] if "." in nome else ""
+    if ext == "pdf":
+        try:
+            import PyPDF2
+            reader = PyPDF2.PdfReader(io.BytesIO(raw))
+            return "\n".join(p.extract_text() or "" for p in reader.pages)
+        except Exception as e:
+            return f"[Erro ao extrair PDF: {e}]"
+    if ext in ("docx",):
+        try:
+            import docx
+            doc = docx.Document(io.BytesIO(raw))
+            return "\n".join(p.text for p in doc.paragraphs)
+        except Exception as e:
+            return f"[Erro ao extrair Word: {e}]"
+    if ext == "xlsx":
+        try:
+            import openpyxl
+            wb = openpyxl.load_workbook(io.BytesIO(raw), data_only=True, read_only=True)
+            ws = wb.active
+            lines = []
+            for row in ws.iter_rows(values_only=True):
+                lines.append("\t".join(str(c) if c is not None else "" for c in row))
+            wb.close()
+            return "\n".join(lines)
+        except Exception as e:
+            return f"[Erro ao extrair Excel: {e}]"
+    if ext == "csv":
+        return _decodificar_bytes(raw)[:10000]
+    if ext in ("png", "jpg", "jpeg", "gif", "webp"):
+        return f"[Imagem: {nome}]"
+    if ext in ("mp4", "mov", "avi", "webm"):
+        return f"[Vídeo: {nome}]"
+    return _decodificar_bytes(raw)[:10000]
+
+
+@app.route("/central-ia")
+def central_ia():
+    conn  = database.get_connection()
+    cur   = conn.execute("SELECT id, nome, tipo, data_upload, tamanho FROM documentos_ia ORDER BY data_upload DESC")
+    docs  = cur.fetchall()
+    conn.close()
+    return render_template("central_ia.html", documentos=docs, total_docs=len(docs))
+
+
+@app.route("/central-ia/chat", methods=["POST"])
+def central_ia_chat():
+    try:
+        body     = request.json or {}
+        mensagem = (body.get("mensagem") or "").strip()
+        historico = body.get("historico") or []
+        if not mensagem:
+            return jsonify({"error": "Mensagem vazia"}), 400
+
+        contexto = _central_ia_context()
+        system   = _IA_SYSTEM_PROMPT
+        if contexto:
+            system += f"\n\nBase de conhecimento disponível:\n{contexto}"
+
+        messages = []
+        for h in historico[-20:]:
+            role = h.get("role")
+            text = h.get("content", "")
+            if role in ("user", "assistant") and text:
+                messages.append({"role": role, "content": text})
+        messages.append({"role": "user", "content": mensagem})
+
+        import anthropic as _ant
+        client   = _ant.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+        response = client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=1024,
+            system=system,
+            messages=messages,
+        )
+        resposta = response.content[0].text
+        return jsonify({"resposta": resposta})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/central-ia/upload", methods=["POST"])
+def central_ia_upload():
+    arquivo = request.files.get("arquivo")
+    if not arquivo or not arquivo.filename:
+        return jsonify({"error": "Nenhum arquivo enviado"}), 400
+    raw      = arquivo.stream.read()
+    tamanho  = len(raw)
+    ext      = arquivo.filename.lower().rsplit(".", 1)[-1] if "." in arquivo.filename else "bin"
+    conteudo = _extrair_texto(raw, arquivo.filename, arquivo.content_type or "")
+    conn = database.get_connection()
+    cur  = conn.execute(
+        "INSERT INTO documentos_ia (nome, tipo, conteudo_texto, tamanho) VALUES (?, ?, ?, ?)",
+        (arquivo.filename, ext.upper(), conteudo, tamanho),
+    )
+    doc_id = cur.lastrowid
+    conn.commit()
+    conn.close()
+    return jsonify({"ok": True, "id": doc_id, "nome": arquivo.filename, "tipo": ext.upper(), "tamanho": tamanho})
+
+
+@app.route("/central-ia/documentos")
+def central_ia_documentos():
+    conn = database.get_connection()
+    cur  = conn.execute("SELECT id, nome, tipo, data_upload, tamanho FROM documentos_ia ORDER BY data_upload DESC")
+    docs = [dict(d) for d in cur.fetchall()]
+    conn.close()
+    return jsonify(docs)
+
+
+@app.route("/central-ia/documentos/<int:id>", methods=["DELETE"])
+def central_ia_doc_excluir(id):
+    conn = database.get_connection()
+    conn.execute("DELETE FROM documentos_ia WHERE id = ?", (id,))
+    conn.commit()
+    conn.close()
+    return jsonify({"ok": True})
+
+
 # ── Dev ping (usado pelo hot-reload do browser) ───────────────────────────────
 
 @app.route("/dev/ping")

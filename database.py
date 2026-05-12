@@ -77,6 +77,15 @@ _SQLITE_DDL = """
         FOREIGN KEY (contato_id) REFERENCES contatos(id) ON DELETE CASCADE,
         FOREIGN KEY (empresa_id) REFERENCES empresas(id) ON DELETE CASCADE
     );
+
+    CREATE TABLE IF NOT EXISTS documentos_ia (
+        id              INTEGER PRIMARY KEY AUTOINCREMENT,
+        nome            TEXT    NOT NULL,
+        tipo            TEXT    NOT NULL,
+        conteudo_texto  TEXT,
+        data_upload     TEXT    DEFAULT (datetime('now', 'localtime')),
+        tamanho         INTEGER
+    );
 """
 
 
