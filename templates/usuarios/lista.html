@@ -68,7 +68,7 @@
               {{ 'Desativar' if u.ativo else 'Ativar' }}
             </button>
             <form method="post" action="{{ url_for('usuarios_excluir', id=u.id) }}" style="display:inline"
-                  onsubmit="return confirm('Excluir {{ u.nome | replace(\"'\",\"\\\\'\")|e }}? Esta ação não pode ser desfeita.')">
+                 onsubmit="return confirm('Excluir {{ u.nome }}? Esta ação não pode ser desfeita.')"
               <button type="submit" class="btn btn-danger btn-xs">Excluir</button>
             </form>
             {% endif %}
