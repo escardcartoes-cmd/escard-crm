@@ -93,6 +93,7 @@ _SQLITE_DDL = """
         email       TEXT    UNIQUE,
         usuario     TEXT    NOT NULL UNIQUE,
         senha_hash  TEXT    NOT NULL,
+        perfil      TEXT    NOT NULL DEFAULT 'admin',
         ativo       INTEGER NOT NULL DEFAULT 1,
         criado_em   TEXT    DEFAULT (datetime('now', 'localtime'))
     );
@@ -180,4 +181,10 @@ def init_db() -> None:
     conn = get_connection()
     conn.executescript(_SQLITE_DDL)
     conn.commit()
+    # Migration: add perfil column if table already existed without it
+    try:
+        conn.execute("ALTER TABLE usuarios ADD COLUMN perfil TEXT NOT NULL DEFAULT 'admin'")
+        conn.commit()
+    except Exception:
+        pass  # Column already exists
     conn.close()

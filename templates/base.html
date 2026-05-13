@@ -19,6 +19,7 @@
     </div>
 
     <nav class="sidebar-nav">
+      {# ── Dashboard: todos os perfis ── #}
       <a href="{{ url_for('dashboard') }}"
          class="nav-link {% if request.endpoint == 'dashboard' %}active{% endif %}">
         <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -28,6 +29,8 @@
         Dashboard
       </a>
 
+      {# ── Empresas: apenas gerente e admin ── #}
+      {% if current_user.is_authenticated and current_user.perfil in ['admin','gerente'] %}
       <a href="{{ url_for('empresas_lista') }}"
          class="nav-link {% if 'empresa' in (request.endpoint or '') %}active{% endif %}">
         <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -36,7 +39,9 @@
         </svg>
         Empresas
       </a>
+      {% endif %}
 
+      {# ── Contatos: todos ── #}
       <a href="{{ url_for('contatos_lista') }}"
          class="nav-link {% if 'contato' in (request.endpoint or '') %}active{% endif %}">
         <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -46,6 +51,7 @@
         Contatos
       </a>
 
+      {# ── Oportunidades: todos ── #}
       <a href="{{ url_for('oportunidades_kanban') }}"
          class="nav-link {% if 'oportunidade' in (request.endpoint or '') %}active{% endif %}">
         <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -55,6 +61,7 @@
         Oportunidades
       </a>
 
+      {# ── Atividades: todos ── #}
       <a href="{{ url_for('atividades_lista') }}"
          class="nav-link {% if 'atividade' in (request.endpoint or '') %}active{% endif %}">
         <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -64,6 +71,7 @@
         Atividades
       </a>
 
+      {# ── Central de IA: todos ── #}
       <a href="{{ url_for('central_ia') }}"
          class="nav-link {% if 'central_ia' in (request.endpoint or '') %}active{% endif %}">
         <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -73,6 +81,8 @@
         Central de IA
       </a>
 
+      {# ── Importar Leads: apenas gerente e admin ── #}
+      {% if current_user.is_authenticated and current_user.perfil in ['admin','gerente'] %}
       <a href="{{ url_for('leads_importar_form') }}"
          class="nav-link {% if 'leads_importar' in (request.endpoint or '') %}active{% endif %}">
         <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -81,7 +91,9 @@
         </svg>
         Importar Leads
       </a>
+      {% endif %}
 
+      {# ── Prospecção: todos ── #}
       <a href="{{ url_for('prospeccao_lista') }}"
          class="nav-link {% if 'prospeccao' in (request.endpoint or '') %}active{% endif %}">
         <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -90,6 +102,18 @@
         </svg>
         Prospecção
       </a>
+
+      {# ── Usuários: apenas admin ── #}
+      {% if current_user.is_authenticated and current_user.perfil == 'admin' %}
+      <a href="{{ url_for('usuarios_lista') }}"
+         class="nav-link {% if 'usuarios' in (request.endpoint or '') %}active{% endif %}">
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/>
+        </svg>
+        👥 Usuários
+      </a>
+      {% endif %}
     </nav>
 
     <div class="sidebar-footer">
