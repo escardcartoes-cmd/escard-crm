@@ -16,12 +16,14 @@ PERFIL_LABELS = {
 
 class Usuario(UserMixin):
     def __init__(self, row):
-        self.id      = row["id"]
-        self.nome    = row["nome"]
-        self.email   = row.get("email") or ""
-        self.usuario = row["usuario"]
-        self.ativo   = bool(row["ativo"])
-        self.perfil  = row.get("perfil") or "admin"
+        if not isinstance(row, dict):
+            row = dict(row)          # sqlite3.Row → dict
+        self.id        = row["id"]
+        self.nome      = row["nome"]
+        self.email     = row.get("email") or ""
+        self.usuario   = row["usuario"]
+        self.ativo     = bool(row["ativo"])
+        self.perfil    = row.get("perfil") or "admin"
         self.criado_em = row.get("criado_em") or ""
 
     def get_id(self):
