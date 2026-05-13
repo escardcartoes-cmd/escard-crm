@@ -16,6 +16,7 @@ import models.oportunidade as op_model
 import models.atividade as atv_model
 import models.prospeccao as prosp_model
 import models.usuario as user_model
+from models.usuario import require_perfil, PERFIS, PERFIL_LABELS
 import ai
 
 app = Flask(__name__)
@@ -93,6 +94,7 @@ def dashboard():
 
 @app.route("/empresas")
 @login_required
+@require_perfil('gerente')
 def empresas_lista():
     q      = request.args.get("q", "").strip()
     status = request.args.get("status", "").strip()
@@ -106,6 +108,7 @@ def empresas_lista():
 
 @app.route("/empresas/nova", methods=["GET", "POST"])
 @login_required
+@require_perfil('gerente')
 def empresas_nova():
     if request.method == "POST":
         emp_model.criar(_form_empresa(request.form))
@@ -117,6 +120,7 @@ def empresas_nova():
 
 @app.route("/empresas/<int:id>")
 @login_required
+@require_perfil('gerente')
 def empresas_detalhe(id):
     emp = emp_model.buscar_por_id(id)
     if not emp:
@@ -134,6 +138,7 @@ def empresas_detalhe(id):
 
 @app.route("/empresas/<int:id>/editar", methods=["GET", "POST"])
 @login_required
+@require_perfil('gerente')
 def empresas_editar(id):
     emp = emp_model.buscar_por_id(id)
     if not emp:
@@ -149,6 +154,7 @@ def empresas_editar(id):
 
 @app.route("/empresas/<int:id>/excluir", methods=["POST"])
 @login_required
+@require_perfil('gerente')
 def empresas_excluir(id):
     emp_model.excluir(id)
     flash("Empresa excluída.", "success")
@@ -157,6 +163,7 @@ def empresas_excluir(id):
 
 @app.route("/empresas/excluir-lote", methods=["POST"])
 @login_required
+@require_perfil('gerente')
 def empresas_excluir_lote():
     ids = (request.json or {}).get("ids", [])
     for id_ in ids:
@@ -195,6 +202,7 @@ def contatos_lista():
 
 @app.route("/contatos/novo", methods=["GET", "POST"])
 @login_required
+@require_perfil('vendedor')
 def contatos_novo():
     if request.method == "POST":
         cont_model.criar(_form_contato(request.form))
@@ -207,6 +215,7 @@ def contatos_novo():
 
 @app.route("/contatos/<int:id>/editar", methods=["GET", "POST"])
 @login_required
+@require_perfil('vendedor')
 def contatos_editar(id):
     c = cont_model.buscar_por_id(id)
     if not c:
@@ -223,6 +232,7 @@ def contatos_editar(id):
 
 @app.route("/contatos/<int:id>/excluir", methods=["POST"])
 @login_required
+@require_perfil('vendedor')
 def contatos_excluir(id):
     cont_model.excluir(id)
     flash("Contato excluído.", "success")
@@ -258,6 +268,7 @@ def oportunidades_kanban():
 
 @app.route("/oportunidades/nova", methods=["GET", "POST"])
 @login_required
+@require_perfil('vendedor')
 def oportunidades_nova():
     if request.method == "POST":
         op_model.criar(_form_oportunidade(request.form))
@@ -289,6 +300,7 @@ def oportunidades_detalhe(id):
 
 @app.route("/oportunidades/<int:id>/editar", methods=["GET", "POST"])
 @login_required
+@require_perfil('vendedor')
 def oportunidades_editar(id):
     o = op_model.buscar_por_id(id)
     if not o:
@@ -308,6 +320,7 @@ def oportunidades_editar(id):
 
 @app.route("/oportunidades/<int:id>/excluir", methods=["POST"])
 @login_required
+@require_perfil('vendedor')
 def oportunidades_excluir(id):
     op_model.excluir(id)
     flash("Oportunidade excluída.", "success")
@@ -316,6 +329,7 @@ def oportunidades_excluir(id):
 
 @app.route("/oportunidades/<int:id>/mover", methods=["POST"])
 @login_required
+@require_perfil('vendedor')
 def oportunidades_mover(id):
     novo = request.json.get("estagio", "")
     if novo not in op_model.ESTAGIOS:
@@ -361,6 +375,7 @@ def atividades_lista():
 
 @app.route("/atividades/nova", methods=["GET", "POST"])
 @login_required
+@require_perfil('vendedor')
 def atividades_nova():
     if request.method == "POST":
         emp_id = request.form.get("empresa_id")
@@ -390,6 +405,7 @@ def atividades_nova():
 
 @app.route("/atividades/<int:id>/excluir", methods=["POST"])
 @login_required
+@require_perfil('vendedor')
 def atividades_excluir(id):
     atv_model.excluir(id)
     flash("Atividade excluída.", "success")
@@ -400,6 +416,7 @@ def atividades_excluir(id):
 
 @app.route("/ai/score/<int:empresa_id>", methods=["POST"])
 @login_required
+@require_perfil('vendedor')
 def ai_score(empresa_id):
     try:
         return jsonify(ai.score_lead(empresa_id))
@@ -409,6 +426,7 @@ def ai_score(empresa_id):
 
 @app.route("/ai/whatsapp/<int:contato_id>", methods=["POST"])
 @login_required
+@require_perfil('vendedor')
 def ai_whatsapp(contato_id):
     try:
         return jsonify(ai.gerar_mensagem_whatsapp(contato_id))
@@ -418,6 +436,7 @@ def ai_whatsapp(contato_id):
 
 @app.route("/ai/proxima-acao/<int:op_id>", methods=["POST"])
 @login_required
+@require_perfil('vendedor')
 def ai_proxima_acao(op_id):
     try:
         return jsonify(ai.proxima_acao(op_id))
@@ -589,12 +608,14 @@ def _processar_linhas(linhas: list, mapa: dict) -> tuple:
 
 @app.route("/leads/importar")
 @login_required
+@require_perfil('gerente')
 def leads_importar_form():
     return render_template("leads/importar.html")
 
 
 @app.route("/leads/importar/preview", methods=["POST"])
 @login_required
+@require_perfil('gerente')
 def leads_importar_preview():
     arquivo = request.files.get("arquivo")
     if not arquivo or not arquivo.filename:
@@ -613,6 +634,7 @@ def leads_importar_preview():
 
 @app.route("/leads/importar/confirmar", methods=["POST"])
 @login_required
+@require_perfil('gerente')
 def leads_importar_confirmar():
     arquivo = request.files.get("arquivo")
     if not arquivo:
@@ -671,6 +693,7 @@ def prospeccao_lista():
 
 @app.route("/prospeccao/<int:id>/status", methods=["POST"])
 @login_required
+@require_perfil('vendedor')
 def prospeccao_status(id):
     novo = (request.json or {}).get("status", "")
     if novo not in prosp_model.STATUS_LIST:
@@ -681,6 +704,7 @@ def prospeccao_status(id):
 
 @app.route("/prospeccao/<int:id>/excluir", methods=["POST"])
 @login_required
+@require_perfil('vendedor')
 def prospeccao_excluir(id):
     prosp_model.excluir(id)
     flash("Lead removido da prospecção.", "success")
@@ -689,6 +713,7 @@ def prospeccao_excluir(id):
 
 @app.route("/prospeccao/excluir-lote", methods=["POST"])
 @login_required
+@require_perfil('vendedor')
 def prospeccao_excluir_lote():
     ids = (request.json or {}).get("ids", [])
     for id_ in ids:
@@ -698,6 +723,7 @@ def prospeccao_excluir_lote():
 
 @app.route("/prospeccao/exportar")
 @login_required
+@require_perfil('vendedor')
 def prospeccao_exportar():
     ids_raw = request.args.getlist("ids")
     ids = [int(i) for i in ids_raw if i.isdigit()]
@@ -733,6 +759,7 @@ def prospeccao_exportar():
 
 @app.route("/ai/leads/pontuar/<int:id>", methods=["POST"])
 @login_required
+@require_perfil('vendedor')
 def ai_leads_pontuar(id):
     try:
         lead = prosp_model.buscar_por_id(id)
@@ -759,6 +786,7 @@ def ai_leads_pontuar(id):
 
 @app.route("/ai/leads/whatsapp/<int:id>", methods=["POST"])
 @login_required
+@require_perfil('vendedor')
 def ai_leads_whatsapp(id):
     try:
         resultado = ai.gerar_whatsapp_lead(id)
@@ -770,6 +798,7 @@ def ai_leads_whatsapp(id):
 
 @app.route("/ai/leads/email/<int:id>", methods=["POST"])
 @login_required
+@require_perfil('vendedor')
 def ai_leads_email(id):
     try:
         resultado = ai.gerar_email_lead(id)
@@ -781,6 +810,107 @@ def ai_leads_email(id):
         })
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
+# ── Usuários ─────────────────────────────────────────────────────────────────
+
+@app.route("/usuarios")
+@login_required
+@require_perfil("admin")
+def usuarios_lista():
+    return render_template(
+        "usuarios/lista.html",
+        usuarios=user_model.listar(),
+        perfil_labels=PERFIL_LABELS,
+    )
+
+
+@app.route("/usuarios/novo", methods=["GET", "POST"])
+@login_required
+@require_perfil("admin")
+def usuarios_novo():
+    erro = None
+    if request.method == "POST":
+        dados, erro = _form_usuario(request.form)
+        if not erro:
+            try:
+                user_model.criar(dados)
+                flash("Usuário criado com sucesso.", "success")
+                return redirect(url_for("usuarios_lista"))
+            except Exception as e:
+                erro = "Usuário ou e-mail já existe." if "UNIQUE" in str(e).upper() else str(e)
+    return render_template("usuarios/form.html", usuario=None,
+                           perfis=PERFIS, perfil_labels=PERFIL_LABELS,
+                           action=url_for("usuarios_novo"), erro=erro)
+
+
+@app.route("/usuarios/<int:id>/editar", methods=["GET", "POST"])
+@login_required
+@require_perfil("admin")
+def usuarios_editar(id):
+    u = user_model.buscar_por_id(id)
+    if not u:
+        flash("Usuário não encontrado.", "danger")
+        return redirect(url_for("usuarios_lista"))
+    erro = None
+    if request.method == "POST":
+        dados, erro = _form_usuario(request.form, editando=True)
+        if not erro:
+            try:
+                user_model.atualizar(id, dados)
+                flash("Usuário atualizado.", "success")
+                return redirect(url_for("usuarios_lista"))
+            except Exception as e:
+                erro = "Usuário ou e-mail já existe." if "UNIQUE" in str(e).upper() else str(e)
+    return render_template("usuarios/form.html", usuario=u,
+                           perfis=PERFIS, perfil_labels=PERFIL_LABELS,
+                           action=url_for("usuarios_editar", id=id), erro=erro)
+
+
+@app.route("/usuarios/<int:id>/toggle", methods=["POST"])
+@login_required
+@require_perfil("admin")
+def usuarios_toggle(id):
+    if id == current_user.id:
+        return jsonify({"error": "Não é possível desativar o próprio usuário."}), 400
+    novo = user_model.toggle_ativo(id)
+    return jsonify({"ok": True, "ativo": novo})
+
+
+@app.route("/usuarios/<int:id>/excluir", methods=["POST"])
+@login_required
+@require_perfil("admin")
+def usuarios_excluir(id):
+    if id == current_user.id:
+        flash("Não é possível excluir o próprio usuário.", "danger")
+        return redirect(url_for("usuarios_lista"))
+    user_model.excluir(id)
+    flash("Usuário excluído.", "success")
+    return redirect(url_for("usuarios_lista"))
+
+
+def _form_usuario(f, editando=False):
+    nome    = f.get("nome", "").strip()
+    email   = f.get("email", "").strip() or None
+    usuario = f.get("usuario", "").strip()
+    senha   = f.get("senha", "")
+    senha2  = f.get("senha2", "")
+    perfil  = f.get("perfil", "vendedor")
+    ativo   = 1 if f.get("ativo") else 0
+
+    if not nome:
+        return None, "Nome é obrigatório."
+    if not usuario:
+        return None, "Usuário (login) é obrigatório."
+    if perfil not in PERFIS:
+        return None, "Perfil inválido."
+    if not editando and not senha:
+        return None, "Senha é obrigatória."
+    if senha and senha != senha2:
+        return None, "As senhas não coincidem."
+
+    return dict(nome=nome, email=email, usuario=usuario,
+                senha=senha, perfil=perfil, ativo=ativo), None
 
 
 # ── Central de IA ────────────────────────────────────────────────────────────
@@ -861,6 +991,7 @@ def central_ia():
 
 @app.route("/central-ia/chat", methods=["POST"])
 @login_required
+@require_perfil('vendedor')
 def central_ia_chat():
     try:
         body     = request.json or {}
@@ -898,6 +1029,7 @@ def central_ia_chat():
 
 @app.route("/central-ia/upload", methods=["POST"])
 @login_required
+@require_perfil('vendedor')
 def central_ia_upload():
     arquivo = request.files.get("arquivo")
     if not arquivo or not arquivo.filename:
@@ -929,6 +1061,7 @@ def central_ia_documentos():
 
 @app.route("/central-ia/documentos/<int:id>", methods=["DELETE"])
 @login_required
+@require_perfil('vendedor')
 def central_ia_doc_excluir(id):
     conn = database.get_connection()
     conn.execute("DELETE FROM documentos_ia WHERE id = ?", (id,))
