@@ -20,7 +20,7 @@ from models.usuario import require_perfil, PERFIS, PERFIL_LABELS
 import ai
 
 app = Flask(__name__)
-app.secret_key = os.getenv("SECRET_KEY", "escard-crm-2024")
+app.secret_key = os.getenv("SECRET_KEY", "krylo-crm-2024")
 app.permanent_session_lifetime = timedelta(hours=8)
 
 login_manager = LoginManager(app)
@@ -916,7 +916,7 @@ def _form_usuario(f, editando=False):
 # ── Central de IA ────────────────────────────────────────────────────────────
 
 _IA_SYSTEM_PROMPT = (
-    "Você é a IA consultora da Escard, empresa de cartão de benefícios B2B. "
+    "Você é a IA consultora da Krylo, empresa de cartão de benefícios B2B. "
     "Conhece profundamente todos os produtos: alimentação, refeição, combustível, "
     "premiação, private label, Welhub (wellness), Vidalink (farmácia), "
     "Viva+ (cultura e lazer), DM Card (carteira administrada). "

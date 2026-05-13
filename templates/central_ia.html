@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% block title %}Central de IA — Escard CRM{% endblock %}
+{% block title %}Central de IA — Krylo CRM{% endblock %}
 {% block topbar_title %}Central de IA{% endblock %}
 {% block topbar_actions %}
   <button class="btn btn-outline btn-sm" onclick="novaConversa()">+ Nova Conversa</button>
@@ -22,7 +22,7 @@
   /* Chat */
   .chat-header {
     padding: 14px 20px 10px;
-    background: linear-gradient(135deg, #1e3a5f 0%, #2563eb 100%);
+    background: linear-gradient(135deg, #4A3F35 0%, #C5A089 100%);
     color: #fff;
   }
   .chat-header h2 { font-size: 16px; font-weight: 700; margin: 0 0 2px; }
@@ -37,7 +37,7 @@
     background: #fff; border: 1px solid var(--border); color: var(--text);
     transition: background .15s, border-color .15s;
   }
-  .quick-btn:hover { background: #eff6ff; border-color: var(--blue); color: var(--blue); }
+  .quick-btn:hover { background: #FDF6F0; border-color: var(--blue); color: var(--blue); }
 
   .chat-messages {
     flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 12px;
@@ -49,14 +49,14 @@
     max-width: 72%; padding: 10px 14px; border-radius: 12px; font-size: 13px;
     line-height: 1.55; white-space: pre-wrap; word-break: break-word;
   }
-  .msg-row.user  .msg-bubble { background: #1e3a5f; color: #fff; border-bottom-right-radius: 3px; }
+  .msg-row.user  .msg-bubble { background: #4A3F35; color: #fff; border-bottom-right-radius: 3px; }
   .msg-row.ai    .msg-bubble { background: #fff; color: var(--text); border: 1px solid var(--border); border-bottom-left-radius: 3px; }
   .msg-avatar {
     width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center;
     justify-content: center; font-size: 12px; font-weight: 700; flex-shrink: 0;
   }
-  .msg-row.user .msg-avatar { background: #1e3a5f; color: #fff; }
-  .msg-row.ai   .msg-avatar { background: linear-gradient(135deg,#2563eb,#7c3aed); color: #fff; }
+  .msg-row.user .msg-avatar { background: #4A3F35; color: #fff; }
+  .msg-row.ai   .msg-avatar { background: linear-gradient(135deg,#C5A089,#8B6F5E); color: #fff; }
 
   .chat-empty {
     flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
@@ -85,10 +85,10 @@
   }
   #chatInput:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 0 3px rgba(37,99,235,.1); }
   #sendBtn {
-    padding: 10px 20px; background: #1e3a5f; color: #fff; border: none; border-radius: 8px;
+    padding: 10px 20px; background: #4A3F35; color: #fff; border: none; border-radius: 8px;
     font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap;
   }
-  #sendBtn:hover { background: #2563eb; }
+  #sendBtn:hover { background: #C5A089; }
   #sendBtn:disabled { opacity: .5; cursor: not-allowed; }
 
   /* Knowledge base */
@@ -97,7 +97,7 @@
     border: 2px dashed var(--border); border-radius: 10px; padding: 32px 20px;
     text-align: center; cursor: pointer; transition: border-color .2s, background .2s;
   }
-  .kb-upload-area:hover, .kb-upload-area.drag-over { border-color: var(--blue); background: #eff6ff; }
+  .kb-upload-area:hover, .kb-upload-area.drag-over { border-color: var(--blue); background: #FDF6F0; }
   .kb-upload-area svg { width: 40px; height: 40px; color: var(--text-muted); margin: 0 auto 10px; display: block; }
   .kb-upload-area p   { font-size: 13px; color: var(--text-muted); margin: 0; }
   .kb-upload-area strong { color: var(--blue); }
@@ -118,13 +118,13 @@
     justify-content: center; font-size: 13px; font-weight: 700; flex-shrink: 0; color: #fff;
   }
   .kb-doc-icon.PDF  { background: #dc2626; }
-  .kb-doc-icon.DOCX { background: #2563eb; }
+  .kb-doc-icon.DOCX { background: #C5A089; }
   .kb-doc-icon.XLSX { background: #16a34a; }
   .kb-doc-icon.CSV  { background: #059669; }
   .kb-doc-icon.PNG,
   .kb-doc-icon.JPG,
-  .kb-doc-icon.JPEG { background: #7c3aed; }
-  .kb-doc-icon.MP4  { background: #ea580c; }
+  .kb-doc-icon.JPEG { background: #8B6F5E; }
+  .kb-doc-icon.MP4  { background: #B8936A; }
   .kb-doc-icon.other { background: #64748b; }
   .kb-doc-info { flex: 1; min-width: 0; }
   .kb-doc-nome { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -148,16 +148,16 @@
   <div id="panel-chat" class="ia-panel active" style="flex:1;overflow:hidden">
     <div class="chat-header">
       <h2>Central de IA 🤖</h2>
-      <p>Sua consultora especialista em benefícios Escard</p>
+      <p>Sua consultora especialista em benefícios Krylo</p>
     </div>
 
     <div class="quick-btns">
       <button class="quick-btn" onclick="quickAction('Crie um texto de prospecção para uma empresa de médio porte do segmento de logística.')">💬 Criar texto de prospecção</button>
-      <button class="quick-btn" onclick="quickAction('Com base no perfil de uma empresa do setor de saúde com 200 funcionários, qual produto Escard você sugere e por quê?')">🎯 Sugerir produto por perfil</button>
+      <button class="quick-btn" onclick="quickAction('Com base no perfil de uma empresa do setor de saúde com 200 funcionários, qual produto Krylo você sugere e por quê?')">🎯 Sugerir produto por perfil</button>
       <button class="quick-btn" onclick="quickAction('Como devo responder a objeção: \"Já temos convênio com outro fornecedor e não queremos trocar\"?')">❓ Responder objeção</button>
       <button class="quick-btn" onclick="quickAction('Compare os produtos Welhub, Vidalink e Viva+ destacando os diferenciais de cada um para diferentes perfis de empresa.')">💰 Comparar produtos</button>
-      <button class="quick-btn" onclick="quickAction('Gere um email comercial profissional para apresentar os cartões Escard para o RH de uma empresa de tecnologia.')">📧 Gerar email comercial</button>
-      <button class="quick-btn" onclick="quickAction('Quais são os melhores argumentos de venda para convencer uma empresa a adotar o cartão de alimentação e refeição Escard?')">📊 Argumentos de venda</button>
+      <button class="quick-btn" onclick="quickAction('Gere um email comercial profissional para apresentar os cartões Krylo para o RH de uma empresa de tecnologia.')">📧 Gerar email comercial</button>
+      <button class="quick-btn" onclick="quickAction('Quais são os melhores argumentos de venda para convencer uma empresa a adotar o cartão de alimentação e refeição Krylo?')">📊 Argumentos de venda</button>
     </div>
 
     <div class="chat-messages" id="chatMessages">
@@ -171,7 +171,7 @@
     </div>
 
     <div class="chat-input-row">
-      <textarea id="chatInput" rows="1" placeholder="Escreva sua pergunta para a IA Escard…"></textarea>
+      <textarea id="chatInput" rows="1" placeholder="Escreva sua pergunta para a IA Krylo…"></textarea>
       <button id="sendBtn" onclick="enviarMensagem()">Enviar ➤</button>
     </div>
   </div>

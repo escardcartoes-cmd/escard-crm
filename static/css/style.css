@@ -1,12 +1,12 @@
 :root {
   --sidebar-w: 240px;
-  --blue:       #1E3A8A;
-  --blue-mid:   #2563EB;
-  --blue-hover: #1D4ED8;
-  --blue-light: #EFF6FF;
-  --orange:     #F97316;
-  --orange-dk:  #EA580C;
-  --bg:         #F1F5FF;
+  --blue:       #4A3F35;
+  --blue-mid:   #C5A089;
+  --blue-hover: #B8936A;
+  --blue-light: #FDF6F0;
+  --orange:     #C5A089;
+  --orange-dk:  #B8936A;
+  --bg:         #F9F5F1;
   --white:      #FFFFFF;
   --text:       #1E293B;
   --muted:      #64748B;
@@ -112,7 +112,7 @@ body {
   width: 46px; height: 46px; border-radius: 12px;
   display: flex; align-items: center; justify-content: center;
 }
-.ic-blue   { background: #EFF6FF; color: var(--blue-mid); }
+.ic-blue   { background: #FDF6F0; color: var(--blue-mid); }
 .ic-green  { background: #F0FDF4; color: #16A34A; }
 .ic-orange { background: #FFF7ED; color: var(--orange); }
 .ic-purple { background: #F5F3FF; color: #7C3AED; }
@@ -266,14 +266,14 @@ textarea { resize: vertical; min-height: 80px; }
 .kc-actions { display: flex; gap: 4px; margin-top: 7px; }
 
 .col-lead          .kanban-header { background: #FEF3C7; color: #92400E; }
-.col-qualificado   .kanban-header { background: #DBEAFE; color: #1E40AF; }
+.col-qualificado   .kanban-header { background: #DBEAFE; color: #6B5A4E; }
 .col-proposta      .kanban-header { background: #E0F2FE; color: #075985; }
 .col-negociacao    .kanban-header { background: #F3E8FF; color: #6B21A8; }
 .col-fechado_ganho   .kanban-header { background: #DCFCE7; color: #14532D; }
 .col-fechado_perdido .kanban-header { background: #FFE4E6; color: #9F1239; }
 
 .col-lead          { background: #FFFBEB; }
-.col-qualificado   { background: #EFF6FF; }
+.col-qualificado   { background: #FDF6F0; }
 .col-proposta      { background: #F0F9FF; }
 .col-negociacao    { background: #FAF5FF; }
 .col-fechado_ganho   { background: #F0FDF4; }
@@ -381,11 +381,11 @@ textarea { resize: vertical; min-height: 80px; }
 /* ── Prospecção — score badges ────────────────────────────────────────────── */
 .badge-score-quente { background: #FEF2F2; color: #B91C1C; }
 .badge-score-morno  { background: #FFFBEB; color: #B45309; }
-.badge-score-frio   { background: #EFF6FF; color: #1D4ED8; }
+.badge-score-frio   { background: #FDF6F0; color: #B8936A; }
 
 /* ── Prospecção — status badges ───────────────────────────────────────────── */
 .badge-status-pendente         { background: #F1F5F9; color: #475569; }
-.badge-status-mensagem_enviada { background: #EFF6FF; color: #1D4ED8; }
+.badge-status-mensagem_enviada { background: #FDF6F0; color: #B8936A; }
 .badge-status-respondeu        { background: #FFFBEB; color: #92400E; }
 .badge-status-convertido       { background: #F0FDF4; color: #15803D; }
 

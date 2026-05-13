@@ -1,6 +1,6 @@
 {% extends 'base.html' %}
 {% set editing = contato is not none %}
-{% block title %}{{ 'Editar' if editing else 'Novo' }} Contato — Escard CRM{% endblock %}
+{% block title %}{{ 'Editar' if editing else 'Novo' }} Contato — Krylo CRM{% endblock %}
 {% block topbar_title %}{{ 'Editar Contato' if editing else 'Novo Contato' }}{% endblock %}
 {% block topbar_actions %}
   <a href="{{ url_for('contatos_lista') }}" class="btn btn-outline btn-sm">← Voltar</a>

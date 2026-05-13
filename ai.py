@@ -43,7 +43,7 @@ def score_lead(empresa_id: int) -> dict:
     valores   = [o["valor_estimado"] for o in ops if o["valor_estimado"]]
     estagios  = [o["estagio"] for o in ops]
 
-    prompt = f"""Você é um analista de CRM da Escard, empresa de cartão de benefícios B2B.
+    prompt = f"""Você é um analista de CRM da Krylo, empresa de cartão de benefícios B2B.
 
 Avalie o lead abaixo e retorne SOMENTE um JSON válido, sem texto extra:
 {{"score": <0-100>, "justificativa": "<2-3 frases>", "pontos_fortes": ["..."], "pontos_fracos": ["..."]}}
@@ -79,10 +79,10 @@ def gerar_mensagem_whatsapp(contato_id: int) -> dict:
     ops = op_model.listar(empresa_id=emp["id"])
     estagio = ops[0]["estagio"] if ops else "sem negociação ativa"
 
-    prompt = f"""Você é um consultor comercial da Escard, empresa de cartão de benefícios B2B.
+    prompt = f"""Você é um consultor comercial da Krylo, empresa de cartão de benefícios B2B.
 
 Crie uma mensagem de WhatsApp personalizada para o contato abaixo.
-Regras: cordial e profissional, máximo 5 linhas, destaque um benefício do cartão Escard relevante para o segmento, termine com call-to-action claro.
+Regras: cordial e profissional, máximo 5 linhas, destaque um benefício do cartão Krylo relevante para o segmento, termine com call-to-action claro.
 Retorne SOMENTE um JSON válido: {{"mensagem": "<texto completo>"}}
 
 Contato: {contato['nome']}, {contato['cargo'] or 'colaborador'} — {emp['nome']}
@@ -111,14 +111,14 @@ def gerar_whatsapp_lead(prospeccao_id: int) -> dict:
         except Exception:
             pass
 
-    prompt = f"""Você é um consultor comercial da Escard, empresa brasileira de cartão de benefícios B2B.
+    prompt = f"""Você é um consultor comercial da Krylo, empresa brasileira de cartão de benefícios B2B.
 
-Produtos Escard: alimentação, refeição, combustível, premiação, Welhub (bem-estar), Vidalink (farmácia), Viva+ (saúde).
+Produtos Krylo: alimentação, refeição, combustível, premiação, Welhub (bem-estar), Vidalink (farmácia), Viva+ (saúde).
 Dor do cliente: gerenciar múltiplos cartões de benefícios é caro e complexo.
 Tom: consultivo, direto, não agressivo. Empresas ideais: 20 a 20.000 funcionários.
 
 Crie uma mensagem de WhatsApp de primeiro contato para o lead abaixo.
-Regras: máximo 5 linhas, identifique e recomende UM produto Escard específico para o segmento, termine com call-to-action claro para uma conversa de 15 minutos.
+Regras: máximo 5 linhas, identifique e recomende UM produto Krylo específico para o segmento, termine com call-to-action claro para uma conversa de 15 minutos.
 Retorne SOMENTE um JSON válido: {{"mensagem": "<texto completo>"}}
 
 Contato: {lead["contato_nome"]}, {lead["cargo"] or "cargo não informado"} — {lead["empresa_nome"]}
@@ -148,13 +148,13 @@ def gerar_email_lead(prospeccao_id: int) -> dict:
         except Exception:
             pass
 
-    prompt = f"""Você é um consultor comercial da Escard, empresa brasileira de cartão de benefícios B2B.
+    prompt = f"""Você é um consultor comercial da Krylo, empresa brasileira de cartão de benefícios B2B.
 
-Produtos Escard: alimentação, refeição, combustível, premiação, Welhub (bem-estar), Vidalink (farmácia), Viva+ (saúde).
+Produtos Krylo: alimentação, refeição, combustível, premiação, Welhub (bem-estar), Vidalink (farmácia), Viva+ (saúde).
 Dor do cliente: gerenciar múltiplos benefícios é caro e burocrático.
 Tom: consultivo, profissional, não agressivo.
 
-Crie um e-mail comercial de primeiro contato. Regras: assunto direto com no máximo 10 palavras; corpo com 3 parágrafos curtos (dor específica do segmento → como Escard resolve → CTA para reunião de 15 minutos); recomende UM produto Escard específico para o segmento.
+Crie um e-mail comercial de primeiro contato. Regras: assunto direto com no máximo 10 palavras; corpo com 3 parágrafos curtos (dor específica do segmento → como Krylo resolve → CTA para reunião de 15 minutos); recomende UM produto Krylo específico para o segmento.
 Retorne SOMENTE um JSON válido:
 {{"assunto": "<assunto do e-mail>", "corpo": "<corpo completo do e-mail>"}}
 
