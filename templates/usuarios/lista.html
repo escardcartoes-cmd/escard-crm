@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% block title %}Usuários — Escard CRM{% endblock %}
+{% block title %}Usuários — Krylo CRM{% endblock %}
 {% block topbar_title %}Usuários{% endblock %}
 {% block topbar_actions %}
   <a href="{{ url_for('usuarios_novo') }}" class="btn btn-primary">+ Novo Usuário</a>
@@ -9,7 +9,7 @@
 <style>
   .badge-perfil-admin        { background:#fef2f2; color:#be123c; border:1px solid #fecdd3; }
   .badge-perfil-gerente      { background:#fff7ed; color:#c2410c; border:1px solid #fed7aa; }
-  .badge-perfil-vendedor     { background:#eff6ff; color:#1d4ed8; border:1px solid #bfdbfe; }
+  .badge-perfil-vendedor     { background:#FDF6F0; color:#B8936A; border:1px solid #bfdbfe; }
   .badge-perfil-visualizador { background:#f8fafc; color:#475569; border:1px solid #e2e8f0; }
   .badge-status-ativo   { background:#f0fdf4; color:#15803d; border:1px solid #bbf7d0; }
   .badge-status-inativo { background:#fef2f2; color:#be123c; border:1px solid #fecdd3; }
@@ -46,7 +46,7 @@
           {% if u.id == current_user.id %}<span style="font-size:10px;color:var(--muted);margin-left:4px">(você)</span>{% endif %}
         </td>
         <td>{{ u.email or '—' }}</td>
-        <td><code style="font-size:12px;background:#f1f5f9;padding:2px 6px;border-radius:4px">{{ u.usuario }}</code></td>
+        <td><code style="font-size:12px;background:#F9F5F1;padding:2px 6px;border-radius:4px">{{ u.usuario }}</code></td>
         <td>
           <span class="badge-p badge-perfil-{{ u.perfil }}">
             {{ perfil_labels.get(u.perfil, u.perfil) }}

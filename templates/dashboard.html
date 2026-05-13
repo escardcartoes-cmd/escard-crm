@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% block title %}Dashboard — Escard CRM{% endblock %}
+{% block title %}Dashboard — Krylo CRM{% endblock %}
 {% block topbar_title %}Dashboard{% endblock %}
 {% block topbar_actions %}
   <a href="{{ url_for('empresas_nova') }}" class="btn btn-outline btn-sm">+ Empresa</a>
@@ -140,7 +140,7 @@ new Chart(document.getElementById('statusChart'), {
   data: {
     labels: Object.keys(statusData).map(s => s.charAt(0).toUpperCase() + s.slice(1)),
     datasets: [{ data: Object.values(statusData),
-      backgroundColor: ['#F97316', '#16A34A', '#94A3B8'], borderWidth: 0 }]
+      backgroundColor: ['#C5A089', '#16A34A', '#94A3B8'], borderWidth: 0 }]
   },
   options: {
     responsive: true, cutout: '62%',
@@ -153,7 +153,7 @@ new Chart(document.getElementById('estagioChart'), {
   data: {
     labels: Object.keys(estagioData).map(k => ESTAGIO_LABELS[k] || k),
     datasets: [{ label: 'Oportunidades', data: Object.values(estagioData),
-      backgroundColor: '#1E3A8A', borderRadius: 5 }]
+      backgroundColor: '#4A3F35', borderRadius: 5 }]
   },
   options: {
     responsive: true,

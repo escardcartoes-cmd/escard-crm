@@ -1,6 +1,6 @@
 {% extends 'base.html' %}
 {% set editing = empresa is not none %}
-{% block title %}{{ 'Editar' if editing else 'Nova' }} Empresa — Escard CRM{% endblock %}
+{% block title %}{{ 'Editar' if editing else 'Nova' }} Empresa — Krylo CRM{% endblock %}
 {% block topbar_title %}{{ 'Editar Empresa' if editing else 'Nova Empresa' }}{% endblock %}
 {% block topbar_actions %}
   <a href="{{ url_for('empresas_lista') }}" class="btn btn-outline btn-sm">← Voltar</a>

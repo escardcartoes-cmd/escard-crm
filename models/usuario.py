@@ -142,7 +142,7 @@ def criar_admin_se_necessario():
         conn.execute(
             "INSERT INTO usuarios (nome, email, usuario, senha_hash, perfil) "
             "VALUES (?, ?, ?, ?, ?)",
-            ("Administrador", "admin@escard.com.br", "admin", _hash("escard2024"), "admin"),
+            ("Administrador", "admin@krylo.com.br", "admin", _hash("escard2024"), "admin"),
         )
     else:
         conn.execute(

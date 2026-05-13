@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% block title %}{{ 'Editar' if usuario else 'Novo' }} Usuário — Escard CRM{% endblock %}
+{% block title %}{{ 'Editar' if usuario else 'Novo' }} Usuário — Krylo CRM{% endblock %}
 {% block topbar_title %}{{ 'Editar Usuário' if usuario else 'Novo Usuário' }}{% endblock %}
 {% block topbar_actions %}
   <a href="{{ url_for('usuarios_lista') }}" class="btn btn-outline btn-sm">← Voltar</a>
@@ -79,7 +79,7 @@
         <div style="margin-top:8px;display:flex;flex-direction:column;gap:5px">
           <div><span style="color:#be123c;font-weight:700">Admin</span> — Acesso total, incluindo gerenciamento de usuários</div>
           <div><span style="color:#c2410c;font-weight:700">Gerente</span> — Acesso a todas as telas exceto Usuários</div>
-          <div><span style="color:#1d4ed8;font-weight:700">Vendedor</span> — Prospecção, Contatos, Oportunidades e Atividades</div>
+          <div><span style="color:#B8936A;font-weight:700">Vendedor</span> — Prospecção, Contatos, Oportunidades e Atividades</div>
           <div><span style="color:#475569;font-weight:700">Visualizador</span> — Apenas leitura, sem criar/editar/excluir</div>
         </div>
       </div>
