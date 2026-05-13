@@ -86,6 +86,16 @@ _SQLITE_DDL = """
         data_upload     TEXT    DEFAULT (datetime('now', 'localtime')),
         tamanho         INTEGER
     );
+
+    CREATE TABLE IF NOT EXISTS usuarios (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        nome        TEXT    NOT NULL,
+        email       TEXT    UNIQUE,
+        usuario     TEXT    NOT NULL UNIQUE,
+        senha_hash  TEXT    NOT NULL,
+        ativo       INTEGER NOT NULL DEFAULT 1,
+        criado_em   TEXT    DEFAULT (datetime('now', 'localtime'))
+    );
 """
 
 
