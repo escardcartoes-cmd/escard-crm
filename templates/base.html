@@ -92,7 +92,25 @@
       </a>
     </nav>
 
-    <div class="sidebar-footer">Escard CRM v2.0</div>
+    <div class="sidebar-footer">
+      {% if current_user.is_authenticated %}
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:6px">
+        <span style="font-size:11px;color:rgba(255,255,255,.5);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+          {{ current_user.nome }}
+        </span>
+        <a href="{{ url_for('logout') }}"
+           style="font-size:11px;color:rgba(255,255,255,.4);text-decoration:none;white-space:nowrap;
+                  padding:3px 7px;border:1px solid rgba(255,255,255,.2);border-radius:4px;
+                  transition:color .15s,border-color .15s"
+           onmouseover="this.style.color='#fff';this.style.borderColor='rgba(255,255,255,.5)'"
+           onmouseout="this.style.color='rgba(255,255,255,.4)';this.style.borderColor='rgba(255,255,255,.2)'">
+          Sair
+        </a>
+      </div>
+      {% else %}
+      Escard CRM v2.0
+      {% endif %}
+    </div>
   </aside>
 
   <!-- ── Main ─────────────────────────────────────────────────────────────── -->

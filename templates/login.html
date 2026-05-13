@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Login — Escard CRM</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(135deg, #1E3A8A 0%, #1e40af 50%, #1e3a8a 100%);
+      padding: 20px;
+    }
+    .login-box {
+      background: #fff;
+      border-radius: 16px;
+      padding: 44px 40px;
+      width: 100%;
+      max-width: 400px;
+      box-shadow: 0 20px 60px rgba(0,0,0,.25);
+    }
+    .logo-wrap { text-align: center; margin-bottom: 32px; }
+    .logo-name {
+      font-size: 28px; font-weight: 800; color: #1E3A8A; letter-spacing: .3px;
+    }
+    .logo-name span { color: #F97316; }
+    .logo-sub { font-size: 12px; color: #64748b; margin-top: 4px; }
+    .login-title { font-size: 16px; font-weight: 700; color: #1e293b; margin-bottom: 24px; text-align: center; }
+
+    .form-group { margin-bottom: 18px; }
+    label { display: block; font-size: 12px; font-weight: 600; color: #475569; margin-bottom: 6px; letter-spacing: .3px; text-transform: uppercase; }
+    input[type="text"], input[type="password"] {
+      width: 100%; padding: 11px 14px;
+      border: 1.5px solid #e2e8f0; border-radius: 8px;
+      font-size: 14px; font-family: inherit; color: #1e293b;
+      transition: border-color .15s, box-shadow .15s;
+      outline: none;
+    }
+    input[type="text"]:focus, input[type="password"]:focus {
+      border-color: #2563eb;
+      box-shadow: 0 0 0 3px rgba(37,99,235,.12);
+    }
+    .btn-login {
+      width: 100%; padding: 13px;
+      background: #1E3A8A; color: #fff;
+      border: none; border-radius: 8px;
+      font-size: 15px; font-weight: 700; font-family: inherit;
+      cursor: pointer; margin-top: 8px;
+      transition: background .15s;
+    }
+    .btn-login:hover { background: #2563eb; }
+
+    .alert {
+      background: #fef2f2; border: 1px solid #fecdd3; color: #be123c;
+      padding: 10px 14px; border-radius: 7px; font-size: 13px;
+      margin-bottom: 18px; display: flex; align-items: center; gap: 8px;
+    }
+    .login-footer { text-align: center; margin-top: 24px; font-size: 11px; color: #94a3b8; }
+  </style>
+</head>
+<body>
+  <div class="login-box">
+    <div class="logo-wrap">
+      <div class="logo-name">Es<span>card</span></div>
+      <div class="logo-sub">CRM · Cartão de Benefícios B2B</div>
+    </div>
+
+    <p class="login-title">Acesse sua conta</p>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% for cat, msg in messages %}
+        <div class="alert">⚠ {{ msg }}</div>
+      {% endfor %}
+    {% endwith %}
+
+    <form method="post" action="{{ url_for('login') }}">
+      <div class="form-group">
+        <label for="usuario">Usuário</label>
+        <input type="text" id="usuario" name="usuario" placeholder="admin"
+               autocomplete="username" required autofocus>
+      </div>
+      <div class="form-group">
+        <label for="senha">Senha</label>
+        <input type="password" id="senha" name="senha" placeholder="••••••••"
+               autocomplete="current-password" required>
+      </div>
+      <button type="submit" class="btn-login">Entrar →</button>
+    </form>
+
+    <div class="login-footer">Escard CRM v2.0 — Acesso restrito</div>
+  </div>
+</body>
+</html>

@@ -3,29 +3,69 @@ import csv
 import io
 import json
 import time
+from datetime import timedelta
 from dotenv import load_dotenv
 load_dotenv(override=True)
 
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, Response
+from flask_login import LoginManager, login_user, logout_user, login_required, current_user
 import database
 import models.empresa as emp_model
 import models.contato as cont_model
 import models.oportunidade as op_model
 import models.atividade as atv_model
 import models.prospeccao as prosp_model
+import models.usuario as user_model
 import ai
 
 app = Flask(__name__)
 app.secret_key = os.getenv("SECRET_KEY", "escard-crm-2024")
+app.permanent_session_lifetime = timedelta(hours=8)
+
+login_manager = LoginManager(app)
+login_manager.login_view = "login"
+login_manager.login_message = "Faça login para acessar o CRM."
+login_manager.login_message_category = "danger"
+
+@login_manager.user_loader
+def load_user(user_id):
+    return user_model.buscar_por_id(int(user_id))
 
 _START_TIME = str(time.time())
 
 database.init_db()
+user_model.criar_admin_se_necessario()
+
+
+# ── Auth ──────────────────────────────────────────────────────────────────────
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if current_user.is_authenticated:
+        return redirect(url_for("dashboard"))
+    if request.method == "POST":
+        usuario = request.form.get("usuario", "").strip()
+        senha   = request.form.get("senha", "")
+        u = user_model.autenticar(usuario, senha)
+        if u:
+            login_user(u, remember=True)
+            return redirect(request.args.get("next") or url_for("dashboard"))
+        flash("Usuário ou senha incorretos.", "danger")
+    return render_template("login.html")
+
+
+@app.route("/logout")
+@login_required
+def logout():
+    logout_user()
+    flash("Sessão encerrada.", "success")
+    return redirect(url_for("login"))
 
 
 # ── Dashboard ─────────────────────────────────────────────────────────────────
 
 @app.route("/")
+@login_required
 def dashboard():
     status_counts  = emp_model.contar_por_status()
     estagio_counts = op_model.contar_por_estagio()
@@ -52,6 +92,7 @@ def dashboard():
 # ── Empresas ──────────────────────────────────────────────────────────────────
 
 @app.route("/empresas")
+@login_required
 def empresas_lista():
     q      = request.args.get("q", "").strip()
     status = request.args.get("status", "").strip()
@@ -64,6 +105,7 @@ def empresas_lista():
 
 
 @app.route("/empresas/nova", methods=["GET", "POST"])
+@login_required
 def empresas_nova():
     if request.method == "POST":
         emp_model.criar(_form_empresa(request.form))
@@ -74,6 +116,7 @@ def empresas_nova():
 
 
 @app.route("/empresas/<int:id>")
+@login_required
 def empresas_detalhe(id):
     emp = emp_model.buscar_por_id(id)
     if not emp:
@@ -90,6 +133,7 @@ def empresas_detalhe(id):
 
 
 @app.route("/empresas/<int:id>/editar", methods=["GET", "POST"])
+@login_required
 def empresas_editar(id):
     emp = emp_model.buscar_por_id(id)
     if not emp:
@@ -104,6 +148,7 @@ def empresas_editar(id):
 
 
 @app.route("/empresas/<int:id>/excluir", methods=["POST"])
+@login_required
 def empresas_excluir(id):
     emp_model.excluir(id)
     flash("Empresa excluída.", "success")
@@ -111,6 +156,7 @@ def empresas_excluir(id):
 
 
 @app.route("/empresas/excluir-lote", methods=["POST"])
+@login_required
 def empresas_excluir_lote():
     ids = (request.json or {}).get("ids", [])
     for id_ in ids:
@@ -135,6 +181,7 @@ def _form_empresa(f):
 # ── Contatos ──────────────────────────────────────────────────────────────────
 
 @app.route("/contatos")
+@login_required
 def contatos_lista():
     q    = request.args.get("q", "").strip()
     todos = cont_model.listar()
@@ -147,6 +194,7 @@ def contatos_lista():
 
 
 @app.route("/contatos/novo", methods=["GET", "POST"])
+@login_required
 def contatos_novo():
     if request.method == "POST":
         cont_model.criar(_form_contato(request.form))
@@ -158,6 +206,7 @@ def contatos_novo():
 
 
 @app.route("/contatos/<int:id>/editar", methods=["GET", "POST"])
+@login_required
 def contatos_editar(id):
     c = cont_model.buscar_por_id(id)
     if not c:
@@ -173,6 +222,7 @@ def contatos_editar(id):
 
 
 @app.route("/contatos/<int:id>/excluir", methods=["POST"])
+@login_required
 def contatos_excluir(id):
     cont_model.excluir(id)
     flash("Contato excluído.", "success")
@@ -192,6 +242,7 @@ def _form_contato(f):
 # ── Oportunidades ─────────────────────────────────────────────────────────────
 
 @app.route("/oportunidades")
+@login_required
 def oportunidades_kanban():
     todas      = op_model.listar()
     by_estagio = {e: [] for e in op_model.ESTAGIOS}
@@ -206,6 +257,7 @@ def oportunidades_kanban():
 
 
 @app.route("/oportunidades/nova", methods=["GET", "POST"])
+@login_required
 def oportunidades_nova():
     if request.method == "POST":
         op_model.criar(_form_oportunidade(request.form))
@@ -220,6 +272,7 @@ def oportunidades_nova():
 
 
 @app.route("/oportunidades/<int:id>")
+@login_required
 def oportunidades_detalhe(id):
     o = op_model.buscar_por_id(id)
     if not o:
@@ -235,6 +288,7 @@ def oportunidades_detalhe(id):
 
 
 @app.route("/oportunidades/<int:id>/editar", methods=["GET", "POST"])
+@login_required
 def oportunidades_editar(id):
     o = op_model.buscar_por_id(id)
     if not o:
@@ -253,6 +307,7 @@ def oportunidades_editar(id):
 
 
 @app.route("/oportunidades/<int:id>/excluir", methods=["POST"])
+@login_required
 def oportunidades_excluir(id):
     op_model.excluir(id)
     flash("Oportunidade excluída.", "success")
@@ -260,6 +315,7 @@ def oportunidades_excluir(id):
 
 
 @app.route("/oportunidades/<int:id>/mover", methods=["POST"])
+@login_required
 def oportunidades_mover(id):
     novo = request.json.get("estagio", "")
     if novo not in op_model.ESTAGIOS:
@@ -297,12 +353,14 @@ def _form_oportunidade(f):
 # ── Atividades ────────────────────────────────────────────────────────────────
 
 @app.route("/atividades")
+@login_required
 def atividades_lista():
     return render_template("atividades/lista.html",
                            atividades=atv_model.listar(limit=50))
 
 
 @app.route("/atividades/nova", methods=["GET", "POST"])
+@login_required
 def atividades_nova():
     if request.method == "POST":
         emp_id = request.form.get("empresa_id")
@@ -331,6 +389,7 @@ def atividades_nova():
 
 
 @app.route("/atividades/<int:id>/excluir", methods=["POST"])
+@login_required
 def atividades_excluir(id):
     atv_model.excluir(id)
     flash("Atividade excluída.", "success")
@@ -340,6 +399,7 @@ def atividades_excluir(id):
 # ── IA ────────────────────────────────────────────────────────────────────────
 
 @app.route("/ai/score/<int:empresa_id>", methods=["POST"])
+@login_required
 def ai_score(empresa_id):
     try:
         return jsonify(ai.score_lead(empresa_id))
@@ -348,6 +408,7 @@ def ai_score(empresa_id):
 
 
 @app.route("/ai/whatsapp/<int:contato_id>", methods=["POST"])
+@login_required
 def ai_whatsapp(contato_id):
     try:
         return jsonify(ai.gerar_mensagem_whatsapp(contato_id))
@@ -356,6 +417,7 @@ def ai_whatsapp(contato_id):
 
 
 @app.route("/ai/proxima-acao/<int:op_id>", methods=["POST"])
+@login_required
 def ai_proxima_acao(op_id):
     try:
         return jsonify(ai.proxima_acao(op_id))
@@ -526,11 +588,13 @@ def _processar_linhas(linhas: list, mapa: dict) -> tuple:
 # ── Leads — importar ──────────────────────────────────────────────────────────
 
 @app.route("/leads/importar")
+@login_required
 def leads_importar_form():
     return render_template("leads/importar.html")
 
 
 @app.route("/leads/importar/preview", methods=["POST"])
+@login_required
 def leads_importar_preview():
     arquivo = request.files.get("arquivo")
     if not arquivo or not arquivo.filename:
@@ -548,6 +612,7 @@ def leads_importar_preview():
 
 
 @app.route("/leads/importar/confirmar", methods=["POST"])
+@login_required
 def leads_importar_confirmar():
     arquivo = request.files.get("arquivo")
     if not arquivo:
@@ -577,6 +642,7 @@ def leads_importar_confirmar():
 # ── Prospecção ────────────────────────────────────────────────────────────────
 
 @app.route("/prospeccao")
+@login_required
 def prospeccao_lista():
     tab    = request.args.get("tab", "todos")
     status = request.args.get("status", "")
@@ -604,6 +670,7 @@ def prospeccao_lista():
 
 
 @app.route("/prospeccao/<int:id>/status", methods=["POST"])
+@login_required
 def prospeccao_status(id):
     novo = (request.json or {}).get("status", "")
     if novo not in prosp_model.STATUS_LIST:
@@ -613,6 +680,7 @@ def prospeccao_status(id):
 
 
 @app.route("/prospeccao/<int:id>/excluir", methods=["POST"])
+@login_required
 def prospeccao_excluir(id):
     prosp_model.excluir(id)
     flash("Lead removido da prospecção.", "success")
@@ -620,6 +688,7 @@ def prospeccao_excluir(id):
 
 
 @app.route("/prospeccao/excluir-lote", methods=["POST"])
+@login_required
 def prospeccao_excluir_lote():
     ids = (request.json or {}).get("ids", [])
     for id_ in ids:
@@ -628,6 +697,7 @@ def prospeccao_excluir_lote():
 
 
 @app.route("/prospeccao/exportar")
+@login_required
 def prospeccao_exportar():
     ids_raw = request.args.getlist("ids")
     ids = [int(i) for i in ids_raw if i.isdigit()]
@@ -662,6 +732,7 @@ def prospeccao_exportar():
 # ── IA — leads (por lead, chamadas via JS loop) ───────────────────────────────
 
 @app.route("/ai/leads/pontuar/<int:id>", methods=["POST"])
+@login_required
 def ai_leads_pontuar(id):
     try:
         lead = prosp_model.buscar_por_id(id)
@@ -687,6 +758,7 @@ def ai_leads_pontuar(id):
 
 
 @app.route("/ai/leads/whatsapp/<int:id>", methods=["POST"])
+@login_required
 def ai_leads_whatsapp(id):
     try:
         resultado = ai.gerar_whatsapp_lead(id)
@@ -697,6 +769,7 @@ def ai_leads_whatsapp(id):
 
 
 @app.route("/ai/leads/email/<int:id>", methods=["POST"])
+@login_required
 def ai_leads_email(id):
     try:
         resultado = ai.gerar_email_lead(id)
@@ -777,6 +850,7 @@ def _extrair_texto(raw: bytes, nome: str, mimetype: str) -> str:
 
 
 @app.route("/central-ia")
+@login_required
 def central_ia():
     conn  = database.get_connection()
     cur   = conn.execute("SELECT id, nome, tipo, data_upload, tamanho FROM documentos_ia ORDER BY data_upload DESC")
@@ -786,6 +860,7 @@ def central_ia():
 
 
 @app.route("/central-ia/chat", methods=["POST"])
+@login_required
 def central_ia_chat():
     try:
         body     = request.json or {}
@@ -822,6 +897,7 @@ def central_ia_chat():
 
 
 @app.route("/central-ia/upload", methods=["POST"])
+@login_required
 def central_ia_upload():
     arquivo = request.files.get("arquivo")
     if not arquivo or not arquivo.filename:
@@ -842,6 +918,7 @@ def central_ia_upload():
 
 
 @app.route("/central-ia/documentos")
+@login_required
 def central_ia_documentos():
     conn = database.get_connection()
     cur  = conn.execute("SELECT id, nome, tipo, data_upload, tamanho FROM documentos_ia ORDER BY data_upload DESC")
@@ -851,6 +928,7 @@ def central_ia_documentos():
 
 
 @app.route("/central-ia/documentos/<int:id>", methods=["DELETE"])
+@login_required
 def central_ia_doc_excluir(id):
     conn = database.get_connection()
     conn.execute("DELETE FROM documentos_ia WHERE id = ?", (id,))
