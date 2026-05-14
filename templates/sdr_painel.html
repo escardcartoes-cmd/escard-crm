@@ -560,21 +560,28 @@ async function salvarFiltros() {
 
 async function salvarERodar() {
   await salvarFiltros();
-  rodarAgora(document.querySelector('button[onclick*="rodarAgora"]'));
+  rodarAgora(null);
 }
 
 function rodarAgora(btn) {
-  ultimoEventoId = 0;
-  if (btn) { btn.disabled = true; }
+  if (btn) { btn.disabled = true; btn.textContent = '…'; }
   fetch('/prospeccao/autonoma/rodar', {
-    method: 'POST', headers: { 'X-Requested-With': 'XMLHttpRequest' }
-  }).then(() => {
-    setTimeout(atualizarPainel, 1000);
-    if (!intervalAoVivo) {
-      intervalAoVivo = setInterval(atualizarPainel, 2000);
-    }
-  }).catch(e => console.error('SDR rodar erro:', e))
-    .finally(() => { if (btn) btn.disabled = false; });
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
+  })
+  .then(r => r.json())
+  .then(data => {
+    ultimoEventoId = 0;
+    mostrarToast(data.status === 'iniciado' ? '⚡ SDR iniciado em background!' : (data.mensagem || 'SDR rodando…'), '#16A34A');
+    setTimeout(atualizarPainel, 800);
+  })
+  .catch(err => {
+    console.error('SDR rodar erro:', err);
+    mostrarToast('Erro ao iniciar SDR — veja o console', '#DC2626');
+  })
+  .finally(() => {
+    if (btn) { btn.disabled = false; btn.innerHTML = btn.id === 'btn-rodar-painel' ? '▶ Rodar agora' : '⚡ Rodar agora'; }
+  });
 }
 
 async function toggleSDR(btn) {
@@ -774,7 +781,8 @@ function atualizarPainel() {
               (ev.uf ? ` <span style="color:#555">[${ev.uf}]</span>` : '');
             feed.appendChild(div);
           });
-          ultimoEventoId = Math.max(...data.eventos.map(e => e.id));
+          const ids = data.eventos.map(e => e.id).filter(x => x != null);
+          if (ids.length) ultimoEventoId = Math.max(...ids);
           feed.scrollTop = feed.scrollHeight;
         }
       }
@@ -783,8 +791,34 @@ function atualizarPainel() {
 }
 
 function pausarSDR() {
-  fetch('/sdr/pausar', {method: 'POST', headers: {'X-Requested-With': 'XMLHttpRequest'}})
-    .then(() => atualizarPainel());
+  const btn = document.getElementById('btn-pausar-painel');
+  if (btn) { btn.disabled = true; btn.textContent = '…'; }
+  fetch('/sdr/pausar', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
+  })
+  .then(r => r.json())
+  .then(data => {
+    mostrarToast('⏸ SDR pausado', '#C2410C');
+    atualizarPainel();
+  })
+  .catch(err => {
+    console.error('SDR pausar erro:', err);
+    mostrarToast('Erro ao pausar SDR', '#DC2626');
+  })
+  .finally(() => {
+    if (btn) { btn.disabled = false; btn.textContent = '⏸ Pausar'; }
+  });
+}
+
+function mostrarToast(msg, cor) {
+  const t = document.getElementById('toast');
+  if (!t) return;
+  t.textContent = msg;
+  t.style.background = cor || '#16A34A';
+  t.style.display = 'block';
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => t.style.display = 'none', 3000);
 }
 </script>
 {% endblock %}

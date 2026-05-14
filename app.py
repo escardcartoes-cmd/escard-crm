@@ -127,7 +127,7 @@ def _job_prospeccao_autonoma():
 
     try:
         from models.prospeccao_autonoma import rodar_prospeccao_autonoma
-        _db_sdr = database.get_connection()
+        _db_sdr = database.get_new_db_connection()
         resultado = rodar_prospeccao_autonoma(_db_sdr)
         try:
             _db_sdr.close()
@@ -1027,7 +1027,7 @@ def prospeccao_autonoma_rodar():
 
     def _rodar():
         try:
-            _db = database.get_connection()
+            _db = database.get_new_db_connection()
             resultado = rodar_prospeccao_autonoma(_db)
             try:
                 _db.close()
