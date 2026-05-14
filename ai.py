@@ -171,6 +171,35 @@ Pontos fortes: {", ".join(pontos_fortes) if pontos_fortes else "não disponível
     return _parse_json(msg.content[0].text)
 
 
+def gerar_email_cadencia(empresa_nome: str, etapa: int, produto: str = "") -> dict:
+    """
+    Gera assunto + corpo de e-mail para cadência (etapa 2 ou 4) via Claude Haiku.
+    Usado como fallback quando o conteúdo não foi pré-gerado.
+    Retorna {"assunto": "...", "corpo": "..."}.
+    """
+    etapa_desc = {
+        2: "follow-up 3 dias após o primeiro contato",
+        4: "último contato (14 dias), urgência suave e oferta de demo de 15 min",
+    }.get(etapa, "follow-up")
+    pitch = produto or "cartão de benefícios Krylo (alimentação, refeição, combustível, saúde, wellness)"
+
+    prompt = (
+        f"Você é consultor comercial da Krylo, empresa brasileira de benefícios B2B.\n"
+        f"Escreva um e-mail de {etapa_desc} para a empresa {empresa_nome}.\n"
+        f"Produto: {pitch}\n"
+        f"Regras: assunto direto (máx 8 palavras), corpo com 3 parágrafos curtos, "
+        f"call-to-action para reunião de 15 minutos.\n"
+        f"Retorne SOMENTE um JSON válido:\n"
+        f'{{\"assunto\": \"<assunto>\", \"corpo\": \"<corpo em HTML simples com <p> e <strong>>\"}}'
+    )
+    msg = _get_client().messages.create(
+        model="claude-haiku-4-5-20251001",
+        max_tokens=700,
+        messages=[{"role": "user", "content": prompt}],
+    )
+    return _parse_json(msg.content[0].text)
+
+
 def proximos_passos_semanal(dados: dict) -> str:
     import json as _json
     dados_resumo = {k: v for k, v in dados.items() if k != "top_ops"}

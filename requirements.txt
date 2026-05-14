@@ -13,3 +13,5 @@ python-docx>=1.1.0
 Pillow>=10.0.0
 flask-login>=0.6.3
 bcrypt>=4.0.0
+apscheduler>=3.10.0
+sib-api-v3-sdk>=7.6.0

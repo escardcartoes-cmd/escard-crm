@@ -97,6 +97,8 @@ _SQLITE_DDL = """
         assunto_email     TEXT,
         corpo_email       TEXT,
         status            TEXT    NOT NULL DEFAULT 'pendente',
+        email_status      TEXT    NOT NULL DEFAULT 'sem_email',
+        email_brevo_id    TEXT,
         criado_em         TEXT    DEFAULT (datetime('now', 'localtime'))
     );
 
@@ -169,6 +171,34 @@ _SQLITE_DDL = """
         fonte     TEXT,
         lido      INTEGER DEFAULT 0,
         criado_em TEXT    DEFAULT (datetime('now', 'localtime'))
+    );
+
+    CREATE TABLE IF NOT EXISTS prospeccao_automatica (
+        id             INTEGER PRIMARY KEY AUTOINCREMENT,
+        cnpj           TEXT    UNIQUE,
+        razao_social   TEXT,
+        municipio      TEXT,
+        uf             TEXT,
+        cnae_descricao TEXT,
+        telefone       TEXT,
+        email          TEXT,
+        capital_social REAL    DEFAULT 0,
+        score_fit      INTEGER DEFAULT 0,
+        status         TEXT    DEFAULT 'novo',
+        importado_em   TEXT    DEFAULT (datetime('now', 'localtime'))
+    );
+
+    CREATE TABLE IF NOT EXISTS ramos_atividade (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        nome        TEXT    NOT NULL,
+        descricao   TEXT,
+        cnaes       TEXT,
+        pitch       TEXT,
+        score_min   INTEGER DEFAULT 6,
+        estados     TEXT    DEFAULT 'ES,SP',
+        capital_min INTEGER DEFAULT 100000,
+        ativo       INTEGER DEFAULT 1,
+        criado_em   TEXT    DEFAULT (datetime('now', 'localtime'))
     );
 
     CREATE TABLE IF NOT EXISTS usuarios (
@@ -298,4 +328,39 @@ def init_db() -> None:
             conn.commit()
         except Exception:
             pass
+    # Migration: Brevo e-mail tracking columns
+    for _col in [
+        "ALTER TABLE cadencias ADD COLUMN email_status TEXT NOT NULL DEFAULT 'sem_email'",
+        "ALTER TABLE cadencias ADD COLUMN email_brevo_id TEXT",
+    ]:
+        try:
+            conn.execute(_col)
+            conn.commit()
+        except Exception:
+            pass
+    # Seed: ramos_atividade — insere apenas se a tabela estiver vazia
+    try:
+        _cnt = conn.execute("SELECT COUNT(*) AS cnt FROM ramos_atividade").fetchone()
+        if (_cnt["cnt"] if _cnt else 0) == 0:
+            for _r in [
+                ("Benefícios Corporativos",
+                 "Empresas que consomem VR/VA/combustível",
+                 "4711302,6202300,4120400,8610101",
+                 "A Krylo oferece Vale Refeição, VA e Combustível sem taxa de adesão",
+                 6, "ES,SP"),
+                ("Cobrança Terceirizada",
+                 "Empresas com carteira de inadimplentes",
+                 "6491300,6492100,7020400",
+                 "Recuperamos seus inadimplentes com taxa só sobre o recuperado",
+                 7, "ES,SP,MG,RJ"),
+            ]:
+                conn.execute(
+                    """INSERT INTO ramos_atividade
+                           (nome, descricao, cnaes, pitch, score_min, estados)
+                       VALUES (?, ?, ?, ?, ?, ?)""",
+                    _r,
+                )
+            conn.commit()
+    except Exception:
+        pass
     conn.close()

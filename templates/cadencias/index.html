@@ -5,6 +5,7 @@
   <span class="text-muted text-sm" style="padding:6px 10px">
     {{ hoje_count }} ação{{ 's' if hoje_count != 1 else '' }} para hoje
   </span>
+  <a href="{{ url_for('cadencia_emails') }}" class="btn btn-outline btn-sm">📧 E-mails enviados</a>
 {% endblock %}
 
 {% block content %}
@@ -15,6 +16,16 @@
   <span style="display:inline-flex;align-items:center;padding:2px 8px;border-radius:99px;font-size:10px;font-weight:700;color:{{ par[0] }};background:{{ par[1] }}">
     E{{ n }}
   </span>
+{% endmacro %}
+
+{% macro email_badge(status) %}
+  {% if status == 'aberto' %}
+    <span style="display:inline-flex;align-items:center;padding:2px 9px;border-radius:99px;font-size:10px;font-weight:700;background:#F0FDF4;color:#16A34A">✓ Aberto</span>
+  {% elif status == 'enviado' %}
+    <span style="display:inline-flex;align-items:center;padding:2px 9px;border-radius:99px;font-size:10px;font-weight:700;background:#FFFBEB;color:#B45309">✉ Enviado</span>
+  {% else %}
+    <span style="display:inline-flex;align-items:center;padding:2px 9px;border-radius:99px;font-size:10px;font-weight:700;background:#F1F5F9;color:#64748B">— Sem e-mail</span>
+  {% endif %}
 {% endmacro %}
 
 <!-- ── HOJE ────────────────────────────────────────────────────────────────── -->
@@ -45,7 +56,10 @@
         <span class="text-muted text-sm" style="font-size:10px;margin-top:2px">{{ item.etapa_label }}</span>
       </div>
       <div class="cad-body">
-        <div class="cad-empresa">{{ item.empresa_nome }}</div>
+        <div class="cad-empresa" style="display:flex;align-items:center;gap:8px">
+          {{ item.empresa_nome }}
+          {{ email_badge(item.email_status or 'sem_email') }}
+        </div>
         {% if item.mensagem_whatsapp %}
         <p class="cad-preview">{{ item.mensagem_whatsapp[:120] }}{% if item.mensagem_whatsapp|length > 120 %}…{% endif %}</p>
         {% endif %}
@@ -104,6 +118,7 @@
       {{ etapa_badge(item.etapa) }}
       <span style="font-size:13px;font-weight:600;margin:0 8px">{{ item.empresa_nome }}</span>
       <span class="text-muted text-sm">{{ item.etapa_label }}</span>
+      {{ email_badge(item.email_status or 'sem_email') }}
       {% if item.contato_whatsapp %}
         <span class="text-muted text-sm" style="margin-left:6px">· 📱 {{ item.contato_whatsapp }}</span>
       {% endif %}
