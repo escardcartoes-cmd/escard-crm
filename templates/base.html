@@ -103,6 +103,21 @@
         Prospecção
       </a>
 
+      {# ── Cadências SDR: vendedor+ ── #}
+      {% if current_user.is_authenticated %}
+      <a href="{{ url_for('cadencias_index') }}"
+         class="nav-link {% if 'cadencias' in (request.endpoint or '') %}active{% endif %}">
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+        </svg>
+        Cadências SDR
+        {% if cadencias_hoje_count > 0 %}
+        <span class="menu-badge">{{ cadencias_hoje_count }}</span>
+        {% endif %}
+      </a>
+      {% endif %}
+
       {# ── Usuários: apenas admin ── #}
       {% if current_user.is_authenticated and current_user.perfil == 'admin' %}
       <a href="{{ url_for('usuarios_lista') }}"

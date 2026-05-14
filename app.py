@@ -16,6 +16,7 @@ import models.oportunidade as op_model
 import models.atividade as atv_model
 import models.prospeccao as prosp_model
 import models.usuario as user_model
+import models.cadencia as cad_model
 from models.usuario import require_perfil, PERFIS, PERFIL_LABELS
 import ai
 
@@ -27,6 +28,14 @@ login_manager = LoginManager(app)
 login_manager.login_view = "login"
 login_manager.login_message = "Faça login para acessar o CRM."
 login_manager.login_message_category = "danger"
+
+@app.context_processor
+def _inject_cadencias_badge():
+    try:
+        return {"cadencias_hoje_count": cad_model.contar_hoje()}
+    except Exception:
+        return {"cadencias_hoje_count": 0}
+
 
 @login_manager.user_loader
 def load_user(user_id):
@@ -845,6 +854,134 @@ def ai_leads_email(id):
         })
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
+# ── SDR — Cadências ──────────────────────────────────────────────────────────
+
+@app.route("/cadencias")
+@login_required
+def cadencias_index():
+    from urllib.parse import quote as _quote
+    hoje    = cad_model.listar_hoje()
+    proximos = cad_model.listar_proximos_dias(7)
+
+    def _limpar_fone(n):
+        return "".join(c for c in (n or "") if c.isdigit()).lstrip("55")
+
+    for item in hoje + proximos:
+        fone = _limpar_fone(item.get("contato_whatsapp", ""))
+        item["wa_url"] = (
+            f"https://wa.me/55{fone}?text={_quote(item.get('mensagem_whatsapp') or '')}"
+            if fone else ""
+        )
+        em = item.get("contato_email", "") or ""
+        item["mail_url"] = (
+            f"mailto:{em}?subject={_quote(item.get('assunto_email') or '')}"
+            f"&body={_quote(item.get('corpo_email') or '')}"
+            if em else ""
+        )
+        item["etapa_label"] = cad_model.ETAPA_LABELS.get(item["etapa"], f"Etapa {item['etapa']}")
+
+    return render_template(
+        "cadencias/index.html",
+        hoje=hoje,
+        proximos=proximos,
+        hoje_count=len(hoje),
+    )
+
+
+@app.route("/cadencia/iniciar", methods=["POST"])
+@login_required
+@require_perfil("vendedor")
+def cadencia_iniciar():
+    import re as _re
+    from datetime import date as _date, timedelta as _td
+    try:
+        dados        = request.json or {}
+        empresa_id   = dados.get("empresa_id")
+        empresa_nome = (dados.get("empresa_nome") or "").strip()
+        whatsapp     = (dados.get("whatsapp") or "").strip()
+        email        = (dados.get("email") or "").strip()
+        op_id        = dados.get("oportunidade_id")
+
+        if not empresa_nome:
+            return jsonify({"error": "Nome da empresa é obrigatório."}), 400
+
+        import anthropic as _ant
+        client = _ant.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+
+        prompt = f"""Você é um SDR especialista em Krylo Cartão de Benefícios B2B.
+Gere uma cadência de 4 contatos para a empresa "{empresa_nome}".
+Retorne SOMENTE um JSON válido, sem markdown, sem explicações:
+
+{{"etapas":[
+  {{"etapa":1,"mensagem_whatsapp":"...","assunto_email":"...","corpo_email":"..."}},
+  {{"etapa":2,"mensagem_whatsapp":"...","assunto_email":"...","corpo_email":"..."}},
+  {{"etapa":3,"mensagem_whatsapp":"...","assunto_email":"...","corpo_email":"..."}},
+  {{"etapa":4,"mensagem_whatsapp":"...","assunto_email":"...","corpo_email":"..."}}
+]}}
+
+Regras obrigatórias:
+- Etapa 1 (hoje): apresentação Krylo, personalizada com "{empresa_nome}", informal e direta, max 3 parágrafos curtos
+- Etapa 2 (D+3): follow-up com case de sucesso de empresa do mesmo porte
+- Etapa 3 (D+7): proposta de valor específica mencionando alimentação, refeição, combustível ou wellness
+- Etapa 4 (D+14): último contato, urgência suave, ofereça demo de 15min
+
+WhatsApp: máx 3 parágrafos, tom pessoal, sem formatação markdown
+E-mail: assunto objetivo (max 8 palavras), corpo profissional com cumprimento e assinatura"""
+
+        resp = client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=2500,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        raw = resp.content[0].text.strip()
+        raw = _re.sub(r"^```(?:json)?\s*", "", raw, flags=_re.MULTILINE)
+        raw = _re.sub(r"```\s*$", "", raw, flags=_re.MULTILINE)
+        etapas = json.loads(raw.strip()).get("etapas", [])
+
+        if empresa_id:
+            cad_model.cancelar_por_empresa(int(empresa_id))
+
+        datas = [
+            str(_date.today() + _td(days=d))
+            for d in (0, 3, 7, 14)
+        ]
+        ids = []
+        for i, et in enumerate(etapas[:4]):
+            ids.append(cad_model.criar_etapa({
+                "empresa_id":        empresa_id,
+                "empresa_nome":      empresa_nome,
+                "contato_whatsapp":  whatsapp,
+                "contato_email":     email,
+                "oportunidade_id":   op_id,
+                "etapa":             et.get("etapa", i + 1),
+                "data_acao":         datas[i],
+                "mensagem_whatsapp": et.get("mensagem_whatsapp", ""),
+                "assunto_email":     et.get("assunto_email", ""),
+                "corpo_email":       et.get("corpo_email", ""),
+                "status":            "pendente",
+            }))
+
+        return jsonify({"ok": True, "ids": ids, "total": len(ids)})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/cadencia/<int:id>/concluir", methods=["POST"])
+@login_required
+@require_perfil("vendedor")
+def cadencia_concluir(id):
+    cad_model.concluir(id)
+    return jsonify({"ok": True})
+
+
+@app.route("/cadencia/<int:id>/cancelar", methods=["POST"])
+@login_required
+@require_perfil("vendedor")
+def cadencia_cancelar(id):
+    cad_model.cancelar(id)
+    return jsonify({"ok": True})
 
 
 # ── Usuários ─────────────────────────────────────────────────────────────────
