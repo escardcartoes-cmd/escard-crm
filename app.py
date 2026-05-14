@@ -1688,11 +1688,13 @@ def ia_config_salvar():
             "restricoes", "saudacao_whatsapp", "saudacao_email", "assinatura_email",
         ]
         conn = database.get_connection()
+        import datetime as _dt
+        _agora = _dt.datetime.now().isoformat(sep=" ", timespec="seconds")
         for campo in campos:
             if campo in f:
                 conn.execute(
                     f"UPDATE ia_config SET {campo}=:v, atualizado_em=:t WHERE id=1",
-                    {"v": f[campo], "t": str(__import__("datetime").datetime.now())},
+                    {"v": f[campo], "t": _agora},
                 )
         conn.commit()
         conn.close()
