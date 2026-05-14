@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Portal Krylo — {{ empresa.nome }}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Inter', -apple-system, sans-serif;
+      background: #F4F0EB;
+      color: #1E293B;
+      font-size: 14px;
+      line-height: 1.5;
+      min-height: 100vh;
+    }
+
+    /* Header */
+    .portal-header {
+      background: #4A3F35;
+      color: #fff;
+      padding: 0 24px;
+    }
+    .portal-header-inner {
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 18px 0;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+    .portal-logo {
+      font-size: 22px;
+      font-weight: 800;
+      letter-spacing: .3px;
+    }
+    .portal-logo span { color: #C5A089; }
+    .portal-subtitle {
+      font-size: 11px;
+      color: rgba(255,255,255,.5);
+      text-transform: uppercase;
+      letter-spacing: .8px;
+      margin-top: 2px;
+    }
+    .portal-empresa-badge {
+      background: rgba(197,160,137,.2);
+      border: 1px solid rgba(197,160,137,.4);
+      color: #C5A089;
+      font-size: 12px;
+      font-weight: 600;
+      padding: 5px 12px;
+      border-radius: 99px;
+    }
+
+    /* Content */
+    .portal-content {
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 28px 24px 60px;
+    }
+
+    /* Sections */
+    .portal-section {
+      background: #fff;
+      border-radius: 10px;
+      box-shadow: 0 1px 3px rgba(0,0,0,.07);
+      margin-bottom: 20px;
+      overflow: hidden;
+    }
+    .portal-section-header {
+      padding: 16px 20px 12px;
+      border-bottom: 1px solid #F1EDE8;
+    }
+    .portal-section-title {
+      font-size: 15px;
+      font-weight: 700;
+      color: #4A3F35;
+      margin-bottom: 3px;
+    }
+    .portal-section-desc {
+      font-size: 12px;
+      color: #64748B;
+    }
+    .portal-section-body { padding: 20px; }
+
+    /* Produtos */
+    .produtos-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 12px;
+    }
+    .produto-card {
+      background: #FAFAF7;
+      border: 1px solid #EDE8E3;
+      border-radius: 8px;
+      padding: 14px 16px;
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+    }
+    .produto-icon {
+      font-size: 24px;
+      flex-shrink: 0;
+      line-height: 1;
+      margin-top: 1px;
+    }
+    .produto-nome {
+      font-size: 13px;
+      font-weight: 700;
+      color: #1E293B;
+      margin-bottom: 2px;
+    }
+    .produto-desc { font-size: 12px; color: #64748B; line-height: 1.4; }
+    .produto-ativo {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 10px;
+      font-weight: 700;
+      color: #16A34A;
+      background: #DCFCE7;
+      border-radius: 99px;
+      padding: 2px 7px;
+      margin-top: 6px;
+    }
+
+    /* Info contrato */
+    .info-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+      gap: 14px;
+    }
+    .info-item {}
+    .info-label {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .4px;
+      color: #94A3B8;
+      margin-bottom: 4px;
+    }
+    .info-value { font-size: 18px; font-weight: 700; color: #1E293B; }
+    .info-value.green { color: #16A34A; }
+    .info-value.red   { color: #DC2626; }
+
+    /* WhatsApp */
+    .wa-card {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      padding: 28px 20px;
+      gap: 10px;
+    }
+    .wa-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      background: #16A34A;
+      color: #fff;
+      font-size: 15px;
+      font-weight: 700;
+      padding: 13px 28px;
+      border-radius: 8px;
+      text-decoration: none;
+      transition: background .15s;
+      margin-top: 6px;
+    }
+    .wa-btn:hover { background: #15803D; }
+    .wa-horario { font-size: 12px; color: #94A3B8; margin-top: 4px; }
+
+    /* Atividades */
+    .atv-list { display: flex; flex-direction: column; }
+    .atv-item {
+      display: flex;
+      gap: 12px;
+      padding: 12px 0;
+      border-bottom: 1px solid #F1EDE8;
+    }
+    .atv-item:last-child { border-bottom: none; }
+    .atv-dot {
+      width: 8px; height: 8px;
+      background: #C5A089;
+      border-radius: 50%;
+      flex-shrink: 0;
+      margin-top: 5px;
+    }
+    .atv-tipo {
+      display: inline-block;
+      background: #F4F0EB;
+      color: #4A3F35;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 2px 7px;
+      border-radius: 4px;
+      margin-right: 6px;
+    }
+    .atv-data { font-size: 11px; color: #94A3B8; }
+    .atv-desc { font-size: 12px; color: #475569; margin-top: 3px; }
+
+    /* Footer */
+    .portal-footer {
+      text-align: center;
+      padding: 20px 24px;
+      border-top: 1px solid #E8E2DC;
+      font-size: 11px;
+      color: #94A3B8;
+      line-height: 1.8;
+      background: #EDE8E3;
+    }
+    .portal-footer strong { color: #C5A089; }
+
+    /* Empty state */
+    .empty-msg { color: #94A3B8; font-size: 13px; padding: 12px 0; }
+
+    @media (max-width: 640px) {
+      .portal-header-inner { flex-direction: column; align-items: flex-start; gap: 8px; }
+      .produtos-grid { grid-template-columns: 1fr; }
+      .info-grid { grid-template-columns: 1fr 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- Header -->
+<header class="portal-header">
+  <div class="portal-header-inner">
+    <div>
+      <div class="portal-logo">Kry<span>lo</span></div>
+      <div class="portal-subtitle">Portal do Cliente</div>
+    </div>
+    <div class="portal-empresa-badge">{{ empresa.nome }}</div>
+  </div>
+</header>
+
+<div class="portal-content">
+
+  <!-- Seção 1: Produtos ativos -->
+  <div class="portal-section">
+    <div class="portal-section-header">
+      <div class="portal-section-title">🎯 Seus Benefícios Ativos</div>
+      <div class="portal-section-desc">Produtos Krylo contratados pela sua empresa</div>
+    </div>
+    <div class="portal-section-body">
+      {% if produtos %}
+      <div class="produtos-grid">
+        {% for p in produtos %}
+        <div class="produto-card">
+          {% if p == 'Alimentação' %}
+            <div class="produto-icon">🛒</div>
+            <div>
+              <div class="produto-nome">Vale Alimentação</div>
+              <div class="produto-desc">Compras em supermercados e estabelecimentos alimentares</div>
+              <div class="produto-ativo">✓ Ativo</div>
+            </div>
+          {% elif p == 'Refeição' %}
+            <div class="produto-icon">🍽️</div>
+            <div>
+              <div class="produto-nome">Vale Refeição</div>
+              <div class="produto-desc">Use em restaurantes e lanchonetes credenciadas</div>
+              <div class="produto-ativo">✓ Ativo</div>
+            </div>
+          {% elif p == 'Combustível' %}
+            <div class="produto-icon">⛽</div>
+            <div>
+              <div class="produto-nome">Cartão Combustível</div>
+              <div class="produto-desc">Postos credenciados em todo o Brasil</div>
+              <div class="produto-ativo">✓ Ativo</div>
+            </div>
+          {% elif p == 'Cultura' %}
+            <div class="produto-icon">🎭</div>
+            <div>
+              <div class="produto-nome">Viva+ Cultura e Lazer</div>
+              <div class="produto-desc">Entretenimento, cultura e lazer para os colaboradores</div>
+              <div class="produto-ativo">✓ Ativo</div>
+            </div>
+          {% elif p == 'Saúde' %}
+            <div class="produto-icon">💊</div>
+            <div>
+              <div class="produto-nome">Welhub — Saúde e Bem-estar</div>
+              <div class="produto-desc">Saúde e bem-estar dos colaboradores</div>
+              <div class="produto-ativo">✓ Ativo</div>
+            </div>
+          {% elif p == 'Private Label' %}
+            <div class="produto-icon">💳</div>
+            <div>
+              <div class="produto-nome">Cartão {{ empresa.nome_private_label or 'Exclusivo' }}</div>
+              <div class="produto-desc">Cartão exclusivo da sua empresa com identidade visual personalizada</div>
+              <div class="produto-ativo">✓ Ativo</div>
+            </div>
+          {% else %}
+            <div class="produto-icon">🏷️</div>
+            <div>
+              <div class="produto-nome">{{ p }}</div>
+              <div class="produto-desc">Produto Krylo ativo</div>
+              <div class="produto-ativo">✓ Ativo</div>
+            </div>
+          {% endif %}
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <p class="empty-msg">Nenhum produto cadastrado ainda. Entre em contato com seu consultor Krylo.</p>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Seção 2: Informações do contrato -->
+  <div class="portal-section">
+    <div class="portal-section-header">
+      <div class="portal-section-title">📋 Informações do Contrato</div>
+      <div class="portal-section-desc">Dados do seu contrato com a Krylo</div>
+    </div>
+    <div class="portal-section-body">
+      <div class="info-grid">
+        <div class="info-item">
+          <div class="info-label">Funcionários</div>
+          <div class="info-value">
+            {% if empresa.num_funcionarios %}
+              {{ empresa.num_funcionarios }}
+            {% else %}
+              <span style="font-size:14px;color:#94A3B8">—</span>
+            {% endif %}
+          </div>
+        </div>
+        <div class="info-item">
+          <div class="info-label">Valor Mensal</div>
+          <div class="info-value">
+            {% if empresa.valor_mensal %}
+              R$&nbsp;{{ '{:,.0f}'.format(empresa.valor_mensal) }}
+            {% else %}
+              <span style="font-size:14px;color:#94A3B8">—</span>
+            {% endif %}
+          </div>
+        </div>
+        <div class="info-item">
+          <div class="info-label">Status</div>
+          <div class="info-value {% if empresa.status == 'cliente' %}green{% elif empresa.status == 'inativo' %}red{% endif %}">
+            {% if empresa.status == 'cliente' %}✓ Ativo
+            {% elif empresa.status == 'inativo' %}✗ Inativo
+            {% else %}Em análise
+            {% endif %}
+          </div>
+        </div>
+        {% if empresa.tipo_cartao %}
+        <div class="info-item">
+          <div class="info-label">Tipo de Cartão</div>
+          <div class="info-value" style="font-size:14px">{{ empresa.tipo_cartao }}</div>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Seção 3: Fale com a Krylo -->
+  <div class="portal-section">
+    <div class="portal-section-header">
+      <div class="portal-section-title">💬 Fale com a Krylo</div>
+      <div class="portal-section-desc">Nosso time está pronto para te atender</div>
+    </div>
+    <div class="wa-card">
+      <p style="font-size:13px;color:#475569;max-width:400px">
+        Precisa de suporte, tem alguma dúvida sobre seus benefícios ou quer adicionar novos produtos?
+        Fale diretamente com seu consultor.
+      </p>
+      <a href="https://wa.me/55{{ krylo_whatsapp | replace(' ','') | replace('-','') | replace('(','') | replace(')','') }}?text={{ ('Olá, sou da empresa ' + empresa.nome + ' e preciso de suporte com os benefícios Krylo.') | urlencode }}"
+         class="wa-btn" target="_blank" rel="noopener">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
+        </svg>
+        📱 Falar com consultor no WhatsApp
+      </a>
+      <div class="wa-horario">Atendimento de segunda a sexta, 8h às 18h</div>
+    </div>
+  </div>
+
+  <!-- Seção 4: Histórico de atividades -->
+  <div class="portal-section">
+    <div class="portal-section-header">
+      <div class="portal-section-title">📅 Histórico de Atendimentos</div>
+      <div class="portal-section-desc">Últimas interações entre sua empresa e a equipe Krylo</div>
+    </div>
+    <div class="portal-section-body">
+      {% if atividades %}
+      <div class="atv-list">
+        {% for a in atividades %}
+        <div class="atv-item">
+          <div class="atv-dot"></div>
+          <div style="flex:1">
+            <div>
+              <span class="atv-tipo">{{ a.tipo }}</span>
+              <span class="atv-data">{{ a.data }}</span>
+            </div>
+            {% if a.descricao %}
+              <div class="atv-desc">{{ a.descricao }}</div>
+            {% endif %}
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <p class="empty-msg">Nenhuma atividade registrada ainda.</p>
+      {% endif %}
+    </div>
+  </div>
+
+</div>
+
+<!-- Footer -->
+<footer class="portal-footer">
+  <div>Portal <strong>Krylo</strong> — Soluções em Benefícios Corporativos | krylo.com.br</div>
+  <div style="margin-top:4px;font-size:10px">
+    🔒 Acesso exclusivo — não compartilhe este link com terceiros
+  </div>
+</footer>
+
+</body>
+</html>

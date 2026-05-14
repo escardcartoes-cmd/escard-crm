@@ -44,6 +44,7 @@
         <th>Porte</th>
         <th>Status</th>
         <th>Cidade/UF</th>
+        <th>Portal</th>
         <th>Ações</th>
       </tr>
     </thead>
@@ -76,6 +77,26 @@
           {{ e.cidade or '' }}{% if e.cidade and e.estado %}/{% endif %}{{ e.estado or '—' }}
         </td>
         <td>
+          {% set portal = portais.get(e.id) %}
+          {% if portal and portal.ativo %}
+          <div class="td-actions" id="portal-cell-{{ e.id }}">
+            <button class="btn btn-outline btn-xs" title="Copiar link"
+                    onclick="copiarPortal('{{ portal.token_acesso }}', this)">🔗 Copiar</button>
+            <button class="btn btn-xs"
+                    style="background:#16A34A;color:#fff"
+                    onclick="enviarPortal('{{ portal.token_acesso }}', '{{ e.nome | replace("'","\\'") | e }}', '{{ e.telefone or '' }}')">📱 Enviar</button>
+            <button class="btn btn-danger btn-xs"
+                    onclick="revogarPortal({{ e.id }}, this)">🚫</button>
+          </div>
+          {% else %}
+          <div class="td-actions" id="portal-cell-{{ e.id }}">
+            <button class="btn btn-xs"
+                    style="background:linear-gradient(135deg,#C5A089,#B8936A);color:#fff"
+                    onclick="gerarPortal({{ e.id }}, '{{ e.nome | replace("'","\\'") | e }}', '{{ e.telefone or '' }}', this)">✨ Gerar</button>
+          </div>
+          {% endif %}
+        </td>
+        <td>
           <div class="td-actions">
             <a href="{{ url_for('empresas_detalhe', id=e.id) }}" class="btn btn-outline btn-xs">Ver</a>
             <a href="{{ url_for('empresas_editar',  id=e.id) }}" class="btn btn-outline btn-xs">Editar</a>
@@ -97,7 +118,7 @@
       </tr>
       {% else %}
       <tr>
-        <td colspan="8">
+        <td colspan="9">
           <div class="empty-state">
             <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
@@ -196,6 +217,70 @@ function exportarSelecionados() {
   const url = URL.createObjectURL(blob);
   const a = Object.assign(document.createElement('a'), { href: url, download: 'empresas_escard.csv' });
   a.click(); URL.revokeObjectURL(url);
+}
+
+// ── Portal do Cliente ────────────────────────────────────────────────────────
+function _portalLink(token) {
+  return window.location.origin + '/portal/' + token;
+}
+
+function copiarPortal(token, btn) {
+  const link = _portalLink(token);
+  navigator.clipboard.writeText(link).then(() => {
+    const orig = btn.innerHTML;
+    btn.innerHTML = '✓ Copiado!';
+    btn.style.color = '#16A34A';
+    setTimeout(() => { btn.innerHTML = orig; btn.style.color = ''; }, 2000);
+  }).catch(() => {
+    prompt('Copie o link:', link);
+  });
+}
+
+function enviarPortal(token, empresaNome, telefone) {
+  const link = _portalLink(token);
+  const msg = `Olá! Preparei seu portal exclusivo Krylo para acompanhar os benefícios da ${empresaNome}. Acesse aqui: ${link} — É só clicar, sem precisar de login! Qualquer dúvida estou à disposição 😊`;
+  const tel = (telefone || '').replace(/\D/g, '');
+  const waUrl = tel
+    ? `https://wa.me/55${tel}?text=${encodeURIComponent(msg)}`
+    : `https://wa.me/?text=${encodeURIComponent(msg)}`;
+  window.open(waUrl, '_blank');
+}
+
+async function gerarPortal(empresaId, empresaNome, telefone, btn) {
+  const orig = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<span style="opacity:.6">✨ Gerando…</span>';
+  try {
+    const d = await fetchJSON('/portal/gerar/' + empresaId, {
+      method: 'POST', headers: {'X-Requested-With': 'XMLHttpRequest'}
+    });
+    if (!d) { btn.disabled = false; btn.innerHTML = orig; return; }
+    if (d.error) { alert('Erro: ' + d.error); btn.disabled = false; btn.innerHTML = orig; return; }
+    const cell = document.getElementById('portal-cell-' + empresaId);
+    if (cell) {
+      cell.innerHTML =
+        `<button class="btn btn-outline btn-xs" title="Copiar link" onclick="copiarPortal('${d.token}', this)">🔗 Copiar</button>` +
+        `<button class="btn btn-xs" style="background:#16A34A;color:#fff" onclick="enviarPortal('${d.token}', '${empresaNome.replace(/'/g,"\\'")}', '${telefone}')">📱 Enviar</button>` +
+        `<button class="btn btn-danger btn-xs" onclick="revogarPortal(${empresaId}, this)">🚫</button>`;
+    }
+  } catch(e) {
+    alert('Erro: ' + e.message);
+    btn.disabled = false;
+    btn.innerHTML = orig;
+  }
+}
+
+async function revogarPortal(empresaId, btn) {
+  if (!confirm('Revogar o acesso ao portal desta empresa?')) return;
+  const d = await fetchJSON('/portal/revogar/' + empresaId, {
+    method: 'POST', headers: {'X-Requested-With': 'XMLHttpRequest'}
+  });
+  if (d && d.ok) {
+    const cell = document.getElementById('portal-cell-' + empresaId);
+    if (cell) {
+      cell.innerHTML = `<button class="btn btn-xs" style="background:linear-gradient(135deg,#C5A089,#B8936A);color:#fff" onclick="gerarPortal(${empresaId}, '', '', this)">✨ Gerar</button>`;
+    }
+  }
 }
 
 // ── Score IA ──────────────────────────────────────────────────────────────────
