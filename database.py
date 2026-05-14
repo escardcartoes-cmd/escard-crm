@@ -450,6 +450,24 @@ def get_connection():
     return conn
 
 
+def get_new_db_connection():
+    """Cria uma conexão dedicada para uso em threads background (sem cache)."""
+    if _USE_PG:
+        import psycopg2
+        import psycopg2.extras
+        url = DATABASE_URL
+        if url.startswith("postgres://"):
+            url = "postgresql://" + url[len("postgres://"):]
+        raw = psycopg2.connect(url)
+        raw.autocommit = False
+        return _PgConn(raw)
+    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA foreign_keys = ON")
+    conn.execute("PRAGMA journal_mode = WAL")
+    return conn
+
+
 def run_migrations(conn) -> None:
     """Apply schema migrations safely — each statement is independent with rollback on failure."""
     # PostgreSQL supports IF NOT EXISTS; SQLite does not — use plain ADD COLUMN there
