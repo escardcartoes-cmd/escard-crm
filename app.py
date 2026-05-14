@@ -57,7 +57,16 @@ def _inject_cadencias_badge():
 
 
 @app.context_processor
-def inject_empresa():
+def inject_globals():
+    estados = [
+        ("AC","Acre"),("AL","Alagoas"),("AP","Amapá"),("AM","Amazonas"),
+        ("BA","Bahia"),("CE","Ceará"),("DF","Distrito Federal"),("ES","Espírito Santo"),
+        ("GO","Goiás"),("MA","Maranhão"),("MT","Mato Grosso"),("MS","Mato Grosso do Sul"),
+        ("MG","Minas Gerais"),("PA","Pará"),("PB","Paraíba"),("PR","Paraná"),
+        ("PE","Pernambuco"),("PI","Piauí"),("RJ","Rio de Janeiro"),("RN","Rio Grande do Norte"),
+        ("RS","Rio Grande do Sul"),("RO","Rondônia"),("RR","Roraima"),("SC","Santa Catarina"),
+        ("SP","São Paulo"),("SE","Sergipe"),("TO","Tocantins"),
+    ]
     try:
         conn = database.get_connection()
         cfg = conn.execute(
@@ -67,9 +76,10 @@ def inject_empresa():
         return {
             "empresa_nome": cfg["nome"] if cfg else "Krylo",
             "empresa_whatsapp": cfg["whatsapp"] if cfg else "",
+            "estados_br": estados,
         }
     except Exception:
-        return {"empresa_nome": "Krylo", "empresa_whatsapp": ""}
+        return {"empresa_nome": "Krylo", "empresa_whatsapp": "", "estados_br": estados}
 
 
 @login_manager.user_loader

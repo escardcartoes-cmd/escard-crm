@@ -220,10 +220,10 @@
         </div>
         <div>
           <label class="ia-form-label">Estados alvo</label>
-          <div style="display:flex;flex-wrap:wrap;gap:8px;padding:6px 0" id="prod-estados-grid">
-            {% for uf in ['ES','SP','MG','RJ','BA','PR','SC','RS','GO','DF'] %}
+          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;padding:6px 0" id="prod-estados-grid">
+            {% for sigla, nome in estados_br %}
             <label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer">
-              <input type="checkbox" class="prod-estado-ck" value="{{ uf }}"> {{ uf }}
+              <input type="checkbox" class="prod-estado-ck" value="{{ sigla }}"> {{ sigla }} — {{ nome }}
             </label>
             {% endfor %}
           </div>

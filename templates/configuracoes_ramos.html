@@ -109,13 +109,13 @@
 
       <div>
         <label class="form-label">Estados alvo</label>
-        <div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:6px">
-          {% for uf in ['ES', 'SP', 'MG', 'RJ', 'BA', 'PR', 'SC', 'RS'] %}
-          <label style="display:flex;align-items:center;gap:5px;font-size:13px;cursor:pointer">
-            <input type="checkbox" name="estados" value="{{ uf }}"
-                   {% if uf in ['ES', 'SP'] %}checked{% endif %}
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:6px">
+          {% for sigla, nome in estados_br %}
+          <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer">
+            <input type="checkbox" name="estados" value="{{ sigla }}"
+                   {% if sigla in ['ES', 'SP'] %}checked{% endif %}
                    style="width:14px;height:14px;accent-color:#4A3F35">
-            {{ uf }}
+            {{ sigla }} — {{ nome }}
           </label>
           {% endfor %}
         </div>
