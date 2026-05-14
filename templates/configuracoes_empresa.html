@@ -73,9 +73,12 @@
     </div>
     <div style="margin-top:14px">
       <label class="form-label">Região de atuação</label>
-      <input type="text" id="regiao_atuacao" class="form-input"
-             value="{{ cfg.get('regiao_atuacao','') }}"
-             placeholder="Ex: ES, SP, MG, RJ">
+      <select id="regiao_atuacao" class="form-input" multiple size="6" style="width:100%;min-height:120px">
+        {% set regioes_sel = cfg.get('regiao_atuacao','').split(',') | map('trim') | list %}
+        {% for sigla, nome in estados_br %}
+        <option value="{{ sigla }}" {% if sigla in regioes_sel %}selected{% endif %}>{{ sigla }} — {{ nome }}</option>
+        {% endfor %}
+      </select>
     </div>
   </div>
 
@@ -218,7 +221,7 @@ function coletarDados() {
     diferenciais:     document.getElementById('diferenciais').value,
     publico_alvo:     document.getElementById('publico_alvo').value,
     produtos_servicos:document.getElementById('produtos_servicos').value,
-    regiao_atuacao:   document.getElementById('regiao_atuacao').value,
+    regiao_atuacao:   [...document.getElementById('regiao_atuacao').selectedOptions].map(o => o.value).join(','),
     historico:        document.getElementById('historico').value,
     tom_da_marca:     document.getElementById('tom_da_marca').value,
     palavras_chave:   document.getElementById('palavras_chave').value,
