@@ -376,7 +376,10 @@ def _to_pg(sql: str) -> str:
     sql = re.sub(r":([A-Za-z_]\w*)", r"%(\1)s", sql)
     # Positional placeholders
     sql = sql.replace("?", "%s")
-    # Date/time functions
+    # Date/time functions: TEXT DEFAULT (datetime(...)) needs ::TEXT cast
+    # because PostgreSQL has no implicit cast from timestamptz to TEXT in DDL
+    sql = re.sub(r"(?i)(TEXT\b[^,;\n]*DEFAULT\s+\()datetime\s*\([^)]*\)\)",
+                 r"\g<1>NOW()::TEXT)", sql)
     sql = re.sub(r"datetime\s*\([^)]*\)", "NOW()", sql)
     sql = re.sub(r"date\s*\([^)]*\)", "CURRENT_DATE", sql)
     # DDL: AUTOINCREMENT → SERIAL
@@ -421,11 +424,16 @@ class _PgConn:
         return _PgCursor(cur, rid)
 
     def executescript(self, sql: str) -> None:
-        cur = self._raw.cursor()
         for stmt in [s.strip() for s in sql.split(";") if s.strip()]:
-            cur.execute(_to_pg(stmt))
-        self._raw.commit()
-        cur.close()
+            try:
+                cur = self._raw.cursor()
+                cur.execute(_to_pg(stmt))
+                self._raw.commit()
+                cur.close()
+            except Exception as e:
+                print(f"executescript aviso (stmt ignorado): {e}")
+                try: self._raw.rollback()
+                except Exception: pass
 
     def commit(self):
         self._raw.commit()
