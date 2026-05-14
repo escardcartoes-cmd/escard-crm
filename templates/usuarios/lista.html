@@ -58,7 +58,7 @@
             {{ '● Ativo' if u.ativo else '○ Inativo' }}
           </span>
         </td>
-        <td>{{ u.criado_em[:10] if u.criado_em else '—' }}</td>
+        <td>{{ (u.criado_em | string)[:10] if u.criado_em else '—' }}</td>
         <td>
           <div class="td-actions">
             <a href="{{ url_for('usuarios_editar', id=u.id) }}" class="btn btn-outline btn-xs">Editar</a>

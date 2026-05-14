@@ -124,7 +124,7 @@
         {% for item in editais %}
         <tr id="radar-row-{{ item.id }}" class="{{ 'radar-row-novo' if not item.lido else '' }}">
           <td style="font-size:12px;color:var(--muted);white-space:nowrap">
-            {{ item.criado_em[:10] if item.criado_em else '—' }}
+            {{ (item.criado_em | string)[:10] if item.criado_em else '—' }}
           </td>
           <td>
             {% if not item.lido %}
@@ -199,7 +199,7 @@
         {% for item in concorrentes %}
         <tr id="radar-row-{{ item.id }}" class="{{ 'radar-row-novo' if not item.lido else '' }}">
           <td style="font-size:12px;color:var(--muted);white-space:nowrap">
-            {{ item.criado_em[:10] if item.criado_em else '—' }}
+            {{ (item.criado_em | string)[:10] if item.criado_em else '—' }}
           </td>
           <td>
             {% if not item.lido %}
