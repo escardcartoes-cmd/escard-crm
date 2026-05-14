@@ -8,6 +8,18 @@
 
 {% block content %}
 
+{% if radar_alerta_count > 0 %}
+<div class="radar-alert {% if radar_alerta_count >= 3 %}radar-alert-danger{% else %}radar-alert-warning{% endif %}">
+  <span>
+    ⚠ <strong>{{ radar_alerta_count }} deal{{ 's' if radar_alerta_count != 1 else '' }}</strong>
+    sem contato há mais de 7 dias
+  </span>
+  <a href="#deal-radar" onclick="document.getElementById('deal-radar').scrollIntoView({behavior:'smooth'});return false;">
+    Ver no radar ↓
+  </a>
+</div>
+{% endif %}
+
 <!-- KPI Cards -->
 <div class="cards-grid">
   <div class="card">
@@ -84,7 +96,7 @@
 </div>
 
 <!-- Deal Radar -->
-<div class="card radar-card">
+<div class="card radar-card" id="deal-radar">
   <div class="flex items-center gap-2" style="justify-content:space-between;margin-bottom:16px">
     <div>
       <p class="card-title" style="margin-bottom:2px">
@@ -97,12 +109,15 @@
       </p>
       <p class="text-muted text-sm">Top 5 oportunidades abertas por score de fechamento</p>
     </div>
-    <div style="display:flex;gap:8px">
+    <div style="display:flex;gap:8px;align-items:center">
+      <button id="radarRefreshBtn" onclick="atualizarRadar(this)" class="btn btn-outline btn-sm">
+        ↻ Atualizar Radar
+      </button>
       <a href="{{ url_for('cadencias_index') }}" class="btn btn-sm"
          style="background:linear-gradient(135deg,#16A34A,#15803D);color:#fff">
-        ⚡ Ver Cadências
+        ⚡ Cadências
       </a>
-      <a href="{{ url_for('oportunidades_kanban') }}" class="btn btn-outline btn-sm">Ver kanban</a>
+      <a href="{{ url_for('oportunidades_kanban') }}" class="btn btn-outline btn-sm">Kanban</a>
     </div>
   </div>
 
@@ -202,6 +217,21 @@
 
 {% block scripts %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+<script>
+async function atualizarRadar(btn) {
+  const orig = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<span style="opacity:.6">↻ Calculando…</span>';
+  try {
+    await fetch('/oportunidades/radar');
+    location.reload();
+  } catch(e) {
+    btn.disabled = false;
+    btn.innerHTML = orig;
+    alert('Erro ao atualizar radar: ' + e.message);
+  }
+}
+</script>
 <script>
 const statusData  = {{ status_counts  | tojson }};
 const estagioData = {{ estagio_counts | tojson }};

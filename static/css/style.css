@@ -424,6 +424,16 @@ textarea { resize: vertical; min-height: 80px; }
 .import-map-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 20px; }
 @media (max-width: 900px) { .import-map-grid { grid-template-columns: 1fr 1fr; } }
 
+/* ── Radar alert strip ────────────────────────────────────────────────────── */
+.radar-alert {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 10px 16px; border-radius: var(--r-sm);
+  font-size: 13px; margin-bottom: 20px; flex-wrap: wrap;
+}
+.radar-alert-warning { background: #FFFBEB; color: #B45309; border: 1px solid #FDE68A; }
+.radar-alert-danger  { background: #FFF1F2; color: #BE123C; border: 1px solid #FECDD3; }
+.radar-alert a { color: inherit; font-weight: 700; text-decoration: underline; white-space: nowrap; }
+
 /* ── Menu badge ───────────────────────────────────────────────────────────── */
 .menu-badge {
   display: inline-flex; align-items: center; justify-content: center;
