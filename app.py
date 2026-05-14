@@ -2434,6 +2434,7 @@ def sdr_config_salvar():
             "dias_recontato", "excluir_ja_prospectados", "produto_foco", "ativo",
             "funcionarios_min", "funcionarios_max", "idade_empresa_min",
             "idade_empresa_max", "max_cadencias_por_dia", "nome_campanha",
+            "modo_busca",
         ]
         _agora = _dt.datetime.now().isoformat(sep=" ", timespec="seconds")
         conn = database.get_connection()

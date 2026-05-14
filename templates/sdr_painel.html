@@ -158,6 +158,33 @@
     </div>
   </div>
 
+  <!-- Modo de Busca -->
+  <div style="margin-bottom:20px">
+    <div style="font-weight:600;font-size:13px;color:#4A3F35;margin-bottom:10px;padding-bottom:4px;border-bottom:1px solid var(--border)">⚙ Modo de Busca</div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px" id="modoCards">
+      <div class="modo-card" data-modo="cnae" onclick="selecionarModo('cnae')"
+           style="padding:12px;border-radius:8px;cursor:pointer;transition:all 0.2s;border:1px solid var(--border);background:#fff">
+        <div style="font-size:18px;margin-bottom:6px">🎯</div>
+        <div style="font-weight:600;font-size:13px;color:#4A3F35">Por Setor (CNAE)</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:4px;line-height:1.4">Busca empresas do setor específico de cada produto. Mais preciso.</div>
+        <span style="display:inline-block;margin-top:6px;background:#F0FDF4;color:#15803D;font-size:10px;padding:2px 7px;border-radius:10px;font-weight:600">Recomendado</span>
+      </div>
+      <div class="modo-card" data-modo="sem_cnae" onclick="selecionarModo('sem_cnae')"
+           style="padding:12px;border-radius:8px;cursor:pointer;transition:all 0.2s;border:1px solid var(--border);background:#fff">
+        <div style="font-size:18px;margin-bottom:6px">🔍</div>
+        <div style="font-weight:600;font-size:13px;color:#4A3F35">Por Filtros Gerais</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:4px;line-height:1.4">Busca qualquer empresa que passe nos filtros de porte e localização, independente do setor.</div>
+      </div>
+      <div class="modo-card" data-modo="ambos" onclick="selecionarModo('ambos')"
+           style="padding:12px;border-radius:8px;cursor:pointer;transition:all 0.2s;border:1px solid var(--border);background:#fff">
+        <div style="font-size:18px;margin-bottom:6px">⚡</div>
+        <div style="font-weight:600;font-size:13px;color:#4A3F35">Combinado</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:4px;line-height:1.4">Busca por setor primeiro, depois complementa com filtros gerais até atingir o limite.</div>
+      </div>
+    </div>
+    <input type="hidden" id="modo_busca" value="{{ config.modo_busca or 'cnae' }}">
+  </div>
+
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
 
     <!-- Localização -->
@@ -514,6 +541,16 @@ function toggleSwitch(campo) {
   marcarAlterado();
 }
 
+function selecionarModo(modo) {
+  document.getElementById('modo_busca').value = modo;
+  document.querySelectorAll('.modo-card').forEach(c => {
+    const sel = c.dataset.modo === modo;
+    c.style.border    = sel ? '2px solid #C5A089' : '1px solid var(--border)';
+    c.style.background = sel ? '#FDF9F5' : '#fff';
+  });
+  marcarAlterado();
+}
+
 function coletarFiltros() {
   const estadosCks = [...document.querySelectorAll('#checkEstados input:checked')].map(c => c.value);
   const diasCks    = [...document.querySelectorAll('#checkDias input:checked')].map(c => c.value);
@@ -538,6 +575,7 @@ function coletarFiltros() {
     max_tentativas_por_empresa: parseInt(document.getElementById('max_tentativas_por_empresa').value) || 3,
     dias_recontato:             parseInt(document.getElementById('dias_recontato').value) || 30,
     dias_semana:                diasCks.join(','),
+    modo_busca:                 document.getElementById('modo_busca').value || 'cnae',
   };
 }
 
@@ -683,6 +721,8 @@ document.addEventListener('DOMContentLoaded', () => {
   carregarInteligencia();
   atualizarPainel();
   intervalAoVivo = setInterval(atualizarPainel, 3000);
+  // Inicializa seletor visual do modo de busca
+  selecionarModo(document.getElementById('modo_busca').value || 'cnae');
 });
 
 document.addEventListener('keydown', e => {
