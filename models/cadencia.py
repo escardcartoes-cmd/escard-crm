@@ -50,6 +50,24 @@ def enviar_email_brevo(
 
 
 def criar_etapa(dados: dict) -> int:
+    # Para etapa 1, tenta usar pitch do produto cadastrado se não houver mensagem
+    if dados.get("etapa") == 1 and not (dados.get("mensagem_whatsapp") or "").strip():
+        produto_nome = dados.get("produto_alvo") or ""
+        if produto_nome:
+            try:
+                _c = get_connection()
+                _p = _c.execute(
+                    "SELECT pitch_whatsapp FROM produtos_krylo WHERE nome=? AND ativo=1",
+                    (produto_nome,)
+                ).fetchone()
+                _c.close()
+                if _p and (_p["pitch_whatsapp"] or "").strip():
+                    dados = dict(dados)
+                    empresa = dados.get("empresa_nome") or ""
+                    dados["mensagem_whatsapp"] = _p["pitch_whatsapp"].replace("{empresa}", empresa)
+            except Exception:
+                pass
+
     conn = get_connection()
     cur = conn.execute(
         """INSERT INTO cadencias

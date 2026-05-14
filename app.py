@@ -1421,11 +1421,17 @@ Tom amigável e consultivo, não agressivo."""
 def expansao_index():
     oportunidades = exp_model.listar_oportunidades()
     potencial = sum(r["potencial_mensal"] for r in oportunidades)
+    conn = database.get_connection()
+    prods_db = [r["nome"] for r in conn.execute(
+        "SELECT nome FROM produtos_krylo WHERE ativo=1 ORDER BY nome"
+    ).fetchall()]
+    conn.close()
+    produtos = prods_db if prods_db else exp_model.PRODUTOS
     return render_template(
         "expansao/index.html",
         oportunidades=oportunidades,
         potencial=potencial,
-        produtos=exp_model.PRODUTOS,
+        produtos=produtos,
     )
 
 
@@ -1440,7 +1446,13 @@ def expansao_pitch(empresa_id):
             return jsonify({"error": "Empresa não encontrada"}), 404
         emp = dict(emp)
         ativos = [p.strip() for p in (emp.get("produtos_ativos") or "").split(",") if p.strip()]
-        faltando = [p for p in exp_model.PRODUTOS if p not in ativos]
+        _conn_prods = database.get_connection()
+        _prods_db = [r["nome"] for r in _conn_prods.execute(
+            "SELECT nome FROM produtos_krylo WHERE ativo=1 ORDER BY nome"
+        ).fetchall()]
+        _conn_prods.close()
+        _lista_prods = _prods_db if _prods_db else exp_model.PRODUTOS
+        faltando = [p for p in _lista_prods if p not in ativos]
         if not faltando:
             return jsonify({"pitch": "Esta empresa já utiliza todos os produtos Krylo disponíveis!"})
         prompt = f"""Você é um especialista em vendas da Krylo Cartão de Benefícios B2B.
@@ -1764,6 +1776,207 @@ def _form_usuario(f, editando=False):
 
     return dict(nome=nome, email=email, usuario=usuario,
                 senha=senha, perfil=perfil, ativo=ativo), None
+
+
+# ── Produtos Krylo — CRUD dinâmico ───────────────────────────────────────────
+
+@app.route("/produtos")
+@login_required
+def produtos_lista():
+    conn = database.get_connection()
+    rows = [dict(r) for r in conn.execute(
+        "SELECT * FROM produtos_krylo ORDER BY ativo DESC, nome ASC"
+    ).fetchall()]
+    conn.close()
+    return jsonify(rows)
+
+
+@app.route("/produtos/<int:pid>")
+@login_required
+def produto_detalhe(pid):
+    conn = database.get_connection()
+    row = conn.execute("SELECT * FROM produtos_krylo WHERE id=?", (pid,)).fetchone()
+    conn.close()
+    if not row:
+        return jsonify({"error": "Não encontrado"}), 404
+    return jsonify(dict(row))
+
+
+@app.route("/produtos/novo", methods=["POST"])
+@login_required
+@require_perfil("gerente")
+def produto_novo():
+    try:
+        import datetime as _dt
+        f = request.json or {}
+        _agora = _dt.datetime.now().isoformat(sep=" ", timespec="seconds")
+        conn = database.get_connection()
+        cur = conn.execute(
+            """INSERT INTO produtos_krylo
+               (nome, descricao, pitch_whatsapp, pitch_email, cnaes_alvo,
+                estados_alvo, capital_min, score_min, valor_por_funcionario,
+                palavras_chave, publico_alvo, beneficios, objecoes_comuns,
+                como_responder_objecoes, ativo, criado_em, atualizado_em)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            (
+                (f.get("nome") or "").strip(),
+                f.get("descricao") or "",
+                f.get("pitch_whatsapp") or "",
+                f.get("pitch_email") or "",
+                f.get("cnaes_alvo") or "",
+                f.get("estados_alvo") or "ES,SP",
+                float(f.get("capital_min") or 50000),
+                int(f.get("score_min") or 6),
+                float(f.get("valor_por_funcionario") or 0),
+                f.get("palavras_chave") or "",
+                f.get("publico_alvo") or "",
+                f.get("beneficios") or "",
+                f.get("objecoes_comuns") or "",
+                f.get("como_responder_objecoes") or "",
+                1 if f.get("ativo", True) else 0,
+                _agora, _agora,
+            ),
+        )
+        conn.commit()
+        new_id = cur.lastrowid
+        conn.close()
+        return jsonify({"ok": True, "id": new_id})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/produtos/<int:pid>/editar", methods=["POST"])
+@login_required
+@require_perfil("gerente")
+def produto_editar(pid):
+    try:
+        import datetime as _dt
+        f = request.json or {}
+        _agora = _dt.datetime.now().isoformat(sep=" ", timespec="seconds")
+        conn = database.get_connection()
+        conn.execute(
+            """UPDATE produtos_krylo SET
+               nome=:nome, descricao=:descricao,
+               pitch_whatsapp=:pw, pitch_email=:pe,
+               cnaes_alvo=:cnaes, estados_alvo=:estados,
+               capital_min=:cap, score_min=:score,
+               valor_por_funcionario=:vpf,
+               palavras_chave=:pk, publico_alvo=:pub,
+               beneficios=:ben, objecoes_comuns=:obj,
+               como_responder_objecoes=:resp,
+               ativo=:ativo, atualizado_em=:at
+               WHERE id=:id""",
+            {
+                "nome": (f.get("nome") or "").strip(),
+                "descricao": f.get("descricao") or "",
+                "pw": f.get("pitch_whatsapp") or "",
+                "pe": f.get("pitch_email") or "",
+                "cnaes": f.get("cnaes_alvo") or "",
+                "estados": f.get("estados_alvo") or "ES,SP",
+                "cap": float(f.get("capital_min") or 50000),
+                "score": int(f.get("score_min") or 6),
+                "vpf": float(f.get("valor_por_funcionario") or 0),
+                "pk": f.get("palavras_chave") or "",
+                "pub": f.get("publico_alvo") or "",
+                "ben": f.get("beneficios") or "",
+                "obj": f.get("objecoes_comuns") or "",
+                "resp": f.get("como_responder_objecoes") or "",
+                "ativo": 1 if f.get("ativo", True) else 0,
+                "at": _agora,
+                "id": pid,
+            },
+        )
+        conn.commit()
+        conn.close()
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/produtos/<int:pid>/toggle", methods=["POST"])
+@login_required
+@require_perfil("gerente")
+def produto_toggle(pid):
+    try:
+        import datetime as _dt
+        conn = database.get_connection()
+        row = conn.execute("SELECT ativo FROM produtos_krylo WHERE id=?", (pid,)).fetchone()
+        if not row:
+            conn.close()
+            return jsonify({"error": "Não encontrado"}), 404
+        novo = 0 if row["ativo"] else 1
+        conn.execute(
+            "UPDATE produtos_krylo SET ativo=:v, atualizado_em=:t WHERE id=:id",
+            {"v": novo, "t": _dt.datetime.now().isoformat(sep=" ", timespec="seconds"), "id": pid},
+        )
+        conn.commit()
+        conn.close()
+        return jsonify({"ok": True, "ativo": bool(novo)})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/produtos/<int:pid>/deletar", methods=["POST"])
+@login_required
+@require_perfil("admin")
+def produto_deletar(pid):
+    try:
+        conn = database.get_connection()
+        conn.execute("DELETE FROM produtos_krylo WHERE id=?", (pid,))
+        conn.commit()
+        conn.close()
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/produtos/gerar-com-ia", methods=["POST"])
+@login_required
+@require_perfil("gerente")
+def produto_gerar_com_ia():
+    try:
+        import re as _re
+        import models.ia_config as ia_mod
+        f = request.json or {}
+        nome = (f.get("nome") or "").strip()
+        descricao = (f.get("descricao") or "").strip()
+        if not nome:
+            return jsonify({"error": "Nome é obrigatório"}), 400
+        conn = database.get_connection()
+        system = ia_mod.get_system_prompt(conn)
+        conn.close()
+        prompt = (
+            f"Você é especialista em vendas B2B de benefícios corporativos.\n"
+            f"Com base no produto abaixo, gere conteúdo de vendas em JSON.\n\n"
+            f"Produto: {nome}\nDescrição: {descricao or 'não informada'}\n\n"
+            "Retorne APENAS este JSON válido (sem markdown, sem explicação):\n"
+            '{\n'
+            '  "pitch_whatsapp": "mensagem WhatsApp 2 frases informal, use {empresa} como variável",\n'
+            '  "pitch_email_assunto": "assunto do email impactante",\n'
+            '  "pitch_email_corpo": "corpo do email 4-5 linhas com {empresa} e {nome_contato}",\n'
+            '  "publico_alvo": "descrição detalhada de quem se beneficia",\n'
+            '  "beneficios": "benefício 1\\nbenfício 2\\nbenfício 3\\nbenfício 4\\nbenfício 5",\n'
+            '  "objecoes": "objeção 1|como responder 1\\nobjeção 2|como responder 2\\nobjeção 3|como responder 3",\n'
+            '  "palavras_chave": "palavra1,palavra2,palavra3,palavra4",\n'
+            '  "cnaes_sugeridos": "1234567,8901234",\n'
+            '  "valor_por_funcionario_sugerido": 0\n'
+            "}"
+        )
+        import anthropic as _ant
+        client = _ant.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+        resp = client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=1500,
+            system=system,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        raw = resp.content[0].text.strip()
+        raw = _re.sub(r"^```(?:json)?\s*", "", raw, flags=_re.MULTILINE)
+        raw = _re.sub(r"```\s*$", "", raw, flags=_re.MULTILINE)
+        data = json.loads(raw.strip())
+        return jsonify({"ok": True, "dados": data})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 # ── IA — Painel de Configuração ──────────────────────────────────────────────
