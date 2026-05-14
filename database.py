@@ -149,6 +149,17 @@ _SQLITE_DDL = """
         tamanho         INTEGER
     );
 
+    CREATE TABLE IF NOT EXISTS portal_acessos (
+        id            INTEGER PRIMARY KEY AUTOINCREMENT,
+        empresa_id    INTEGER,
+        empresa_nome  TEXT,
+        token_acesso  TEXT UNIQUE,
+        ativo         INTEGER DEFAULT 1,
+        ultimo_acesso TEXT,
+        criado_em     TEXT DEFAULT (datetime('now', 'localtime')),
+        FOREIGN KEY (empresa_id) REFERENCES empresas(id)
+    );
+
     CREATE TABLE IF NOT EXISTS radar_mercado (
         id        INTEGER PRIMARY KEY AUTOINCREMENT,
         tipo      TEXT,

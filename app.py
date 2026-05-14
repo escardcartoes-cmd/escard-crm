@@ -22,6 +22,7 @@ import models.expansao as exp_model
 import models.cobranca as cob_model
 import models.recebivel as rec_model
 import models.radar as radar_model
+import models.portal as portal_model
 from models.usuario import require_perfil, PERFIS, PERFIL_LABELS
 import ai
 
@@ -153,7 +154,8 @@ def empresas_lista():
         ql = q.lower()
         todas = [e for e in todas if ql in e["nome"].lower()
                  or (e["cnpj"] and ql in e["cnpj"])]
-    return render_template("empresas/lista.html", empresas=todas, q=q, status=status)
+    portais = portal_model.listar_todos()
+    return render_template("empresas/lista.html", empresas=todas, q=q, status=status, portais=portais)
 
 
 @app.route("/empresas/nova", methods=["GET", "POST"])
@@ -1027,6 +1029,49 @@ def cadencia_concluir(id):
 @require_perfil("vendedor")
 def cadencia_cancelar(id):
     cad_model.cancelar(id)
+    return jsonify({"ok": True})
+
+
+# ── Portal do Cliente (rota pública — sem @login_required) ───────────────────
+
+@app.route("/portal/<token>")
+def portal_view(token):
+    acesso = portal_model.buscar_por_token(token)
+    if not acesso:
+        return render_template("portal_erro.html"), 404
+    portal_model.atualizar_ultimo_acesso(token)
+    empresa = emp_model.buscar_por_id(acesso["empresa_id"])
+    if not empresa:
+        return render_template("portal_erro.html"), 404
+    empresa = dict(empresa)
+    produtos = [p.strip() for p in (empresa.get("produtos_ativos") or "").split(",") if p.strip()]
+    atividades = atv_model.listar(empresa_id=empresa["id"], limit=5)
+    return render_template(
+        "portal_cliente.html",
+        empresa=empresa,
+        acesso=acesso,
+        produtos=produtos,
+        atividades=atividades,
+        krylo_whatsapp=os.getenv("KRYLO_WHATSAPP", ""),
+    )
+
+
+@app.route("/portal/gerar/<int:empresa_id>", methods=["POST"])
+@login_required
+def portal_gerar(empresa_id):
+    emp = emp_model.buscar_por_id(empresa_id)
+    if not emp:
+        return jsonify({"error": "Empresa não encontrada"}), 404
+    token = portal_model.gerar_token(empresa_id, emp["nome"])
+    base = os.getenv("APP_URL", request.url_root.rstrip("/"))
+    link = f"{base}/portal/{token}"
+    return jsonify({"ok": True, "token": token, "link": link})
+
+
+@app.route("/portal/revogar/<int:empresa_id>", methods=["POST"])
+@login_required
+def portal_revogar(empresa_id):
+    portal_model.revogar(empresa_id)
     return jsonify({"ok": True})
 
 
