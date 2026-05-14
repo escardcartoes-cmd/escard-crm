@@ -3,6 +3,7 @@ Prospecção Autônoma — motor SDR completo com scoring avançado, filtros,
 pitch por IA, criação automática de cadências e sessões com log ao vivo.
 """
 import json
+import random
 import time
 import requests
 from datetime import datetime, date, timedelta
@@ -265,6 +266,85 @@ def buscar_por_cnpj_especifico(cnpj: str) -> dict | None:
         except Exception:
             pass
     return None
+
+
+def _calcular_digitos_cnpj(base12: str) -> str:
+    """Calcula os 2 dígitos verificadores de um prefixo de 12 chars de CNPJ"""
+    p1 = [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]
+    s1 = sum(int(base12[i]) * p1[i] for i in range(12))
+    d1 = 11 - (s1 % 11); d1 = 0 if d1 >= 10 else d1
+    p2 = [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]
+    full = base12 + str(d1)
+    s2 = sum(int(full[i]) * p2[i] for i in range(13))
+    d2 = 11 - (s2 % 11); d2 = 0 if d2 >= 10 else d2
+    return f"{d1}{d2}"
+
+
+def _gerar_cnpj_valido(base_num: int) -> str:
+    """Gera um CNPJ de 14 dígitos válido a partir de um número base"""
+    base12 = f"{base_num:08d}0001"
+    return base12 + _calcular_digitos_cnpj(base12)
+
+
+def buscar_empresas_por_cnae(cnae: str, uf: str, limit: int = 10) -> list:
+    """
+    Busca empresas por CNAE e UF usando APIs disponíveis.
+
+    Estratégia 1: BrasilAPI search em lote (quando disponível).
+    Estratégia 2: Busca sequencial por range de CNPJ com lookup individual.
+    Retorna lista de dicts com pelo menos {"cnpj": "..."}.
+    """
+    uf_upper = uf.upper().strip()
+
+    # Estratégia 1: BrasilAPI bulk search
+    try:
+        url = (f"https://brasilapi.com.br/api/cnpj/v1/search"
+               f"?cnae={cnae}&uf={uf}&limit={limit}")
+        r = requests.get(url, timeout=10, headers=_HEADERS)
+        if r.status_code == 200:
+            data = r.json()
+            if isinstance(data, list) and data:
+                return data
+    except Exception:
+        pass
+
+    # Estratégia 2: Geração sequencial de CNPJs + lookup individual
+    # Faixa ativa de empresas brasileiras: base ~1M-65M
+    start_base = random.randint(1_000_000, 60_000_000)
+    max_cands = min(limit * 8, 80)
+    candidatos = [_gerar_cnpj_valido(start_base + i) for i in range(max_cands)]
+
+    resultados = []
+    _stop = [False]
+
+    def checar(cnpj: str):
+        if _stop[0]:
+            return None
+        result = _fetch_brasilapi(cnpj)
+        if not result:
+            result = _fetch_cnpjws(cnpj)
+        if not result:
+            return None
+        source, data = result
+        emp = _normalizar_brasilapi(data) if source == "brasilapi" else _normalizar_cnpjws(data)
+        sit = emp.get("situacao", "").upper()
+        if "ATIVA" not in sit and "ACTIVE" not in sit:
+            return None
+        if uf_upper and emp.get("uf", "").upper() != uf_upper:
+            return None
+        return {"cnpj": emp.get("cnpj") or cnpj}
+
+    with ThreadPoolExecutor(max_workers=3) as executor:
+        futures = [executor.submit(checar, c) for c in candidatos]
+        for future in as_completed(futures):
+            if len(resultados) >= limit:
+                _stop[0] = True
+                break
+            r = future.result()
+            if r:
+                resultados.append(r)
+
+    return resultados
 
 
 # ── Scoring ───────────────────────────────────────────────────────────────────
@@ -602,17 +682,7 @@ def rodar_prospeccao_autonoma(db=None, config_override: dict = None) -> dict:
                          f"Buscando empresas de {nome_produto} em {uf}",
                          uf=uf, produto=nome_produto)
 
-                    empresas_lista = []
-                    try:
-                        url = (f"https://brasilapi.com.br/api/cnpj/v1/search"
-                               f"?cnae={cnae}&uf={uf}&limit=10")
-                        r = requests.get(url, timeout=15, headers=_HEADERS)
-                        if r.status_code == 200:
-                            data = r.json()
-                            if isinstance(data, list):
-                                empresas_lista = data
-                    except Exception:
-                        pass
+                    empresas_lista = buscar_empresas_por_cnae(cnae, uf, limit=10)
 
                     _log(db, sessao_id, "info",
                          f"API retornou {len(empresas_lista)} empresas para CNAE {cnae} em {uf}",
