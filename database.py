@@ -187,4 +187,15 @@ def init_db() -> None:
         conn.commit()
     except Exception:
         pass  # Column already exists
+    # Migration: Deal Radar columns
+    for _col in [
+        "ALTER TABLE oportunidades ADD COLUMN score_fechamento INTEGER DEFAULT 0",
+        "ALTER TABLE oportunidades ADD COLUMN data_ultimo_contato TEXT",
+        "ALTER TABLE oportunidades ADD COLUMN num_interacoes INTEGER DEFAULT 0",
+    ]:
+        try:
+            conn.execute(_col)
+            conn.commit()
+        except Exception:
+            pass
     conn.close()
