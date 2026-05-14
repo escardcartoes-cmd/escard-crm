@@ -151,7 +151,8 @@ def listar_radar() -> list:
         JOIN empresas e ON o.empresa_id = e.id
         LEFT JOIN atividades a ON a.oportunidade_id = o.id
         WHERE o.estagio NOT IN ('fechado_ganho', 'fechado_perdido')
-        GROUP BY o.id
+        GROUP BY o.id, o.titulo, o.estagio, o.valor_estimado, o.score_fechamento,
+                 o.data_ultimo_contato, o.num_interacoes, e.nome
         ORDER BY o.criado_em DESC
     """, (sete_dias_atras, "reunião")).fetchall()
     conn.close()
