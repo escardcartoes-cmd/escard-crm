@@ -3,9 +3,13 @@ import csv
 import io
 import json
 import time
+import threading
+import atexit
 from datetime import timedelta
 from dotenv import load_dotenv
 load_dotenv(override=True)
+
+from apscheduler.schedulers.background import BackgroundScheduler
 
 from datetime import date
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, Response
@@ -24,6 +28,7 @@ import models.recebivel as rec_model
 import models.radar as radar_model
 import models.portal as portal_model
 import models.relatorio as rel_model
+import models.prospeccao_auto as pauto_model
 from models.usuario import require_perfil, PERFIS, PERFIL_LABELS
 import ai
 
@@ -70,6 +75,29 @@ _START_TIME = str(time.time())
 
 database.init_db()
 user_model.criar_admin_se_necessario()
+
+
+# ── APScheduler — SDR Autônomo ────────────────────────────────────────────────
+
+def _job_prospeccao_autonoma():
+    try:
+        from models.prospeccao_autonoma import rodar_prospeccao_autonoma
+        resultado = rodar_prospeccao_autonoma()
+        print(f"[SCHEDULER] prospeccao_autonoma: {resultado}")
+    except Exception as e:
+        print(f"[SCHEDULER] Erro: {e}")
+
+
+scheduler = BackgroundScheduler(timezone="America/Sao_Paulo")
+scheduler.add_job(
+    func=_job_prospeccao_autonoma,
+    trigger="interval",
+    hours=6,
+    id="prospeccao_autonoma",
+    replace_existing=True,
+)
+scheduler.start()
+atexit.register(lambda: scheduler.shutdown(wait=False))
 
 
 # ── Auth ──────────────────────────────────────────────────────────────────────
@@ -125,6 +153,10 @@ def dashboard():
     radar_badge = radar_model.contar_nao_lidos()
     dash_extra = rel_model.coletar_dashboard_extra(mes_atual)
     top_acao = (radar[0].get("proxima_acao") or "") if radar else ""
+    try:
+        pauto_resumo = pauto_model.resumo_dashboard()
+    except Exception:
+        pauto_resumo = {"novos_hoje": 0, "prontos": 0}
     return render_template(
         "dashboard.html",
         status_counts=status_counts,
@@ -148,6 +180,7 @@ def dashboard():
         pct_meta=dash_extra["pct_meta"],
         cadencias_ativas_count=dash_extra["cadencias_ativas_count"],
         top_acao=top_acao,
+        pauto_resumo=pauto_resumo,
     )
 
 
@@ -857,6 +890,98 @@ def prospeccao_exportar():
     )
 
 
+# ── Prospecção automática (BrasilAPI / CNPJ.ws) ──────────────────────────────
+
+@app.route("/prospeccao/automatica")
+@login_required
+def prospeccao_automatica():
+    uf        = request.args.get("uf", "").strip().upper()
+    score_min = request.args.get("score_min", None)
+    status    = request.args.get("status", "").strip() or None
+    try:
+        score_min_int = int(score_min) if score_min else None
+    except ValueError:
+        score_min_int = None
+    leads = pauto_model.listar(uf=uf or None, score_min=score_min_int, status=status)
+    return render_template(
+        "leads/busca_automatica.html",
+        leads=leads,
+        uf=uf, score_min=score_min or "", status_filter=status or "",
+        cnaes=pauto_model.CNAES_DISPONIVEIS,
+        ufs=pauto_model.UFS_DISPONIVEIS,
+    )
+
+
+@app.route("/prospeccao/buscar-automatico", methods=["POST"])
+@login_required
+@require_perfil("vendedor")
+def prospeccao_buscar_automatico():
+    dados  = request.json or {}
+    uf     = (dados.get("uf") or "ES").strip().upper()
+    cnaes  = dados.get("cnaes") or []
+    limite = min(int(dados.get("limite") or 30), 100)
+    try:
+        resultado = pauto_model.buscar_e_salvar(uf, cnaes, limite)
+        return jsonify(resultado)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/prospeccao/automatica/<int:id>/importar", methods=["POST"])
+@login_required
+@require_perfil("vendedor")
+def prospeccao_auto_importar(id):
+    try:
+        emp_id = pauto_model.importar(id)
+        return jsonify({"ok": True, "empresa_id": emp_id})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/prospeccao/automatica/importar-selecionados", methods=["POST"])
+@login_required
+@require_perfil("vendedor")
+def prospeccao_auto_importar_lote():
+    ids = (request.json or {}).get("ids", [])
+    ok = pauto_model.importar_varios(ids)
+    return jsonify({"ok": True, "importados": ok})
+
+
+@app.route("/prospeccao/automatica/<int:id>/status", methods=["POST"])
+@login_required
+@require_perfil("vendedor")
+def prospeccao_auto_status(id):
+    novo = (request.json or {}).get("status", "")
+    if novo not in ("novo", "importado", "descartado"):
+        return jsonify({"error": "Status inválido"}), 400
+    pauto_model.atualizar_status(id, novo)
+    return jsonify({"ok": True})
+
+
+@app.route("/prospeccao/autonoma/rodar", methods=["POST"])
+@login_required
+@require_perfil("vendedor")
+def prospeccao_autonoma_rodar():
+    from models.prospeccao_autonoma import rodar_prospeccao_autonoma
+
+    def _rodar():
+        try:
+            resultado = rodar_prospeccao_autonoma()
+            print(f"[MANUAL] prospeccao_autonoma: {resultado}")
+        except Exception as e:
+            print(f"[MANUAL] Erro: {e}")
+
+    threading.Thread(target=_rodar, daemon=True).start()
+    return jsonify({"status": "iniciado", "mensagem": "Prospecção rodando em background"})
+
+
+@app.route("/prospeccao/autonoma/status")
+@login_required
+def prospeccao_autonoma_status():
+    from models.prospeccao_autonoma import status_resumo
+    return jsonify(status_resumo())
+
+
 # ── IA — leads (por lead, chamadas via JS loop) ───────────────────────────────
 
 @app.route("/ai/leads/pontuar/<int:id>", methods=["POST"])
@@ -1040,6 +1165,19 @@ def cadencia_concluir(id):
 def cadencia_cancelar(id):
     cad_model.cancelar(id)
     return jsonify({"ok": True})
+
+
+@app.route("/cadencia/emails")
+@login_required
+def cadencia_emails():
+    try:
+        atualizados = cad_model.sincronizar_aberturas()
+    except Exception:
+        atualizados = 0
+    emails = cad_model.listar_emails_enviados()
+    for e in emails:
+        e["etapa_label"] = cad_model.ETAPA_LABELS.get(e["etapa"], f"Etapa {e['etapa']}")
+    return render_template("cadencias/emails.html", emails=emails, atualizados=atualizados)
 
 
 # ── Portal do Cliente (rota pública — sem @login_required) ───────────────────
@@ -1668,6 +1806,68 @@ def central_ia_doc_excluir(id):
     conn.commit()
     conn.close()
     return jsonify({"ok": True})
+
+
+# ── Configurações — Ramos de Atividade ───────────────────────────────────────
+
+@app.route("/configuracoes/ramos")
+@login_required
+@require_perfil("gerente")
+def configuracoes_ramos():
+    conn = database.get_connection()
+    ramos = [dict(r) for r in conn.execute(
+        "SELECT * FROM ramos_atividade ORDER BY ativo DESC, nome ASC"
+    ).fetchall()]
+    conn.close()
+    return render_template("configuracoes_ramos.html", ramos=ramos)
+
+
+@app.route("/configuracoes/ramos/novo", methods=["POST"])
+@login_required
+@require_perfil("gerente")
+def configuracoes_ramos_novo():
+    try:
+        f = request.form
+        nome        = f.get("nome", "").strip()
+        if not nome:
+            return jsonify({"error": "Nome é obrigatório"}), 400
+        estados_lst = f.getlist("estados")
+        conn = database.get_connection()
+        conn.execute(
+            """INSERT INTO ramos_atividade
+                   (nome, descricao, cnaes, pitch, score_min, estados, capital_min, ativo)
+               VALUES (:nome, :descricao, :cnaes, :pitch, :score_min, :estados, :capital_min, 1)""",
+            {
+                "nome":        nome,
+                "descricao":   f.get("descricao", ""),
+                "cnaes":       f.get("cnaes", ""),
+                "pitch":       f.get("pitch", ""),
+                "score_min":   int(f.get("score_min", 6)),
+                "estados":     ",".join(estados_lst) if estados_lst else f.get("estados", "ES,SP"),
+                "capital_min": int(f.get("capital_min", 100000) or 100000),
+            },
+        )
+        conn.commit()
+        conn.close()
+        return redirect(url_for("configuracoes_ramos"))
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/configuracoes/ramos/<int:id>/toggle", methods=["POST"])
+@login_required
+@require_perfil("gerente")
+def configuracoes_ramos_toggle(id):
+    conn = database.get_connection()
+    row = conn.execute("SELECT ativo FROM ramos_atividade WHERE id=?", (id,)).fetchone()
+    if not row:
+        conn.close()
+        return jsonify({"error": "Não encontrado"}), 404
+    novo = 0 if row["ativo"] else 1
+    conn.execute("UPDATE ramos_atividade SET ativo=? WHERE id=?", (novo, id))
+    conn.commit()
+    conn.close()
+    return jsonify({"ok": True, "ativo": novo})
 
 
 # ── Dev ping (usado pelo hot-reload do browser) ───────────────────────────────

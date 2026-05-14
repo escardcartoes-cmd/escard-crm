@@ -1,0 +1,386 @@
+{% extends 'base.html' %}
+{% block title %}Busca Automática de Leads — Krylo CRM{% endblock %}
+{% block topbar_title %}Prospecção{% endblock %}
+{% block topbar_actions %}
+  <a href="{{ url_for('leads_importar_form') }}" class="btn btn-outline btn-sm">+ Importar CSV</a>
+{% endblock %}
+
+{% block content %}
+
+<!-- Tabs -->
+<div class="card" style="padding:14px 18px;margin-bottom:16px">
+  <div class="tab-row">
+    <a href="{{ url_for('prospeccao_lista') }}" class="tab-btn">Todos os leads</a>
+    <a href="{{ url_for('prospeccao_lista', tab='quentes') }}" class="tab-btn">🔥 Quentes</a>
+    <a href="{{ url_for('prospeccao_lista', tab='mornos') }}" class="tab-btn">Mornos</a>
+    <a href="{{ url_for('prospeccao_lista', tab='frios') }}" class="tab-btn">Frios</a>
+    <a href="{{ url_for('prospeccao_automatica') }}" class="tab-btn active">🔍 Busca Automática</a>
+  </div>
+</div>
+
+<!-- Formulário de busca -->
+<div class="card" style="margin-bottom:20px">
+  <p class="card-title" style="margin-bottom:14px">🔍 Buscar Leads por CNAE — BrasilAPI</p>
+
+  <div class="form-row" style="align-items:flex-start;gap:20px">
+    <div>
+      <label class="form-label">Estado</label>
+      <select id="buscaUF" style="padding:7px 12px;border:1px solid var(--border);border-radius:var(--r-sm);font-size:13px;width:100%">
+        {% for u in ufs %}
+        <option value="{{ u }}" {% if uf == u %}selected{% endif %}>{{ u }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label class="form-label">Limite de empresas</label>
+      <input type="number" id="buscaLimite" value="30" min="5" max="100"
+             style="padding:7px 12px;border:1px solid var(--border);border-radius:var(--r-sm);font-size:13px;width:100px">
+    </div>
+  </div>
+
+  <div style="margin-top:14px">
+    <label class="form-label">CNAEs (setores de interesse)</label>
+    <div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:6px">
+      {% for cnae in cnaes %}
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;padding:6px 10px;border:1px solid var(--border);border-radius:var(--r-sm);background:#F8FAFC">
+        <input type="checkbox" class="cnae-cb" value="{{ cnae.code }}" checked
+               style="cursor:pointer;width:13px;height:13px">
+        <span>{{ cnae.label }}</span>
+        <span class="text-muted" style="font-size:11px">({{ cnae.code }})</span>
+      </label>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div style="margin-top:16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+    <button id="btnBuscar" onclick="iniciarBusca()"
+            class="btn btn-primary btn-sm">
+      🔍 Buscar leads agora
+    </button>
+    <div id="buscaMsg" style="font-size:13px;color:var(--muted)"></div>
+  </div>
+
+  <!-- Progress bar -->
+  <div id="progressWrap" style="display:none;margin-top:14px">
+    <div style="height:6px;background:#F1F5F9;border-radius:99px;overflow:hidden">
+      <div id="progressBar" style="height:100%;width:0%;background:linear-gradient(90deg,#C5A089,#4A3F35);border-radius:99px;transition:width .3s ease"></div>
+    </div>
+    <p class="text-muted text-sm" style="margin-top:6px" id="progressTxt">Consultando BrasilAPI…</p>
+  </div>
+
+  <!-- Resultado -->
+  <div id="buscaResultado" style="display:none;margin-top:12px;padding:12px 16px;border-radius:var(--r-sm);background:#F0FDF4;border:1px solid #BBF7D0;font-size:13px">
+  </div>
+</div>
+
+<!-- Barra de ações em lote -->
+<div id="bulkBar" class="bulk-bar" style="display:none">
+  <span id="bulkCount" class="bulk-bar-count"></span>
+  <button class="btn btn-sm" style="background:#16A34A;color:#fff" onclick="importarSelecionados()">↑ Importar selecionados</button>
+  <button class="btn btn-outline-inv btn-sm" onclick="desmarcarTodos()">✕ Desmarcar</button>
+</div>
+
+<!-- Filtros rápidos -->
+<div class="card" style="padding:12px 16px;margin-bottom:12px">
+  <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+    <select id="filterUF" onchange="aplicarFiltros()"
+            style="padding:5px 10px;border:1px solid var(--border);border-radius:var(--r-sm);font-size:12px">
+      <option value="">Todos os estados</option>
+      {% for u in ufs %}
+      <option value="{{ u }}" {% if uf == u %}selected{% endif %}>{{ u }}</option>
+      {% endfor %}
+    </select>
+    <select id="filterScore" onchange="aplicarFiltros()"
+            style="padding:5px 10px;border:1px solid var(--border);border-radius:var(--r-sm);font-size:12px">
+      <option value="">Qualquer score</option>
+      <option value="7" {% if score_min == '7' %}selected{% endif %}>Score ≥ 7</option>
+      <option value="5" {% if score_min == '5' %}selected{% endif %}>Score ≥ 5</option>
+      <option value="3" {% if score_min == '3' %}selected{% endif %}>Score ≥ 3</option>
+    </select>
+    <select id="filterStatus" onchange="aplicarFiltros()"
+            style="padding:5px 10px;border:1px solid var(--border);border-radius:var(--r-sm);font-size:12px">
+      <option value="">Todos os status</option>
+      <option value="novo" {% if status_filter == 'novo' %}selected{% endif %}>Novos</option>
+      <option value="importado" {% if status_filter == 'importado' %}selected{% endif %}>Importados</option>
+      <option value="descartado" {% if status_filter == 'descartado' %}selected{% endif %}>Descartados</option>
+    </select>
+    <span class="text-muted text-sm">{{ leads|length }} lead(s)</span>
+    {% if leads %}
+    <button class="btn btn-sm" style="background:#16A34A;color:#fff;margin-left:auto"
+            onclick="importarTodosNovos()">↑ Importar todos os novos</button>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Tabela de leads -->
+{% if leads %}
+<div class="table-wrap">
+  <table>
+    <thead>
+      <tr>
+        <th style="width:32px;padding:10px 12px">
+          <input type="checkbox" id="checkAll" onchange="toggleAll(this)"
+                 style="cursor:pointer;width:14px;height:14px">
+        </th>
+        <th>Score</th>
+        <th>Empresa</th>
+        <th>Cidade/UF</th>
+        <th>CNAE</th>
+        <th>Telefone</th>
+        <th>Capital</th>
+        <th>Status</th>
+        <th>Ações</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for l in leads %}
+      {% if l.score_fit >= 7 %}
+        {% set row_bg = '#F0FDF4' %}
+      {% elif l.score_fit >= 4 %}
+        {% set row_bg = '#FFFBEB' %}
+      {% else %}
+        {% set row_bg = '' %}
+      {% endif %}
+      <tr id="arow-{{ l.id }}" style="{% if row_bg %}background:{{ row_bg }}{% endif %}">
+        <td style="padding:10px 12px">
+          <input type="checkbox" class="auto-cb" value="{{ l.id }}"
+                 style="cursor:pointer;width:14px;height:14px"
+                 {% if l.status != 'novo' %}disabled{% endif %}>
+        </td>
+        <td>
+          <span class="score-fit-badge sf-{% if l.score_fit >= 7 %}high{% elif l.score_fit >= 4 %}mid{% else %}low{% endif %}">
+            {{ l.score_fit }}
+          </span>
+        </td>
+        <td>
+          <div style="font-weight:600;font-size:13px">{{ l.razao_social or '—' }}</div>
+          <div class="text-muted text-sm">{{ l.cnpj or '' }}</div>
+        </td>
+        <td style="font-size:13px">
+          {{ l.municipio or '—' }}{% if l.municipio and l.uf %}/{% endif %}{{ l.uf or '—' }}
+        </td>
+        <td style="font-size:12px;max-width:180px">
+          <span title="{{ l.cnae_descricao or '' }}" style="display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+            {{ (l.cnae_descricao or '—')[:40] }}{% if (l.cnae_descricao or '')|length > 40 %}…{% endif %}
+          </span>
+        </td>
+        <td style="font-size:12px">{{ l.telefone or '—' }}</td>
+        <td style="font-size:12px;font-weight:600">
+          {% if l.capital_social %}
+            R$&nbsp;{{ '{:,.0f}'.format(l.capital_social) }}
+          {% else %}—{% endif %}
+        </td>
+        <td>
+          <span class="badge-auto-{{ l.status }}">{{ l.status }}</span>
+        </td>
+        <td>
+          <div class="td-actions">
+            {% if l.status == 'novo' %}
+            <button class="btn btn-xs" style="background:#16A34A;color:#fff"
+                    onclick="importarLead({{ l.id }}, this)">↑ Importar</button>
+            <button class="btn btn-xs" style="background:linear-gradient(135deg,#16A34A,#15803D);color:#fff"
+                    onclick="iniciarCadenciaAuto('{{ l.razao_social | replace("'","\\'") | e }}', '{{ l.telefone or "" }}', '')">
+              ⚡ Cadência
+            </button>
+            <button class="btn btn-danger btn-xs"
+                    onclick="descartarLead({{ l.id }}, this)">✕</button>
+            {% elif l.status == 'importado' %}
+            <span class="text-muted text-sm">importado</span>
+            {% else %}
+            <button class="btn btn-outline btn-xs"
+                    onclick="restaurarLead({{ l.id }}, this)">↺</button>
+            {% endif %}
+          </div>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="card">
+  <div class="empty-state">
+    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+        d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+    </svg>
+    <p style="font-weight:600;margin-bottom:6px">Nenhum lead encontrado</p>
+    <p class="text-sm">Use o formulário acima para buscar empresas por CNAE via BrasilAPI.</p>
+  </div>
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+// ── Seleção ───────────────────────────────────────────────────────────────────
+function getSelectedIds() {
+  return [...document.querySelectorAll('.auto-cb:checked')].map(cb => parseInt(cb.value));
+}
+function toggleAll(cb) {
+  document.querySelectorAll('.auto-cb:not([disabled])').forEach(c => c.checked = cb.checked);
+  updateBulkBar();
+}
+document.addEventListener('change', e => {
+  if (e.target.classList.contains('auto-cb')) updateBulkBar();
+});
+function updateBulkBar() {
+  const n = getSelectedIds().length;
+  document.getElementById('bulkBar').style.display = n > 0 ? 'flex' : 'none';
+  document.getElementById('bulkCount').textContent = n === 1 ? '1 empresa selecionada' : `${n} empresas selecionadas`;
+}
+function desmarcarTodos() {
+  document.querySelectorAll('.auto-cb').forEach(c => c.checked = false);
+  document.getElementById('checkAll').checked = false;
+  updateBulkBar();
+}
+
+// ── Busca ─────────────────────────────────────────────────────────────────────
+async function iniciarBusca() {
+  const uf = document.getElementById('buscaUF').value;
+  const limite = parseInt(document.getElementById('buscaLimite').value) || 30;
+  const cnaes = [...document.querySelectorAll('.cnae-cb:checked')].map(cb => cb.value);
+
+  const btn = document.getElementById('btnBuscar');
+  const msg = document.getElementById('buscaMsg');
+  const pw = document.getElementById('progressWrap');
+  const pb = document.getElementById('progressBar');
+  const pt = document.getElementById('progressTxt');
+  const res = document.getElementById('buscaResultado');
+
+  btn.disabled = true;
+  btn.textContent = 'Buscando…';
+  pw.style.display = 'block';
+  res.style.display = 'none';
+  msg.textContent = '';
+
+  let pct = 5;
+  pb.style.width = pct + '%';
+  const timer = setInterval(() => {
+    pct = Math.min(pct + 3, 90);
+    pb.style.width = pct + '%';
+    pt.textContent = `Consultando BrasilAPI… (${pct}%)`;
+  }, 1000);
+
+  try {
+    const r = await fetch('/prospeccao/buscar-automatico', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({uf, cnaes, limite}),
+    });
+    const d = await r.json();
+    clearInterval(timer);
+    pb.style.width = '100%';
+    pt.textContent = 'Concluído!';
+    if (d.error) {
+      res.style.background = '#FFF1F2';
+      res.style.borderColor = '#FECDD3';
+      res.innerHTML = `<strong>Erro:</strong> ${d.error}`;
+    } else {
+      res.innerHTML = `✓ <strong>${d.encontrados}</strong> leads encontrados &nbsp;·&nbsp; <strong>${d.salvos}</strong> novos salvos &nbsp;·&nbsp; ${d.duplicados} duplicados ignorados`;
+    }
+    res.style.display = 'block';
+    if (d.salvos > 0) setTimeout(() => location.reload(), 1200);
+  } catch(e) {
+    clearInterval(timer);
+    msg.textContent = 'Erro: ' + e.message;
+  }
+
+  btn.disabled = false;
+  btn.textContent = '🔍 Buscar leads agora';
+}
+
+// ── Importar ──────────────────────────────────────────────────────────────────
+async function importarLead(id, btn) {
+  const orig = btn.innerHTML;
+  btn.disabled = true; btn.textContent = '…';
+  try {
+    const r = await fetch(`/prospeccao/automatica/${id}/importar`, {method:'POST', headers:{'X-Requested-With':'XMLHttpRequest'}});
+    const d = await r.json();
+    if (d.ok) {
+      const row = document.getElementById('arow-' + id);
+      if (row) {
+        row.querySelector('.badge-auto-novo, .badge-auto-importado, .badge-auto-descartado').className = 'badge-auto-importado';
+        row.querySelector('.badge-auto-importado').textContent = 'importado';
+        row.querySelector('.td-actions').innerHTML = '<span class="text-muted text-sm">importado</span>';
+      }
+    } else { alert(d.error || 'Erro'); btn.disabled = false; btn.innerHTML = orig; }
+  } catch(e) { alert('Erro: ' + e.message); btn.disabled = false; btn.innerHTML = orig; }
+}
+
+async function importarSelecionados() {
+  const ids = getSelectedIds();
+  if (!ids.length) return;
+  if (!confirm(`Importar ${ids.length} empresa(s) para o CRM?`)) return;
+  const r = await fetch('/prospeccao/automatica/importar-selecionados', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ids}),
+  });
+  const d = await r.json();
+  if (d.ok) { alert(`${d.importados} empresa(s) importada(s) com sucesso.`); location.reload(); }
+  else alert(d.error || 'Erro');
+}
+
+async function importarTodosNovos() {
+  const ids = [...document.querySelectorAll('.auto-cb:not([disabled])')].map(cb => parseInt(cb.value));
+  if (!ids.length) { alert('Nenhum lead novo disponível.'); return; }
+  if (!confirm(`Importar todos os ${ids.length} leads novos para o CRM?`)) return;
+  const r = await fetch('/prospeccao/automatica/importar-selecionados', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ids}),
+  });
+  const d = await r.json();
+  if (d.ok) { alert(`${d.importados} empresa(s) importada(s).`); location.reload(); }
+  else alert(d.error || 'Erro');
+}
+
+async function descartarLead(id, btn) {
+  const r = await fetch(`/prospeccao/automatica/${id}/status`, {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({status:'descartado'}),
+  });
+  const d = await r.json();
+  if (d.ok) {
+    const row = document.getElementById('arow-' + id);
+    if (row) {
+      row.style.opacity = '.45';
+      row.querySelector('.td-actions').innerHTML = `<button class="btn btn-outline btn-xs" onclick="restaurarLead(${id}, this)">↺</button>`;
+      row.querySelectorAll('[class^=badge-auto]').forEach(el => {
+        el.className = 'badge-auto-descartado'; el.textContent = 'descartado';
+      });
+    }
+  }
+}
+
+async function restaurarLead(id, btn) {
+  await fetch(`/prospeccao/automatica/${id}/status`, {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({status:'novo'}),
+  });
+  location.reload();
+}
+
+function iniciarCadenciaAuto(nome, telefone, email) {
+  if (typeof iniciarCadencia === 'function') {
+    iniciarCadencia(null, nome, telefone, email);
+  } else {
+    alert('Abra a empresa no CRM para iniciar uma cadência.');
+  }
+}
+
+// ── Filtros ───────────────────────────────────────────────────────────────────
+function aplicarFiltros() {
+  const uf = document.getElementById('filterUF').value;
+  const score = document.getElementById('filterScore').value;
+  const status = document.getElementById('filterStatus').value;
+  const params = new URLSearchParams();
+  if (uf) params.set('uf', uf);
+  if (score) params.set('score_min', score);
+  if (status) params.set('status', status);
+  location.href = '/prospeccao/automatica?' + params.toString();
+}
+</script>
+{% endblock %}

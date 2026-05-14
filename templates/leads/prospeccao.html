@@ -70,6 +70,8 @@
        class="tab-btn {% if tab=='mornos'  %}active{% endif %}">Mornos (40–69)</a>
     <a href="{{ url_for('prospeccao_lista', tab='frios',   status=status) }}"
        class="tab-btn {% if tab=='frios'   %}active{% endif %}">Frios (&lt;40)</a>
+    <a href="{{ url_for('prospeccao_automatica') }}"
+       class="tab-btn">🔍 Busca Automática</a>
   </div>
   <div class="flex items-center gap-2" style="flex-wrap:wrap">
     <select id="statusFilter" onchange="applyStatusFilter(this.value)"

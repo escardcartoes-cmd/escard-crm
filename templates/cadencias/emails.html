@@ -1,0 +1,87 @@
+{% extends 'base.html' %}
+{% block title %}E-mails Enviados — Krylo CRM{% endblock %}
+{% block topbar_title %}E-mails das Cadências{% endblock %}
+{% block topbar_actions %}
+  <a href="{{ url_for('cadencias_index') }}" class="btn btn-outline btn-sm">← Cadências</a>
+{% endblock %}
+
+{% block content %}
+
+{% macro email_badge(status) %}
+  {% if status == 'aberto' %}
+    <span style="display:inline-flex;align-items:center;padding:3px 10px;border-radius:99px;font-size:11px;font-weight:700;background:#F0FDF4;color:#16A34A">
+      ✓ Aberto
+    </span>
+  {% elif status == 'enviado' %}
+    <span style="display:inline-flex;align-items:center;padding:3px 10px;border-radius:99px;font-size:11px;font-weight:700;background:#FFFBEB;color:#B45309">
+      ✉ Enviado
+    </span>
+  {% else %}
+    <span style="display:inline-flex;align-items:center;padding:3px 10px;border-radius:99px;font-size:11px;font-weight:700;background:#F1F5F9;color:#64748B">
+      — Sem e-mail
+    </span>
+  {% endif %}
+{% endmacro %}
+
+<div class="card" style="margin-bottom:20px">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+    <p class="card-title" style="margin-bottom:0">E-mails Enviados via Brevo</p>
+    {% if atualizados > 0 %}
+    <span style="font-size:12px;color:#16A34A;font-weight:600">
+      ✓ {{ atualizados }} abertura(s) detectada(s) agora
+    </span>
+    {% endif %}
+  </div>
+  <p class="text-muted text-sm" style="margin-bottom:16px">
+    Status de abertura atualizado em tempo real a cada visita nesta página.
+  </p>
+
+  {% if emails %}
+  <div style="overflow-x:auto">
+    <table style="width:100%;border-collapse:collapse;font-size:13px">
+      <thead>
+        <tr style="border-bottom:2px solid var(--border);text-align:left">
+          <th style="padding:8px 10px;font-weight:600;color:var(--muted);font-size:11px;text-transform:uppercase">Empresa</th>
+          <th style="padding:8px 10px;font-weight:600;color:var(--muted);font-size:11px;text-transform:uppercase">Etapa</th>
+          <th style="padding:8px 10px;font-weight:600;color:var(--muted);font-size:11px;text-transform:uppercase">Destinatário</th>
+          <th style="padding:8px 10px;font-weight:600;color:var(--muted);font-size:11px;text-transform:uppercase">Assunto</th>
+          <th style="padding:8px 10px;font-weight:600;color:var(--muted);font-size:11px;text-transform:uppercase">Data de envio</th>
+          <th style="padding:8px 10px;font-weight:600;color:var(--muted);font-size:11px;text-transform:uppercase">Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for e in emails %}
+        <tr style="border-bottom:1px solid var(--border);{% if e.email_status == 'aberto' %}background:#F0FDF4{% elif loop.index is odd %}background:#FAFAFA{% endif %}">
+          <td style="padding:10px 10px;font-weight:600">{{ e.empresa_nome }}</td>
+          <td style="padding:10px 10px">
+            {% set cores = {1:'#B45309,#FFFBEB', 2:'#0369A1,#F0F9FF', 3:'#7E22CE,#FAF5FF', 4:'#BE123C,#FFF1F2'} %}
+            {% set par = cores.get(e.etapa, '#64748B,#F1F5F9').split(',') %}
+            <span style="display:inline-flex;align-items:center;padding:2px 8px;border-radius:99px;font-size:10px;font-weight:700;color:{{ par[0] }};background:{{ par[1] }}">
+              E{{ e.etapa }}
+            </span>
+            <span class="text-muted text-sm" style="margin-left:5px">{{ e.etapa_label }}</span>
+          </td>
+          <td style="padding:10px 10px;color:var(--muted)">{{ e.contato_email or '—' }}</td>
+          <td style="padding:10px 10px;max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{{ e.assunto_email }}">
+            {{ e.assunto_email or '—' }}
+          </td>
+          <td style="padding:10px 10px;color:var(--muted);white-space:nowrap">{{ e.data_acao }}</td>
+          <td style="padding:10px 10px">{{ email_badge(e.email_status) }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="empty-state" style="padding:36px 0">
+    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+        d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+    </svg>
+    <p style="font-weight:600;margin-bottom:6px">Nenhum e-mail enviado ainda</p>
+    <p class="text-sm">E-mails são enviados automaticamente nas etapas 2 (D+3) e 4 (D+14) quando há endereço de e-mail no contato.</p>
+  </div>
+  {% endif %}
+</div>
+
+{% endblock %}
