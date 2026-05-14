@@ -89,6 +89,8 @@ def dashboard():
         v for k, v in estagio_counts.items()
         if k not in ("fechado_ganho", "fechado_perdido")
     )
+    radar = op_model.listar_radar()
+    op_model.salvar_scores_radar(radar)
     return render_template(
         "dashboard.html",
         status_counts=status_counts,
@@ -98,6 +100,7 @@ def dashboard():
         total_empresas=total_empresas,
         clientes=clientes,
         em_aberto=em_aberto,
+        radar=radar[:5],
     )
 
 
@@ -352,6 +355,27 @@ def oportunidades_mover(id):
     dados["estagio"] = novo
     op_model.atualizar(id, dados)
     return jsonify({"ok": True, "estagio": novo, "label": op_model.ESTAGIO_LABELS[novo]})
+
+
+@app.route("/oportunidades/radar")
+@login_required
+def oportunidades_radar():
+    radar = op_model.listar_radar()
+    op_model.salvar_scores_radar(radar)
+    return jsonify([
+        {
+            "id": r["id"],
+            "titulo": r["titulo"],
+            "empresa": r["empresa_nome"],
+            "estagio": r["estagio"],
+            "estagio_label": r["estagio_label"],
+            "valor": r["valor_estimado"],
+            "score": r["score_calc"],
+            "dias_sem_contato": r["dias_sem_contato"],
+            "proxima_acao": r["proxima_acao"],
+        }
+        for r in radar
+    ])
 
 
 def _form_oportunidade(f):
