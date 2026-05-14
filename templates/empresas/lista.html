@@ -141,6 +141,15 @@ function desmarcarTodos() {
   updateBulkBar();
 }
 
+// ── Helpers de fetch ─────────────────────────────────────────────────────────
+async function fetchJSON(url, opts) {
+  const r = await fetch(url, opts);
+  const d = await r.json();
+  if (r.status === 401) { alert(d.error || 'Sessão expirada. Faça login novamente.'); location.href = '/login'; return null; }
+  if (r.status === 403) { alert(d.error || 'Acesso negado.'); return null; }
+  return d;
+}
+
 // ── Excluir em lote ───────────────────────────────────────────────────────────
 async function excluirSelecionados() {
   const ids = getSelectedIds();
@@ -148,17 +157,18 @@ async function excluirSelecionados() {
   const n = ids.length;
   if (!confirm(`Excluir ${n} empresa${n > 1 ? 's' : ''}? Esta ação não pode ser desfeita.`)) return;
   try {
-    const d = await fetch('/empresas/excluir-lote', {
+    const d = await fetchJSON('/empresas/excluir-lote', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ids }),
-    }).then(r => r.json());
+    });
+    if (!d) return;
     if (d.ok) {
       ids.forEach(id => document.getElementById('row-' + id)?.remove());
       document.getElementById('checkAll').checked = false;
       updateBulkBar();
     } else {
-      alert('Erro ao excluir.');
+      alert(d.error || 'Erro ao excluir.');
     }
   } catch(e) { alert('Erro: ' + e.message); }
 }
@@ -186,9 +196,9 @@ function exportarSelecionados() {
 // ── Score IA ──────────────────────────────────────────────────────────────────
 function aiScore(id, nome) {
   openModal('Score do Lead — ' + nome, true);
-  fetch('/ai/score/' + id, { method: 'POST' })
-    .then(r => r.json())
+  fetchJSON('/ai/score/' + id, { method: 'POST' })
     .then(d => {
+      if (!d) { closeModal(); return; }
       if (d.error) { showError(d.error); return; }
       const s = d.score;
       const cls = s >= 70 ? 'score-high' : s >= 40 ? 'score-mid' : 'score-low';
