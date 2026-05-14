@@ -83,6 +83,11 @@
                     onclick="aiScore({{ e.id }}, '{{ e.nome | replace("'","\\'")|e }}')">
               ✦ Score
             </button>
+            <button class="btn btn-xs"
+                    style="background:linear-gradient(135deg,#16A34A,#15803D);color:#fff"
+                    onclick="iniciarCadencia({{ e.id }}, '{{ e.nome | replace("'","\\'") }}', '{{ e.telefone or "" }}', '{{ e.email or "" }}')">
+              ⚡ Cadência
+            </button>
             <form method="post" action="{{ url_for('empresas_excluir', id=e.id) }}" style="display:inline"
                   onsubmit="return confirm('Excluir {{ e.nome | replace("'","\\'") }}?')">
               <button type="submit" class="btn btn-danger btn-xs">Excluir</button>

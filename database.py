@@ -78,6 +78,22 @@ _SQLITE_DDL = """
         FOREIGN KEY (empresa_id) REFERENCES empresas(id) ON DELETE CASCADE
     );
 
+    CREATE TABLE IF NOT EXISTS cadencias (
+        id                INTEGER PRIMARY KEY AUTOINCREMENT,
+        empresa_id        INTEGER,
+        empresa_nome      TEXT    NOT NULL,
+        contato_whatsapp  TEXT,
+        contato_email     TEXT,
+        oportunidade_id   INTEGER,
+        etapa             INTEGER NOT NULL DEFAULT 1,
+        data_acao         TEXT    NOT NULL,
+        mensagem_whatsapp TEXT,
+        assunto_email     TEXT,
+        corpo_email       TEXT,
+        status            TEXT    NOT NULL DEFAULT 'pendente',
+        criado_em         TEXT    DEFAULT (datetime('now', 'localtime'))
+    );
+
     CREATE TABLE IF NOT EXISTS documentos_ia (
         id              INTEGER PRIMARY KEY AUTOINCREMENT,
         nome            TEXT    NOT NULL,

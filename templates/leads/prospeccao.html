@@ -134,7 +134,8 @@
     </thead>
     <tbody>
       {% for l in leads %}
-      <tr id="row-{{ l.id }}" data-telefone="{{ l.contato_telefone or '' }}" data-email="{{ l.contato_email or '' }}">
+      <tr id="row-{{ l.id }}" data-telefone="{{ l.contato_telefone or '' }}" data-email="{{ l.contato_email or '' }}"
+          data-empresa-id="{{ l.empresa_id }}" data-empresa-nome="{{ l.empresa_nome | e }}">
         <td style="padding:10px 12px">
           <input type="checkbox" class="lead-cb" value="{{ l.id }}"
                  style="cursor:pointer;width:14px;height:14px">
@@ -171,6 +172,9 @@
             <button class="btn btn-ai btn-xs" onclick="pontuarLead({{ l.id }})" title="Calcular score">✦ Score</button>
             <button class="btn btn-wa btn-xs" onclick="gerarWhatsapp({{ l.id }})" title="Gerar mensagem WhatsApp">WA</button>
             <button class="btn btn-outline btn-xs" onclick="gerarEmail({{ l.id }})" title="Gerar e-mail">E-mail</button>
+            <button class="btn btn-xs" style="background:linear-gradient(135deg,#16A34A,#15803D);color:#fff"
+                    title="Iniciar cadência SDR"
+                    onclick="iniciarCadenciaFromRow({{ l.id }})">⚡ SDR</button>
             <form method="post" action="{{ url_for('prospeccao_excluir', id=l.id) }}"
                   onsubmit="return confirm('Remover este lead da prospecção?')" style="display:inline">
               <button type="submit" class="btn btn-danger btn-xs">✕</button>
