@@ -19,6 +19,15 @@ def _get_client() -> anthropic.Anthropic:
     return _client
 
 
+def _ia_system() -> str:
+    """Carrega o system prompt configurado pelo usuário (silencia erros)."""
+    try:
+        from models.ia_config import get_system_prompt_cached
+        return get_system_prompt_cached()
+    except Exception:
+        return ""
+
+
 def _parse_json(text: str) -> dict:
     start = text.find("{")
     end = text.rfind("}") + 1
@@ -129,6 +138,7 @@ Pontos fortes: {", ".join(pontos_fortes) if pontos_fortes else "não disponível
     msg = _get_client().messages.create(
         model=MODEL,
         max_tokens=400,
+        system=_ia_system(),
         messages=[{"role": "user", "content": prompt}],
     )
     return _parse_json(msg.content[0].text)
@@ -166,6 +176,7 @@ Pontos fortes: {", ".join(pontos_fortes) if pontos_fortes else "não disponível
     msg = _get_client().messages.create(
         model=MODEL,
         max_tokens=700,
+        system=_ia_system(),
         messages=[{"role": "user", "content": prompt}],
     )
     return _parse_json(msg.content[0].text)
@@ -195,6 +206,7 @@ def gerar_email_cadencia(empresa_nome: str, etapa: int, produto: str = "") -> di
     msg = _get_client().messages.create(
         model="claude-haiku-4-5-20251001",
         max_tokens=700,
+        system=_ia_system(),
         messages=[{"role": "user", "content": prompt}],
     )
     return _parse_json(msg.content[0].text)

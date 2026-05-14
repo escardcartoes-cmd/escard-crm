@@ -1091,10 +1091,13 @@ def cadencia_iniciar():
             return jsonify({"error": "Nome da empresa é obrigatório."}), 400
 
         import anthropic as _ant
+        import models.ia_config as ia_mod
         client = _ant.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+        _conn_ia = database.get_connection()
+        _sys_cad = ia_mod.get_system_prompt(_conn_ia)
+        _conn_ia.close()
 
-        prompt = f"""Você é um SDR especialista em Krylo Cartão de Benefícios B2B.
-Gere uma cadência de 4 contatos para a empresa "{empresa_nome}".
+        prompt = f"""Gere uma cadência de 4 contatos para a empresa "{empresa_nome}".
 Retorne SOMENTE um JSON válido, sem markdown, sem explicações:
 
 {{"etapas":[
@@ -1116,6 +1119,7 @@ E-mail: assunto objetivo (max 8 palavras), corpo profissional com cumprimento e 
         resp = client.messages.create(
             model="claude-haiku-4-5-20251001",
             max_tokens=2500,
+            system=_sys_cad,
             messages=[{"role": "user", "content": prompt}],
         )
         raw = resp.content[0].text.strip()
@@ -1286,11 +1290,15 @@ Regras: mensagem curta (máx 4 linhas), mencione o problema do concorrente de fo
 destaque a estabilidade e confiabilidade da Krylo, termine com CTA para uma conversa rápida.
 Tom amigável e consultivo, não agressivo."""
 
-        import anthropic as _ant
+        import anthropic as _ant, models.ia_config as ia_mod
+        _conn_rad = database.get_connection()
+        _sys_rad  = ia_mod.get_system_prompt(_conn_rad)
+        _conn_rad.close()
         client = _ant.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
         resp = client.messages.create(
             model="claude-haiku-4-5-20251001",
             max_tokens=400,
+            system=_sys_rad,
             messages=[{"role": "user", "content": prompt}],
         )
         raw = resp.content[0].text.strip()
@@ -1345,11 +1353,15 @@ Valor mensal atual: R$ {emp.get('valor_mensal') or 0:,.0f}
 
 Destaque o benefício principal de cada produto faltando, o impacto para os funcionários e a facilidade de adicionar ao pacote atual. Tom consultivo e direto."""
 
-        import anthropic as _ant
+        import anthropic as _ant, models.ia_config as ia_mod
+        _conn_exp = database.get_connection()
+        _sys_exp  = ia_mod.get_system_prompt(_conn_exp)
+        _conn_exp.close()
         client = _ant.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
         resp = client.messages.create(
             model="claude-haiku-4-5-20251001",
             max_tokens=800,
+            system=_sys_exp,
             messages=[{"role": "user", "content": prompt}],
         )
         raw = resp.content[0].text.strip()
@@ -1651,6 +1663,111 @@ def _form_usuario(f, editando=False):
                 senha=senha, perfil=perfil, ativo=ativo), None
 
 
+# ── IA — Painel de Configuração ──────────────────────────────────────────────
+
+@app.route("/ia/config")
+@login_required
+@require_perfil("gerente")
+def ia_config_painel():
+    import models.ia_config as ia_mod
+    conn = database.get_connection()
+    cfg  = ia_mod.get_ia_config(conn)
+    conn.close()
+    return render_template("ia_painel.html", cfg=cfg)
+
+
+@app.route("/ia/config/salvar", methods=["POST"])
+@login_required
+@require_perfil("gerente")
+def ia_config_salvar():
+    try:
+        f = request.json or {}
+        campos = [
+            "nome_assistente", "personalidade", "tom", "estrategia",
+            "estilo_escrita", "contexto_empresa", "objetivo_principal",
+            "restricoes", "saudacao_whatsapp", "saudacao_email", "assinatura_email",
+        ]
+        conn = database.get_connection()
+        for campo in campos:
+            if campo in f:
+                conn.execute(
+                    f"UPDATE ia_config SET {campo}=:v, atualizado_em=:t WHERE id=1",
+                    {"v": f[campo], "t": str(__import__("datetime").datetime.now())},
+                )
+        conn.commit()
+        conn.close()
+        return jsonify({"status": "salvo"})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/ia/chat", methods=["POST"])
+@login_required
+def ia_chat():
+    try:
+        import models.ia_config as ia_mod
+        body     = request.json or {}
+        mensagem = (body.get("mensagem") or "").strip()
+        historico = body.get("historico") or []
+        contexto  = (body.get("contexto") or "").strip()
+        if not mensagem:
+            return jsonify({"error": "Mensagem vazia"}), 400
+        conn = database.get_connection()
+        resposta = ia_mod.chat_com_ia(conn, mensagem, historico, contexto)
+        conn.close()
+        return jsonify({"resposta": resposta})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/ia/testar-pitch", methods=["POST"])
+@login_required
+def ia_testar_pitch():
+    import re as _re
+    try:
+        import models.ia_config as ia_mod
+        import anthropic as _ant
+        body    = request.json or {}
+        empresa = (body.get("empresa") or "").strip()
+        produto = (body.get("produto") or "").strip()
+        canal   = (body.get("canal") or "whatsapp").strip()
+        if not empresa:
+            return jsonify({"error": "Empresa é obrigatória"}), 400
+
+        conn   = database.get_connection()
+        system = ia_mod.get_system_prompt(conn)
+        cfg    = ia_mod.get_ia_config(conn)
+        conn.close()
+
+        if canal == "email":
+            prompt = (
+                f"Crie um e-mail de prospecção para {empresa} sobre {produto or 'benefícios Krylo'}.\n"
+                f"Saudação padrão: {cfg.get('saudacao_email','Prezado(a),')}\n"
+                f"Assinatura: {cfg.get('assinatura_email','Krylo')}\n"
+                "Retorne SOMENTE JSON válido: {\"assunto\": \"...\", \"corpo\": \"...\"}"
+            )
+        else:
+            prompt = (
+                f"Crie uma mensagem de WhatsApp de prospecção para {empresa} sobre {produto or 'benefícios Krylo'}.\n"
+                f"Saudação padrão: {cfg.get('saudacao_whatsapp','Olá!')}\n"
+                "Retorne SOMENTE JSON válido: {\"mensagem\": \"...\"}"
+            )
+
+        client = _ant.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+        resp   = client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=600,
+            system=system,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        raw = resp.content[0].text.strip()
+        raw = _re.sub(r"^```(?:json)?\s*", "", raw, flags=_re.MULTILINE)
+        raw = _re.sub(r"```\s*$",          "", raw, flags=_re.MULTILINE)
+        return jsonify({"ok": True, "canal": canal, **json.loads(raw.strip())})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 # ── Central de IA ────────────────────────────────────────────────────────────
 
 _IA_SYSTEM_PROMPT = (
@@ -1738,10 +1855,11 @@ def central_ia_chat():
         if not mensagem:
             return jsonify({"error": "Mensagem vazia"}), 400
 
-        contexto = _central_ia_context()
-        system   = _IA_SYSTEM_PROMPT
-        if contexto:
-            system += f"\n\nBase de conhecimento disponível:\n{contexto}"
+        import models.ia_config as ia_mod
+        contexto_docs = _central_ia_context()
+        conn_ia = database.get_connection()
+        system  = ia_mod.get_system_prompt(conn_ia, contexto_docs)
+        conn_ia.close()
 
         messages = []
         for h in historico[-20:]:
