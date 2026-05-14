@@ -87,6 +87,67 @@
 
 </div>
 
+<!-- ── PAINEL AO VIVO ─────────────────────────────────────────────────────── -->
+<div id="painel-ao-vivo" style="background:var(--card-bg,#fff);border:1px solid var(--border);border-radius:12px;padding:20px;margin-bottom:20px">
+
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+    <div style="display:flex;align-items:center;gap:10px">
+      <div id="badge-status" style="width:10px;height:10px;border-radius:50%;background:#888;flex-shrink:0"></div>
+      <span id="texto-status" style="font-size:13px;font-weight:600;color:#374151">Aguardando</span>
+      <span id="sessao-id" style="font-size:11px;color:var(--muted)"></span>
+    </div>
+    <div style="display:flex;gap:8px">
+      <button onclick="rodarAgora(this)" id="btn-rodar-painel" class="btn btn-primary btn-sm">▶ Rodar agora</button>
+      <button onclick="pausarSDR()" id="btn-pausar-painel" class="btn btn-sm" style="display:none;border-color:#DC2626;color:#DC2626">⏸ Pausar</button>
+    </div>
+  </div>
+
+  <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:8px;margin-bottom:14px">
+    <div style="background:#EFF6FF;border-radius:8px;padding:10px;text-align:center">
+      <div id="cnt-encontrados" style="font-size:22px;font-weight:700;color:#1D4ED8">0</div>
+      <div style="font-size:10px;color:#555;margin-top:2px">Encontradas</div>
+    </div>
+    <div style="background:#F0FDF4;border-radius:8px;padding:10px;text-align:center">
+      <div id="cnt-aprovados" style="font-size:22px;font-weight:700;color:#16A34A">0</div>
+      <div style="font-size:10px;color:#555;margin-top:2px">Aprovadas</div>
+    </div>
+    <div style="background:#FFF7ED;border-radius:8px;padding:10px;text-align:center">
+      <div id="cnt-importados" style="font-size:22px;font-weight:700;color:#C5A089">0</div>
+      <div style="font-size:10px;color:#555;margin-top:2px">Importadas</div>
+    </div>
+    <div style="background:#F0FDF4;border-radius:8px;padding:10px;text-align:center">
+      <div id="cnt-cadencias" style="font-size:22px;font-weight:700;color:#3B6D11">0</div>
+      <div style="font-size:10px;color:#555;margin-top:2px">Cadências</div>
+    </div>
+    <div style="background:#FEF2F2;border-radius:8px;padding:10px;text-align:center">
+      <div id="cnt-descartados" style="font-size:22px;font-weight:700;color:#DC2626">0</div>
+      <div style="font-size:10px;color:#555;margin-top:2px">Descartadas</div>
+    </div>
+    <div style="background:#F9FAFB;border-radius:8px;padding:10px;text-align:center">
+      <div id="cnt-filtrados" style="font-size:22px;font-weight:700;color:#6B7280">0</div>
+      <div style="font-size:10px;color:#555;margin-top:2px">Filtradas</div>
+    </div>
+  </div>
+
+  <div style="background:#F9FAFB;border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:12px">
+    <div style="color:var(--muted);font-size:11px;margin-bottom:4px">Processando agora</div>
+    <div style="display:flex;gap:16px;flex-wrap:wrap">
+      <span>Produto: <strong id="produto-atual" style="color:#4A3F35">—</strong></span>
+      <span>Estado: <strong id="estado-atual">—</strong></span>
+      <span>Empresa: <strong id="empresa-atual" style="color:#C5A089">—</strong></span>
+    </div>
+  </div>
+
+  <div id="feed-eventos" style="background:#1a1a1a;border-radius:8px;padding:12px;height:260px;overflow-y:auto;font-family:monospace;font-size:11px;line-height:1.6">
+    <div style="color:#555">Aguardando início do SDR…</div>
+  </div>
+
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px">
+    <span id="tempo-rodando" style="font-size:11px;color:var(--muted)"></span>
+    <a id="link-relatorio" href="#" style="font-size:12px;display:none;color:#C5A089">Ver relatório desta sessão →</a>
+  </div>
+</div>
+
 <!-- ── SEÇÃO 2 — Filtros ──────────────────────────────────────────────────── -->
 <div class="card" style="margin-bottom:20px">
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:8px">
@@ -426,6 +487,7 @@
   0%,100% { box-shadow: 0 0 0 4px rgba(22,163,74,.25); }
   50%      { box-shadow: 0 0 0 8px rgba(22,163,74,.08); }
 }
+@keyframes pulseBadge { 0%,100%{opacity:1} 50%{opacity:0.35} }
 </style>
 
 {% endblock %}
@@ -501,20 +563,18 @@ async function salvarERodar() {
   rodarAgora(document.querySelector('button[onclick*="rodarAgora"]'));
 }
 
-async function rodarAgora(btn) {
-  const orig = btn ? btn.innerHTML : '';
-  if (btn) { btn.disabled = true; btn.innerHTML = '<span style="opacity:.6">Rodando…</span>'; }
-  try {
-    const r = await fetch('/prospeccao/autonoma/rodar', {
-      method: 'POST', headers: { 'X-Requested-With': 'XMLHttpRequest' }
-    });
-    const d = await r.json();
-    alert(d.mensagem || 'SDR iniciado em background!');
-    setTimeout(() => location.reload(), 3000);
-  } catch(e) {
-    alert('Erro: ' + e.message);
-  }
-  if (btn) { btn.disabled = false; btn.innerHTML = orig; }
+function rodarAgora(btn) {
+  ultimoEventoId = 0;
+  if (btn) { btn.disabled = true; }
+  fetch('/prospeccao/autonoma/rodar', {
+    method: 'POST', headers: { 'X-Requested-With': 'XMLHttpRequest' }
+  }).then(() => {
+    setTimeout(atualizarPainel, 1000);
+    if (!intervalAoVivo) {
+      intervalAoVivo = setInterval(atualizarPainel, 2000);
+    }
+  }).catch(e => console.error('SDR rodar erro:', e))
+    .finally(() => { if (btn) btn.disabled = false; });
 }
 
 async function toggleSDR(btn) {
@@ -612,10 +672,119 @@ async function carregarInteligencia() {
   } catch(e) {}
 }
 
-document.addEventListener('DOMContentLoaded', carregarInteligencia);
+document.addEventListener('DOMContentLoaded', () => {
+  carregarInteligencia();
+  atualizarPainel();
+  intervalAoVivo = setInterval(atualizarPainel, 3000);
+});
 
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') document.getElementById('modalOtimizar').style.display = 'none';
 });
+
+// ── Painel ao vivo ────────────────────────────────────────────────────────────
+let intervalAoVivo = null;
+let ultimoEventoId = 0;
+let sessaoAtual = null;
+
+const _coresLog = {
+  inicio: '#888', busca: '#378ADD', info: '#5F5E5A', encontrado: '#BA7517',
+  score: '#639922', descarte: '#E24B4A', filtro: '#888780', importado: '#C5A089',
+  cadencia: '#1D9E75', pausa: '#BA7517', fim: '#3B6D11', erro: '#E24B4A'
+};
+const _iconesLog = {
+  inicio: '▶', busca: '🔍', info: 'ℹ', encontrado: '📋', score: '⭐',
+  descarte: '✗', filtro: '⊘', importado: '✓', cadencia: '📱',
+  pausa: '⏸', fim: '✔', erro: '!'
+};
+
+function atualizarPainel() {
+  fetch('/sdr/log-ao-vivo')
+    .then(r => r.json())
+    .then(data => {
+      sessaoAtual = data.sessao_id;
+      const ativo  = data.ativo;
+      const badge  = document.getElementById('badge-status');
+      const texto  = document.getElementById('texto-status');
+      const sessEl = document.getElementById('sessao-id');
+
+      if (ativo) {
+        badge.style.background  = '#27AE60';
+        badge.style.animation   = 'pulseBadge 1.5s infinite';
+        texto.textContent       = 'SDR rodando';
+        texto.style.color       = '#16A34A';
+        document.getElementById('btn-rodar-painel').style.display  = 'none';
+        document.getElementById('btn-pausar-painel').style.display = 'inline-flex';
+      } else {
+        badge.style.background  = data.status === 'concluido' ? '#C5A089' : '#888';
+        badge.style.animation   = 'none';
+        texto.textContent       = data.status === 'concluido' ? 'Concluído' :
+                                   data.status === 'pausado'  ? 'Pausado'   : 'Aguardando';
+        texto.style.color       = '';
+        document.getElementById('btn-rodar-painel').style.display  = 'inline-flex';
+        document.getElementById('btn-pausar-painel').style.display = 'none';
+      }
+
+      if (data.sessao_id) {
+        sessEl.textContent = '#' + data.sessao_id;
+        const linkRel = document.getElementById('link-relatorio');
+        linkRel.href = '/sdr/relatorio/' + data.sessao_id;
+        linkRel.style.display = 'inline';
+      }
+
+      if (data.stats) {
+        document.getElementById('cnt-encontrados').textContent = data.stats.encontrados || 0;
+        document.getElementById('cnt-aprovados').textContent   = data.stats.aprovados   || 0;
+        document.getElementById('cnt-importados').textContent  = data.stats.importados  || 0;
+        document.getElementById('cnt-cadencias').textContent   = data.stats.cadencias   || 0;
+        document.getElementById('cnt-descartados').textContent = data.stats.descartados || 0;
+        document.getElementById('cnt-filtrados').textContent   = data.stats.filtrados   || 0;
+      }
+
+      document.getElementById('produto-atual').textContent = data.produto_atual || '—';
+      document.getElementById('estado-atual').textContent  = data.estado_atual  || '—';
+      document.getElementById('empresa-atual').textContent = data.empresa_atual || '—';
+
+      if (data.iniciado_em) {
+        const inicio   = new Date(data.iniciado_em);
+        const fim      = data.finalizado_em ? new Date(data.finalizado_em) : new Date();
+        const segundos = Math.floor((fim - inicio) / 1000);
+        const min = Math.floor(segundos / 60), seg = segundos % 60;
+        document.getElementById('tempo-rodando').textContent = `Duração: ${min}m ${seg}s`;
+      }
+
+      if (data.eventos && data.eventos.length > 0) {
+        const novos = data.eventos.filter(e => e.id > ultimoEventoId);
+        if (novos.length > 0 || ultimoEventoId === 0) {
+          const feed = document.getElementById('feed-eventos');
+          feed.innerHTML = '';
+          [...data.eventos].reverse().forEach(ev => {
+            const cor    = _coresLog[ev.tipo] || '#888';
+            const icone  = _iconesLog[ev.tipo] || '·';
+            const hora   = new Date(ev.criado_em).toLocaleTimeString('pt-BR',
+                             {hour:'2-digit', minute:'2-digit', second:'2-digit'});
+            const div    = document.createElement('div');
+            div.style.cssText = 'margin-bottom:3px';
+            div.innerHTML =
+              `<span style="color:#555">${hora}</span> ` +
+              `<span style="color:${cor};font-weight:bold">${icone} [${ev.tipo.toUpperCase()}]</span> ` +
+              (ev.empresa ? `<span style="color:#C5A089">${ev.empresa}</span> — ` : '') +
+              `<span style="color:#ddd">${ev.mensagem}</span>` +
+              (ev.score > 0 ? ` <span style="color:#639922">Score:${ev.score}</span>` : '') +
+              (ev.uf ? ` <span style="color:#555">[${ev.uf}]</span>` : '');
+            feed.appendChild(div);
+          });
+          ultimoEventoId = Math.max(...data.eventos.map(e => e.id));
+          feed.scrollTop = feed.scrollHeight;
+        }
+      }
+    })
+    .catch(err => console.log('Painel ao vivo erro:', err));
+}
+
+function pausarSDR() {
+  fetch('/sdr/pausar', {method: 'POST', headers: {'X-Requested-With': 'XMLHttpRequest'}})
+    .then(() => atualizarPainel());
+}
 </script>
 {% endblock %}

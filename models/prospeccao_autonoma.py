@@ -1,15 +1,17 @@
 """
 Prospecção Autônoma — motor SDR completo com scoring avançado, filtros,
-pitch por IA e criação automática de cadências.
-Usa ramos_atividade do banco (se houver) ou REGRAS_POR_PRODUTO como fallback.
-Respeita sdr_config: ativo, horário, filtros, score mínimo, limites.
+pitch por IA, criação automática de cadências e sessões com log ao vivo.
 """
+import json
+import time
 import requests
 from datetime import datetime, date, timedelta
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from database import get_connection
 
 _HEADERS = {"User-Agent": "KryloCRM/1.0 SDR-autonomo"}
+
+_sessao_global = {"id": None, "ativo": False, "pausado": False}
 
 _SDR_DEFAULTS = {
     "nome_campanha":              "Campanha Principal",
@@ -44,7 +46,6 @@ _SDR_DEFAULTS = {
 
 
 def get_sdr_config(db) -> dict:
-    """Retorna configuração do SDR do banco, merged com defaults."""
     try:
         row = db.execute("SELECT * FROM sdr_config WHERE id=1").fetchone()
         if row:
@@ -95,10 +96,6 @@ REGRAS_POR_PRODUTO = [
 
 
 def carregar_produtos_do_banco(db) -> list:
-    """
-    Carrega produtos ativos de produtos_krylo e retorna no formato de regras.
-    Faz fallback para REGRAS_POR_PRODUTO se a tabela estiver vazia.
-    """
     try:
         rows = db.execute(
             "SELECT * FROM produtos_krylo WHERE ativo=1 ORDER BY nome"
@@ -110,17 +107,17 @@ def carregar_produtos_do_banco(db) -> list:
             cnaes = [c.strip() for c in (p["cnaes_alvo"] or "").split(",") if c.strip()]
             ufs   = [e.strip() for e in (p["estados_alvo"] or "ES,SP").split(",") if e.strip()]
             regras.append({
-                "produto":              p["nome"],
-                "descricao":            p["descricao"] or "",
-                "cnaes":                cnaes,
-                "ufs":                  ufs or ["ES", "SP"],
-                "pitch":                p["pitch_whatsapp"] or "",
-                "pitch_email":          p["pitch_email"] or "",
-                "beneficios":           p["beneficios"] or "",
-                "objecoes":             p["objecoes_comuns"] or "",
-                "como_responder":       p["como_responder_objecoes"] or "",
-                "score_min_cadencia":   int(p["score_min"] or 6),
-                "capital_min":          float(p["capital_min"] or 50000),
+                "produto":               p["nome"],
+                "descricao":             p["descricao"] or "",
+                "cnaes":                 cnaes,
+                "ufs":                   ufs or ["ES", "SP"],
+                "pitch":                 p["pitch_whatsapp"] or "",
+                "pitch_email":           p["pitch_email"] or "",
+                "beneficios":            p["beneficios"] or "",
+                "objecoes":              p["objecoes_comuns"] or "",
+                "como_responder":        p["como_responder_objecoes"] or "",
+                "score_min_cadencia":    int(p["score_min"] or 6),
+                "capital_min":           float(p["capital_min"] or 50000),
                 "valor_por_funcionario": float(p["valor_por_funcionario"] or 0),
             })
         return regras if regras else REGRAS_POR_PRODUTO
@@ -254,7 +251,6 @@ def _normalizar_cnpjws(d: dict) -> dict:
 
 
 def buscar_por_cnpj_especifico(cnpj: str) -> dict | None:
-    """Busca dados completos via BrasilAPI com fallback ReceitaWS."""
     cnpj_clean = cnpj.replace(".", "").replace("/", "").replace("-", "")
     result = _fetch_brasilapi(cnpj_clean)
     if result:
@@ -274,7 +270,6 @@ def buscar_por_cnpj_especifico(cnpj: str) -> dict | None:
 # ── Scoring ───────────────────────────────────────────────────────────────────
 
 def calcular_idade_empresa(data_abertura) -> int:
-    """Retorna idade em anos a partir de uma string de data."""
     if not data_abertura:
         return 0
     try:
@@ -291,15 +286,10 @@ def calcular_idade_empresa(data_abertura) -> int:
 
 
 def calcular_score_avancado(empresa: dict, config: dict) -> dict:
-    """
-    Score 0-10 com 6 critérios ponderados.
-    Retorna {score, motivos, penalidades, aprovado}.
-    """
     score = 0
     motivos = []
     penalidades = []
 
-    # 1. Capital social (máx 3 pontos)
     cap = float(empresa.get("capital_social") or 0)
     if cap >= 5_000_000:
         score += 3
@@ -313,7 +303,6 @@ def calcular_score_avancado(empresa: dict, config: dict) -> dict:
     else:
         penalidades.append("Capital baixo")
 
-    # 2. Canais de contato (máx 2 pontos)
     if empresa.get("telefone"):
         score += 1
         motivos.append("Telefone OK")
@@ -323,21 +312,18 @@ def calcular_score_avancado(empresa: dict, config: dict) -> dict:
     else:
         penalidades.append("Sem e-mail")
 
-    # 3. Matriz (1 ponto)
     if empresa.get("is_matriz"):
         score += 1
         motivos.append("É matriz")
     else:
         penalidades.append("É filial")
 
-    # 4. Situação ATIVA (1 ponto)
     if "ATIVA" in (empresa.get("situacao") or "").upper():
         score += 1
         motivos.append("Situação ativa")
     else:
         penalidades.append("Inativa/irregular")
 
-    # 5. Maturidade 2-20 anos (1 ponto)
     idade = calcular_idade_empresa(empresa.get("data_inicio_atividade"))
     if 2 <= idade <= 20:
         score += 1
@@ -347,7 +333,6 @@ def calcular_score_avancado(empresa: dict, config: dict) -> dict:
     elif idade < 2:
         penalidades.append(f"Muito nova ({idade}a)")
 
-    # 6. Natureza jurídica favorável (1 ponto)
     nat = (empresa.get("natureza_juridica") or "").upper()
     if any(k in nat for k in ["SOCIEDADE ANÔNIMA", "S/A", "S.A", "LTDA", "LIMITADA", "EMPRESÁRIA"]):
         score += 1
@@ -359,10 +344,6 @@ def calcular_score_avancado(empresa: dict, config: dict) -> dict:
 
 
 def aplicar_filtros_config(empresa: dict, config: dict) -> tuple:
-    """
-    Aplica filtros do sdr_config.
-    Retorna (aprovado: bool, motivo_rejeicao: str).
-    """
     if "ATIVA" not in (empresa.get("situacao") or "").upper():
         return (False, f"Situação: {empresa.get('situacao')}")
 
@@ -395,10 +376,6 @@ def aplicar_filtros_config(empresa: dict, config: dict) -> tuple:
 
 
 def empresa_deve_ser_recontato(cnpj: str, config: dict, db) -> tuple:
-    """
-    Verifica se a empresa deve ser prospectada/recontactada.
-    Retorna (deve: bool, motivo: str).
-    """
     try:
         row = db.execute(
             "SELECT status, tentativas, ultima_tentativa FROM prospeccao_automatica WHERE cnpj=?",
@@ -439,7 +416,6 @@ def empresa_deve_ser_recontato(cnpj: str, config: dict, db) -> tuple:
 
 def gerar_pitch_ia(db, empresa_nome: str, cnae_desc: str, produto: str, canal: str,
                    beneficios: str = "", objecoes: str = "") -> str:
-    """Gera pitch personalizado via Claude Haiku usando dados do produto."""
     try:
         import models.ia_config as ia_mod
         limite = "máximo 150 caracteres" if canal == "whatsapp" else "3-4 frases"
@@ -459,15 +435,93 @@ def gerar_pitch_ia(db, empresa_nome: str, cnae_desc: str, produto: str, canal: s
         return ""
 
 
-# ── Engine principal ──────────────────────────────────────────────────────────
+# ── Sessão e log ao vivo ──────────────────────────────────────────────────────
+
+def criar_sessao(db, config: dict) -> str:
+    sessao_id = datetime.now().strftime("%Y%m%d%H%M%S")
+    _sessao_global["id"] = sessao_id
+    _sessao_global["ativo"] = True
+    _sessao_global["pausado"] = False
+    try:
+        db.execute("""
+            INSERT OR IGNORE INTO sdr_sessoes (sessao_id, status, config_snapshot)
+            VALUES (?, 'rodando', ?)
+        """, (sessao_id, json.dumps(config, default=str)[:500]))
+        db.commit()
+    except Exception:
+        pass
+    _log(db, sessao_id, "inicio", "SDR Autônomo iniciado — buscando leads", status="rodando")
+    return sessao_id
+
+
+def finalizar_sessao(db, sessao_id: str, stats: dict):
+    _sessao_global["ativo"] = False
+    _sessao_global["pausado"] = False
+    try:
+        db.execute("""
+            UPDATE sdr_sessoes SET
+              status='concluido',
+              encontrados=?, aprovados=?, importados=?,
+              cadencias=?, descartados=?, filtrados=?,
+              finalizado_em=datetime('now', 'localtime')
+            WHERE sessao_id=?
+        """, (
+            stats.get("encontrados", 0), stats.get("aprovados", 0),
+            stats.get("importados", 0), stats.get("cadencias", 0),
+            stats.get("descartados", 0), stats.get("filtrados", 0),
+            sessao_id,
+        ))
+        db.commit()
+    except Exception:
+        pass
+    msg = (f"Sessão concluída — {stats.get('importados', 0)} leads importados, "
+           f"{stats.get('cadencias', 0)} cadências iniciadas")
+    _log(db, sessao_id, "fim", msg, status="concluido")
+
+
+def atualizar_progresso(db, sessao_id: str, **kwargs):
+    if not kwargs or not sessao_id:
+        return
+    try:
+        set_clause = ", ".join(f"{k}=?" for k in kwargs)
+        values = list(kwargs.values()) + [sessao_id]
+        db.execute(f"UPDATE sdr_sessoes SET {set_clause} WHERE sessao_id=?", values)
+        db.commit()
+    except Exception:
+        pass
+
+
+def _log(db, sessao_id: str, tipo: str, mensagem: str,
+         empresa: str = "", uf: str = "", score: int = 0,
+         produto: str = "", status: str = "", capital: float = 0):
+    if not sessao_id:
+        return
+    try:
+        db.execute("""
+            INSERT INTO sdr_log_ao_vivo
+            (sessao_id, tipo, mensagem, empresa, uf, score, produto, status, capital)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (sessao_id, tipo, str(mensagem)[:300], str(empresa)[:100],
+              str(uf)[:5], int(score or 0), str(produto)[:50],
+              str(status)[:20], float(capital or 0)))
+        db.commit()
+    except Exception:
+        pass
+
+
+def sdr_deve_parar(db, sessao_id: str) -> bool:
+    try:
+        row = db.execute(
+            "SELECT status FROM sdr_sessoes WHERE sessao_id=?", (sessao_id,)
+        ).fetchone()
+        return bool(row and row["status"] in ("pausado", "cancelado"))
+    except Exception:
+        return False
+
+
+# ── Engine principal com log ao vivo ─────────────────────────────────────────
 
 def rodar_prospeccao_autonoma(db=None, config_override: dict = None) -> dict:
-    """
-    Engine SDR: busca seeds via API, filtra, pontua, salva e cria cadências
-    para os melhores leads.
-    """
-    from models.prospeccao_auto import _ALL_SEEDS
-
     _own_conn = db is None
     if _own_conn:
         db = get_connection()
@@ -478,231 +532,256 @@ def rodar_prospeccao_autonoma(db=None, config_override: dict = None) -> dict:
             cfg.update(config_override)
 
         if not cfg.get("ativo", 1):
-            return {"encontrados": 0, "salvos": 0, "duplicados": 0,
-                    "cadencias": 0, "descartados": 0, "motivo": "SDR pausado"}
+            return {"status": "inativo", "encontrados": 0, "importados": 0,
+                    "salvos": 0, "cadencias": 0, "descartados": 0}
 
         hora_atual = datetime.now().hour
         h_ini = int(cfg.get("horario_inicio") or 8)
         h_fim = int(cfg.get("horario_fim") or 18)
         if hora_atual < h_ini or hora_atual >= h_fim:
-            return {"encontrados": 0, "salvos": 0, "duplicados": 0,
-                    "cadencias": 0, "descartados": 0,
+            return {"status": "fora_horario", "encontrados": 0, "importados": 0,
+                    "salvos": 0, "cadencias": 0, "descartados": 0,
                     "motivo": f"Fora do horário ({hora_atual}h, janela {h_ini}h–{h_fim}h)"}
 
-        regras_banco = _carregar_regras_do_banco()
-        if regras_banco:
-            regras = regras_banco
-        else:
-            regras = carregar_produtos_do_banco(db)
+        sessao_id = criar_sessao(db, cfg)
 
-        estados_cfg   = [e.strip() for e in (cfg.get("estados") or "").split(",") if e.strip()]
-        max_leads     = int(cfg.get("max_leads_por_execucao") or 20)
-        produto_foco  = cfg.get("produto_foco") or "todos"
-        canal_prim    = cfg.get("canal_primario") or "whatsapp"
-        score_minimo  = int(cfg.get("score_minimo") or 6)
+        regras = carregar_produtos_do_banco(db)
 
-        # Build CNAE → produto/dados map
-        cnaes_alvo: set    = set()
-        produto_por_cnae: dict = {}
-        dados_por_cnae: dict   = {}  # beneficios, objecoes, pitch por CNAE
+        estados_cfg  = [e.strip().upper() for e in cfg.get("estados", "ES,SP").split(",") if e.strip()]
+        max_leads    = int(cfg.get("max_leads_por_execucao") or 20)
+        produto_foco = cfg.get("produto_foco") or "todos"
+        canal_prim   = cfg.get("canal_primario") or "whatsapp"
+
+        stats = {"encontrados": 0, "aprovados": 0, "importados": 0,
+                 "cadencias": 0, "descartados": 0, "filtrados": 0}
+
         for regra in regras:
-            prod = regra["produto"] if produto_foco == "todos" else produto_foco
-            for c in regra.get("cnaes", []):
-                c_clean = str(c).replace(".", "").replace("-", "")
-                cnaes_alvo.add(c_clean)
-                produto_por_cnae.setdefault(c_clean, prod)
-                dados_por_cnae.setdefault(c_clean, {
-                    "pitch":       regra.get("pitch") or "",
-                    "beneficios":  regra.get("beneficios") or "",
-                    "objecoes":    regra.get("objecoes") or "",
-                })
-
-        # Fetch seeds concurrently
-        brutos: list = []
-        with ThreadPoolExecutor(max_workers=6) as ex:
-            fts = {ex.submit(buscar_por_cnpj_especifico, s): s for s in _ALL_SEEDS}
-            for ft in as_completed(fts):
-                emp = ft.result()
-                if emp:
-                    brutos.append(emp)
-
-        brutos.sort(key=lambda e: float(e.get("capital_social") or 0), reverse=True)
-
-        total_encontrados = 0
-        total_salvos      = 0
-        total_duplicados  = 0
-        total_descartados = 0
-        total_cadencias   = 0
-        erros: list       = []
-
-        for emp in brutos:
-            if total_salvos >= max_leads:
+            if stats["importados"] >= max_leads:
                 break
 
-            emp_uf   = (emp.get("uf") or "").upper()
-            emp_cnae = emp.get("cnae_codigo") or ""
-
-            # Filtra UF
-            if estados_cfg and emp_uf not in estados_cfg:
+            nome_produto = regra["produto"]
+            if produto_foco != "todos" and nome_produto.lower() not in produto_foco.lower():
                 continue
 
-            # Filtra CNAE
-            if cnaes_alvo:
-                exact  = emp_cnae in cnaes_alvo
-                sector = any(emp_cnae[:4] == c[:4] for c in cnaes_alvo if len(c) >= 4)
-                if not exact and not sector:
-                    continue
+            estados_busca = estados_cfg or regra.get("ufs", ["ES", "SP"])
+            cnaes_regra   = regra.get("cnaes", [])
 
-            total_encontrados += 1
-            cnpj = emp.get("cnpj") or ""
-            if not cnpj:
-                continue
+            for uf in estados_busca[:3]:
+                if stats["importados"] >= max_leads:
+                    break
 
-            # Verifica recontato
-            deve, _ = empresa_deve_ser_recontato(cnpj, cfg, db)
-            if not deve:
-                total_duplicados += 1
-                continue
+                if sdr_deve_parar(db, sessao_id):
+                    _log(db, sessao_id, "pausa", f"SDR pausado durante busca em {uf}", uf=uf)
+                    finalizar_sessao(db, sessao_id, stats)
+                    return {**stats, "status": "pausado", "sessao_id": sessao_id,
+                            "salvos": stats["importados"]}
 
-            # Aplica filtros
-            aprovado, motivo_filtro = aplicar_filtros_config(emp, cfg)
-            if not aprovado:
-                total_descartados += 1
-                # Registra motivo se já existe no banco
-                try:
-                    db.execute(
-                        "UPDATE prospeccao_automatica SET motivo_descarte=? WHERE cnpj=?",
-                        (motivo_filtro, cnpj)
-                    )
-                    db.commit()
-                except Exception:
-                    pass
-                continue
+                cnaes_busca = [c.strip() for c in cfg.get("cnaes", "").split(",") if c.strip()] \
+                              or cnaes_regra
 
-            # Score avançado
-            res_score = calcular_score_avancado(emp, cfg)
-            score     = res_score["score"]
-            if not res_score["aprovado"]:
-                total_descartados += 1
-                continue
+                for cnae in cnaes_busca[:2]:
+                    if stats["importados"] >= max_leads:
+                        break
 
-            produto_alvo = produto_foco if produto_foco != "todos" else produto_por_cnae.get(emp_cnae, "Benefícios Corporativos")
-            idade        = calcular_idade_empresa(emp.get("data_inicio_atividade"))
-            hoje_str     = date.today().isoformat()
+                    atualizar_progresso(db, sessao_id,
+                        produto_atual=nome_produto, estado_atual=uf,
+                        ultima_acao=f"Buscando {nome_produto} em {uf} (CNAE {cnae})",
+                        encontrados=stats["encontrados"], aprovados=stats["aprovados"],
+                        importados=stats["importados"], cadencias=stats["cadencias"],
+                        descartados=stats["descartados"], filtrados=stats["filtrados"])
 
-            # Checa se já existe (para UPDATE vs INSERT)
-            existente = db.execute(
-                "SELECT id FROM prospeccao_automatica WHERE cnpj=?", (cnpj,)
-            ).fetchone()
+                    _log(db, sessao_id, "busca",
+                         f"Buscando empresas de {nome_produto} em {uf}",
+                         uf=uf, produto=nome_produto)
 
-            try:
-                if existente:
-                    db.execute(
-                        """UPDATE prospeccao_automatica
-                           SET score_fit=?, status='novo', tentativas=tentativas+1,
-                               ultima_tentativa=?, produto_alvo=?, motivo_descarte=NULL
-                           WHERE cnpj=?""",
-                        (score, hoje_str, produto_alvo, cnpj),
-                    )
-                else:
-                    db.execute(
-                        """INSERT INTO prospeccao_automatica
-                           (cnpj, razao_social, municipio, uf, cnae_descricao,
-                            telefone, email, capital_social, score_fit, status,
-                            fonte, idade_empresa, natureza_juridica, porte,
-                            produto_alvo, tentativas, ultima_tentativa)
-                           VALUES (?,?,?,?,?,?,?,?,?,'novo',?,?,?,?,?,1,?)""",
-                        (
-                            cnpj,
-                            emp.get("razao_social") or "",
-                            emp.get("municipio") or "",
-                            emp_uf,
-                            emp.get("cnae_descricao") or "",
-                            emp.get("telefone"),
-                            emp.get("email"),
-                            float(emp.get("capital_social") or 0),
-                            score,
-                            emp.get("fonte") or "brasilapi",
-                            idade,
-                            emp.get("natureza_juridica") or "",
-                            emp.get("porte") or "",
-                            produto_alvo,
-                            hoje_str,
-                        ),
-                    )
-                db.commit()
-                total_salvos += 1
-            except Exception as e:
-                erros.append(f"DB {cnpj}: {e}")
-                try:
-                    db.rollback()
-                except Exception:
-                    pass
-                continue
-
-            # Auto-cadência para leads nota ≥ 8
-            if score >= 8 and (emp.get("telefone") or emp.get("email")):
-                try:
-                    _dados_regra = dados_por_cnae.get(emp_cnae) or {}
-                    _pitch_base  = _dados_regra.get("pitch") or ""
-                    if _pitch_base:
-                        # Usa pitch pré-definido do produto substituindo {empresa}
-                        pitch = _pitch_base.replace("{empresa}", emp.get("razao_social") or "")
-                    else:
-                        pitch = gerar_pitch_ia(
-                            db,
-                            emp.get("razao_social") or "",
-                            emp.get("cnae_descricao") or "",
-                            produto_alvo,
-                            canal_prim,
-                            beneficios=_dados_regra.get("beneficios") or "",
-                            objecoes=_dados_regra.get("objecoes") or "",
-                        )
-                    data_acao = (date.today() + timedelta(days=1)).isoformat()
-                    db.execute(
-                        """INSERT INTO cadencias
-                           (empresa_nome, contato_whatsapp, contato_email,
-                            etapa, data_acao, mensagem_whatsapp,
-                            assunto_email, corpo_email, status)
-                           VALUES (?,?,?,1,?,?,?,?,'pendente')""",
-                        (
-                            emp.get("razao_social") or "",
-                            emp.get("telefone"),
-                            emp.get("email"),
-                            data_acao,
-                            (pitch or "")[:500],
-                            f"Proposta Krylo para {emp.get('razao_social') or ''}",
-                            pitch or "",
-                        ),
-                    )
-                    db.commit()
-                    total_cadencias += 1
-                except Exception as e:
-                    erros.append(f"Cadência {cnpj}: {e}")
+                    empresas_lista = []
                     try:
-                        db.rollback()
+                        url = (f"https://brasilapi.com.br/api/cnpj/v1/search"
+                               f"?cnae={cnae}&uf={uf}&limit=10")
+                        r = requests.get(url, timeout=15, headers=_HEADERS)
+                        if r.status_code == 200:
+                            data = r.json()
+                            if isinstance(data, list):
+                                empresas_lista = data
                     except Exception:
                         pass
 
-        # Registra execução
+                    _log(db, sessao_id, "info",
+                         f"API retornou {len(empresas_lista)} empresas para CNAE {cnae} em {uf}",
+                         uf=uf, produto=nome_produto)
+
+                    for item in empresas_lista:
+                        if stats["importados"] >= max_leads:
+                            break
+
+                        if sdr_deve_parar(db, sessao_id):
+                            finalizar_sessao(db, sessao_id, stats)
+                            return {**stats, "status": "pausado", "sessao_id": sessao_id,
+                                    "salvos": stats["importados"]}
+
+                        cnpj = "".join(filter(str.isdigit, str(item.get("cnpj", ""))))
+                        if not cnpj or len(cnpj) != 14:
+                            continue
+
+                        deve, _ = empresa_deve_ser_recontato(cnpj, cfg, db)
+                        if not deve:
+                            stats["filtrados"] += 1
+                            continue
+
+                        empresa = buscar_por_cnpj_especifico(cnpj)
+                        if not empresa:
+                            time.sleep(0.5)
+                            continue
+
+                        razao   = (empresa.get("razao_social") or "")[:80]
+                        capital = float(empresa.get("capital_social") or 0)
+                        uf_emp  = empresa.get("uf") or uf
+                        stats["encontrados"] += 1
+
+                        atualizar_progresso(db, sessao_id,
+                            empresa_atual=razao,
+                            ultima_acao=f"Analisando: {razao}",
+                            encontrados=stats["encontrados"])
+
+                        _log(db, sessao_id, "encontrado",
+                             f"Analisando empresa: {razao}",
+                             empresa=razao, uf=uf_emp, produto=nome_produto, capital=capital)
+
+                        aprovado_filtro, motivo_filtro = aplicar_filtros_config(empresa, cfg)
+                        if not aprovado_filtro:
+                            stats["descartados"] += 1
+                            _log(db, sessao_id, "descarte",
+                                 f"Descartada: {motivo_filtro}",
+                                 empresa=razao, uf=uf_emp, score=0)
+                            continue
+
+                        res_score = calcular_score_avancado(empresa, cfg)
+                        score     = res_score["score"]
+                        stats["aprovados"] += 1
+
+                        _log(db, sessao_id, "score",
+                             f"Score {score}/10 — {', '.join(res_score['motivos'][:3])}",
+                             empresa=razao, uf=uf_emp, score=score, produto=nome_produto,
+                             status="aprovado" if res_score["aprovado"] else "baixo_score",
+                             capital=capital)
+
+                        telefone_raw = empresa.get("telefone") or ""
+                        telefone = (f"55{telefone_raw}"
+                                    if telefone_raw and not telefone_raw.startswith("55")
+                                    else telefone_raw) or None
+                        email    = empresa.get("email") or None
+                        idade    = calcular_idade_empresa(empresa.get("data_inicio_atividade", ""))
+                        hoje_str = date.today().isoformat()
+
+                        existente = None
+                        try:
+                            existente = db.execute(
+                                "SELECT id FROM prospeccao_automatica WHERE cnpj=?", (cnpj,)
+                            ).fetchone()
+                        except Exception:
+                            pass
+
+                        try:
+                            if existente:
+                                db.execute("""
+                                    UPDATE prospeccao_automatica
+                                    SET score_fit=?, status='novo', tentativas=tentativas+1,
+                                        ultima_tentativa=?, produto_alvo=?, motivo_descarte=NULL
+                                    WHERE cnpj=?
+                                """, (score, hoje_str, nome_produto, cnpj))
+                            else:
+                                db.execute("""
+                                    INSERT INTO prospeccao_automatica
+                                    (cnpj, razao_social, municipio, uf, cnae_descricao,
+                                     telefone, email, capital_social, score_fit, status,
+                                     fonte, idade_empresa, natureza_juridica, porte,
+                                     produto_alvo, tentativas, ultima_tentativa)
+                                    VALUES (?,?,?,?,?,?,?,?,?,'novo',?,?,?,?,?,1,?)
+                                """, (cnpj, razao, empresa.get("municipio", ""), uf_emp,
+                                      empresa.get("cnae_descricao", ""),
+                                      telefone, email, capital, score,
+                                      empresa.get("fonte") or "brasilapi",
+                                      idade,
+                                      empresa.get("natureza_juridica", ""),
+                                      empresa.get("porte", ""),
+                                      nome_produto, hoje_str))
+                            db.commit()
+                            stats["importados"] += 1
+                            atualizar_progresso(db, sessao_id, importados=stats["importados"])
+                            _log(db, sessao_id, "importado",
+                                 f"Salvo na base! Score {score}/10",
+                                 empresa=razao, uf=uf_emp, score=score,
+                                 produto=nome_produto, status="importado", capital=capital)
+                        except Exception:
+                            try:
+                                db.rollback()
+                            except Exception:
+                                pass
+                            continue
+
+                        # Auto-cadência
+                        score_min_cad = regra.get("score_min_cadencia",
+                                                   int(cfg.get("score_minimo") or 6))
+                        if res_score["aprovado"] and score >= score_min_cad and (telefone or email):
+                            try:
+                                pitch_base = regra.get("pitch") or ""
+                                if pitch_base:
+                                    pitch = pitch_base.replace("{empresa}", razao)
+                                else:
+                                    pitch = gerar_pitch_ia(
+                                        db, razao,
+                                        empresa.get("cnae_descricao", ""),
+                                        nome_produto, canal_prim,
+                                        beneficios=regra.get("beneficios", ""),
+                                        objecoes=regra.get("objecoes", ""),
+                                    )
+                                from models.cadencia import criar_etapa
+                                criar_etapa({
+                                    "empresa_id":        None,
+                                    "empresa_nome":      razao,
+                                    "contato_whatsapp":  telefone,
+                                    "contato_email":     email,
+                                    "oportunidade_id":   None,
+                                    "etapa":             1,
+                                    "data_acao":         (date.today() + timedelta(days=1)).isoformat(),
+                                    "mensagem_whatsapp": (pitch or "")[:500],
+                                    "assunto_email":     f"Proposta Krylo para {razao}",
+                                    "corpo_email":       pitch or "",
+                                    "status":            "pendente",
+                                    "produto_alvo":      nome_produto,
+                                })
+                                stats["cadencias"] += 1
+                                atualizar_progresso(db, sessao_id, cadencias=stats["cadencias"])
+                                db.execute(
+                                    "UPDATE prospeccao_automatica SET status='importado' WHERE cnpj=?",
+                                    (cnpj,)
+                                )
+                                db.commit()
+                                _log(db, sessao_id, "cadencia",
+                                     "Cadência iniciada — WhatsApp+Email agendados",
+                                     empresa=razao, uf=uf_emp, score=score,
+                                     produto=nome_produto, status="cadencia")
+                            except Exception as e:
+                                _log(db, sessao_id, "erro",
+                                     f"Erro na cadência: {str(e)[:80]}", empresa=razao)
+
+                        time.sleep(1)
+
+        finalizar_sessao(db, sessao_id, stats)
+
         try:
-            db.execute(
-                "INSERT INTO sdr_execucoes (encontrados, salvos, cadencias, descartados, log) VALUES (?,?,?,?,?)",
-                (total_encontrados, total_salvos, total_cadencias, total_descartados,
-                 "; ".join(erros) if erros else "OK"),
-            )
+            db.execute("""
+                INSERT INTO sdr_execucoes (encontrados, salvos, cadencias, descartados, log)
+                VALUES (?, ?, ?, ?, ?)
+            """, (stats["encontrados"], stats["importados"], stats["cadencias"],
+                  stats["descartados"], json.dumps({"sessao_id": sessao_id})))
             db.commit()
         except Exception:
             pass
 
-        return {
-            "encontrados": total_encontrados,
-            "salvos":      total_salvos,
-            "duplicados":  total_duplicados,
-            "cadencias":   total_cadencias,
-            "descartados": total_descartados,
-            "erros":       erros,
-        }
+        return {**stats, "status": "concluido", "sessao_id": sessao_id,
+                "salvos": stats["importados"]}
+
     finally:
         if _own_conn:
             try:
@@ -712,7 +791,6 @@ def rodar_prospeccao_autonoma(db=None, config_override: dict = None) -> dict:
 
 
 def status_resumo() -> dict:
-    """Retorna estatísticas atuais da tabela prospeccao_automatica."""
     conn = get_connection()
     row = conn.execute("""
         SELECT

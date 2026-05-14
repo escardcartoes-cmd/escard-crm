@@ -334,6 +334,39 @@ _SQLITE_DDL = """
         criado_em               TEXT    DEFAULT (datetime('now', 'localtime')),
         atualizado_em           TIMESTAMP DEFAULT (datetime('now', 'localtime'))
     );
+
+    CREATE TABLE IF NOT EXISTS sdr_sessoes (
+        id             INTEGER PRIMARY KEY AUTOINCREMENT,
+        sessao_id      TEXT    UNIQUE,
+        status         TEXT    DEFAULT 'rodando',
+        encontrados    INTEGER DEFAULT 0,
+        aprovados      INTEGER DEFAULT 0,
+        importados     INTEGER DEFAULT 0,
+        cadencias      INTEGER DEFAULT 0,
+        descartados    INTEGER DEFAULT 0,
+        filtrados      INTEGER DEFAULT 0,
+        produto_atual  TEXT    DEFAULT '',
+        estado_atual   TEXT    DEFAULT '',
+        empresa_atual  TEXT    DEFAULT '',
+        ultima_acao    TEXT    DEFAULT '',
+        iniciado_em    TEXT    DEFAULT (datetime('now', 'localtime')),
+        finalizado_em  TEXT,
+        config_snapshot TEXT   DEFAULT ''
+    );
+
+    CREATE TABLE IF NOT EXISTS sdr_log_ao_vivo (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        sessao_id  TEXT,
+        tipo       TEXT,
+        mensagem   TEXT,
+        empresa    TEXT    DEFAULT '',
+        uf         TEXT    DEFAULT '',
+        score      INTEGER DEFAULT 0,
+        produto    TEXT    DEFAULT '',
+        status     TEXT    DEFAULT '',
+        capital    REAL    DEFAULT 0,
+        criado_em  TEXT    DEFAULT (datetime('now', 'localtime'))
+    );
 """
 
 
@@ -660,6 +693,37 @@ def run_migrations(conn) -> None:
             ativo                   INTEGER DEFAULT 1,
             criado_em               TEXT    DEFAULT (datetime('now', 'localtime')),
             atualizado_em           TIMESTAMP DEFAULT (datetime('now', 'localtime'))
+        )""",
+        """CREATE TABLE IF NOT EXISTS sdr_sessoes (
+            id             INTEGER PRIMARY KEY AUTOINCREMENT,
+            sessao_id      TEXT    UNIQUE,
+            status         TEXT    DEFAULT 'rodando',
+            encontrados    INTEGER DEFAULT 0,
+            aprovados      INTEGER DEFAULT 0,
+            importados     INTEGER DEFAULT 0,
+            cadencias      INTEGER DEFAULT 0,
+            descartados    INTEGER DEFAULT 0,
+            filtrados      INTEGER DEFAULT 0,
+            produto_atual  TEXT    DEFAULT '',
+            estado_atual   TEXT    DEFAULT '',
+            empresa_atual  TEXT    DEFAULT '',
+            ultima_acao    TEXT    DEFAULT '',
+            iniciado_em    TEXT    DEFAULT (datetime('now', 'localtime')),
+            finalizado_em  TEXT,
+            config_snapshot TEXT   DEFAULT ''
+        )""",
+        """CREATE TABLE IF NOT EXISTS sdr_log_ao_vivo (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            sessao_id  TEXT,
+            tipo       TEXT,
+            mensagem   TEXT,
+            empresa    TEXT    DEFAULT '',
+            uf         TEXT    DEFAULT '',
+            score      INTEGER DEFAULT 0,
+            produto    TEXT    DEFAULT '',
+            status     TEXT    DEFAULT '',
+            capital    REAL    DEFAULT 0,
+            criado_em  TEXT    DEFAULT (datetime('now', 'localtime'))
         )""",
     ]
 
