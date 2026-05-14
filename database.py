@@ -208,6 +208,8 @@ def init_db() -> None:
         "ALTER TABLE oportunidades ADD COLUMN score_fechamento INTEGER DEFAULT 0",
         "ALTER TABLE oportunidades ADD COLUMN data_ultimo_contato TEXT",
         "ALTER TABLE oportunidades ADD COLUMN num_interacoes INTEGER DEFAULT 0",
+        "ALTER TABLE oportunidades ADD COLUMN dias_sem_contato INTEGER DEFAULT 0",
+        "ALTER TABLE oportunidades ADD COLUMN proxima_acao_sugerida TEXT",
     ]:
         try:
             conn.execute(_col)

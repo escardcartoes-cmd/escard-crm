@@ -100,6 +100,10 @@ def dashboard():
     )
     radar = op_model.listar_radar()
     op_model.salvar_scores_radar(radar)
+    radar_alerta_count = sum(
+        1 for r in radar
+        if r.get("dias_sem_contato") is not None and r["dias_sem_contato"] > 7
+    )
     return render_template(
         "dashboard.html",
         status_counts=status_counts,
@@ -110,6 +114,7 @@ def dashboard():
         clientes=clientes,
         em_aberto=em_aberto,
         radar=radar[:5],
+        radar_alerta_count=radar_alerta_count,
     )
 
 

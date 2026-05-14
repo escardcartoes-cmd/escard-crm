@@ -1,4 +1,4 @@
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from database import get_connection
 
 ESTAGIOS = ["lead", "qualificado", "proposta", "negociacao", "fechado_ganho", "fechado_perdido"]
@@ -103,71 +103,73 @@ def _dias_sem_contato(data_str) -> int:
         return 999
 
 
-def _calcular_score(estagio: str, dias: int, num_int: int, valor) -> int:
-    score = 100
-    if dias > 7:
-        score -= 20
-    if dias > 14:
-        score -= 30
-    if num_int < 2:
-        score -= 20
-    if valor and valor > 5000:
-        score += 10
+def _calcular_score(estagio: str, dias: int, valor, teve_reuniao: bool) -> int:
+    score = 50
+    if teve_reuniao:
+        score += 20
     if estagio == "proposta":
         score += 15
+    if valor and valor > 5000:
+        score += 10
+    if dias > 7:
+        score -= 15
+    if dias > 14:
+        score -= 25
+    if dias > 30:
+        score -= 10
     return max(0, min(100, score))
 
 
-def _proxima_acao(estagio: str, dias: int, num_int: int) -> str:
-    if dias >= 999:
-        return "Registrar primeiro contato"
-    if dias > 14:
-        return "Contato urgente — lead em risco de esfriar"
-    if estagio == "proposta":
-        return "Follow-up da proposta enviada"
-    if estagio == "negociacao":
-        return "Verificar objeções e definir fechamento"
-    if num_int < 2:
-        return "Aumentar cadência de contatos"
-    if estagio == "lead":
-        return "Qualificar e agendar apresentação"
-    if estagio == "qualificado":
-        return "Preparar e enviar proposta comercial"
-    if dias > 7:
-        return "Agendar reunião de acompanhamento"
-    return "Manter cadência de contatos"
+def _proxima_acao(score: int, dias: int, teve_reuniao: bool) -> str:
+    if dias > 30:
+        return "Ligar urgente ou arquivar"
+    if score < 50 and dias > 14:
+        return "Reativar — deal esfriando"
+    if score > 75:
+        return "Enviar contrato agora"
+    if 50 <= score <= 75 and not teve_reuniao:
+        return "Agendar reunião"
+    if 50 <= score <= 75 and teve_reuniao:
+        return "Enviar proposta"
+    return "Manter acompanhamento"
 
 
 def listar_radar() -> list:
+    sete_dias_atras = str(date.today() - timedelta(days=7))
     conn = get_connection()
     rows = conn.execute("""
         SELECT o.id, o.titulo, o.estagio, o.valor_estimado,
                o.score_fechamento, o.data_ultimo_contato, o.num_interacoes,
                e.nome AS empresa_nome,
                COUNT(a.id) AS interacoes_reais,
-               MAX(a.data) AS ultimo_contato_real
+               MAX(a.data) AS ultimo_contato_real,
+               (SELECT COUNT(*) FROM atividades r
+                WHERE r.oportunidade_id = o.id
+                  AND r.data >= ?
+                  AND r.tipo = ?) AS reunioes_recentes
         FROM oportunidades o
         JOIN empresas e ON o.empresa_id = e.id
         LEFT JOIN atividades a ON a.oportunidade_id = o.id
         WHERE o.estagio NOT IN ('fechado_ganho', 'fechado_perdido')
         GROUP BY o.id
         ORDER BY o.criado_em DESC
-    """).fetchall()
+    """, (sete_dias_atras, "reunião")).fetchall()
     conn.close()
 
     resultado = []
     for raw in rows:
         r = dict(raw)
         ultimo = r["ultimo_contato_real"] or r["data_ultimo_contato"]
-        num_int = int(r["interacoes_reais"] or 0)
         dias = _dias_sem_contato(ultimo)
-        score = _calcular_score(r["estagio"], dias, num_int, r["valor_estimado"])
+        teve_reuniao = int(r.get("reunioes_recentes") or 0) > 0
+        score = _calcular_score(r["estagio"], dias, r["valor_estimado"], teve_reuniao)
+        proxima = _proxima_acao(score, dias, teve_reuniao)
         r.update({
             "score_calc": score,
             "dias_sem_contato": None if dias >= 999 else dias,
-            "proxima_acao": _proxima_acao(r["estagio"], dias, num_int),
-            "num_int_calc": num_int,
+            "proxima_acao": proxima,
             "estagio_label": ESTAGIO_LABELS.get(r["estagio"], r["estagio"]),
+            "teve_reuniao": teve_reuniao,
         })
         resultado.append(r)
 
@@ -181,8 +183,10 @@ def salvar_scores_radar(scores: list) -> None:
     conn = get_connection()
     for r in scores:
         conn.execute(
-            "UPDATE oportunidades SET score_fechamento = ? WHERE id = ?",
-            (r["score_calc"], r["id"]),
+            """UPDATE oportunidades
+               SET score_fechamento = ?, dias_sem_contato = ?, proxima_acao_sugerida = ?
+               WHERE id = ?""",
+            (r["score_calc"], r["dias_sem_contato"] or 0, r["proxima_acao"], r["id"]),
         )
     conn.commit()
     conn.close()
