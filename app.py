@@ -118,7 +118,8 @@ def _job_prospeccao_autonoma():
             if not _cfg["ativo"]:
                 print("[SCHEDULER] SDR pausado, pulando execução")
                 return
-            _hora = _dt2.now().hour
+            from datetime import timezone as _tz, timedelta as _td
+            _hora = _dt2.now(_tz(_td(hours=-3))).hour
             if _hora < int(_cfg["horario_inicio"] or 8) or _hora >= int(_cfg["horario_fim"] or 18):
                 print(f"[SCHEDULER] Fora do horário ({_hora}h), pulando")
                 return
