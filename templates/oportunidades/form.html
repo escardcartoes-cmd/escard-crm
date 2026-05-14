@@ -26,7 +26,8 @@
         </div>
         <div class="form-group">
           <label>Título <span class="req">*</span></label>
-          <input type="text" name="titulo" required value="{{ op.titulo if editing else '' }}"
+          <input type="text" name="titulo" required
+                 value="{{ op.titulo if editing else (pre_titulo if pre_titulo is defined else '') }}"
                  placeholder="Ex: Proposta Cartão Benefício — 150 funcionários">
         </div>
         <div class="form-row">

@@ -149,6 +149,17 @@ _SQLITE_DDL = """
         tamanho         INTEGER
     );
 
+    CREATE TABLE IF NOT EXISTS radar_mercado (
+        id        INTEGER PRIMARY KEY AUTOINCREMENT,
+        tipo      TEXT,
+        titulo    TEXT,
+        resumo    TEXT,
+        link      TEXT,
+        fonte     TEXT,
+        lido      INTEGER DEFAULT 0,
+        criado_em TEXT    DEFAULT (datetime('now', 'localtime'))
+    );
+
     CREATE TABLE IF NOT EXISTS usuarios (
         id          INTEGER PRIMARY KEY AUTOINCREMENT,
         nome        TEXT    NOT NULL,
