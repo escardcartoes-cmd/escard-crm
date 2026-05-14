@@ -19,9 +19,9 @@
         Sessão #{{ sessao.sessao_id }}
       </div>
       <div style="display:flex;gap:16px;flex-wrap:wrap;font-size:13px;color:var(--muted)">
-        <span>Início: <strong>{{ (sessao.iniciado_em or '')[:16] }}</strong></span>
+        <span>Início: <strong>{{ (sessao.iniciado_em | string)[:16] | replace('T',' ') if sessao.iniciado_em else '' }}</strong></span>
         {% if sessao.finalizado_em %}
-        <span>Fim: <strong>{{ (sessao.finalizado_em or '')[:16] }}</strong></span>
+        <span>Fim: <strong>{{ (sessao.finalizado_em | string)[:16] | replace('T',' ') if sessao.finalizado_em else '' }}</strong></span>
         {% endif %}
       </div>
     </div>
@@ -171,7 +171,7 @@
     }.get(ev.tipo, '·') %}
     <div style="display:flex;gap:12px;padding:8px 4px;border-bottom:1px solid var(--border)">
       <div style="flex-shrink:0;width:80px;font-size:11px;color:var(--muted);padding-top:2px">
-        {{ (ev.criado_em or '')[-8:][:8] }}
+        {{ (ev.criado_em | string)[11:19] if ev.criado_em else '' }}
       </div>
       <div style="flex-shrink:0;width:24px;height:24px;border-radius:50%;
                   background:{{ cor }}22;display:flex;align-items:center;justify-content:center;

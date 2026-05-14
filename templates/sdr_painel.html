@@ -366,7 +366,7 @@
       <tbody>
         {% for ex in execucoes %}
         <tr>
-          <td style="font-size:12px;white-space:nowrap">{{ ex.executado_em[:16] if ex.executado_em else '—' }}</td>
+          <td style="font-size:12px;white-space:nowrap">{{ (ex.executado_em | string)[:16] if ex.executado_em else '—' }}</td>
           <td style="text-align:right;font-weight:600">{{ ex.encontrados or 0 }}</td>
           <td style="text-align:right;color:#16A34A;font-weight:600">{{ ex.salvos or 0 }}</td>
           <td style="text-align:right">{{ ex.cadencias or 0 }}</td>
