@@ -1,0 +1,368 @@
+{% extends 'base.html' %}
+{% block title %}Painel de IA — Krylo CRM{% endblock %}
+{% block topbar_title %}Central de Inteligência Artificial{% endblock %}
+{% block topbar_actions %}
+  <span id="ia-status-badge" style="display:inline-flex;align-items:center;gap:6px;padding:4px 12px;border-radius:99px;font-size:12px;font-weight:700;background:#F0FDF4;color:#16A34A;border:1px solid #BBF7D0">
+    <span style="width:7px;height:7px;border-radius:50%;background:#16A34A;animation:pulse-ia 1.5s infinite"></span>
+    IA Ativa
+  </span>
+{% endblock %}
+
+{% block content %}
+<style>
+@keyframes pulse-ia {
+  0%,100% { opacity:1; transform:scale(1); }
+  50%      { opacity:.5; transform:scale(1.3); }
+}
+.ia-section { background:#fff;border-radius:12px;border:1px solid var(--border);padding:24px;margin-bottom:20px }
+.ia-section-title { font-size:14px;font-weight:700;color:#4A3F35;margin-bottom:16px;padding-bottom:10px;border-bottom:1px solid var(--border) }
+.ia-form-label { display:block;font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:5px }
+.ia-input, .ia-textarea, .ia-select {
+  width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:8px;
+  font-size:13px;font-family:inherit;background:#FAFAFA;color:#1E1A16;
+  transition:border-color .15s,box-shadow .15s;box-sizing:border-box
+}
+.ia-input:focus, .ia-textarea:focus, .ia-select:focus {
+  outline:none;border-color:#C5A089;box-shadow:0 0 0 3px rgba(197,160,137,.15)
+}
+.ia-textarea { resize:vertical;line-height:1.5 }
+.chat-area {
+  height:300px;overflow-y:auto;border:1px solid var(--border);border-radius:10px;
+  padding:14px;background:#FAFAFA;display:flex;flex-direction:column;gap:10px
+}
+.chat-msg-user {
+  align-self:flex-end;background:#C5A089;color:#fff;padding:8px 14px;border-radius:16px 16px 4px 16px;
+  max-width:75%;font-size:13px;line-height:1.45
+}
+.chat-msg-ia {
+  align-self:flex-start;display:flex;gap:8px;align-items:flex-start;max-width:80%
+}
+.chat-msg-ia-avatar {
+  width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,#C5A089,#8B6B57);
+  color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0
+}
+.chat-msg-ia-bubble {
+  background:#fff;border:1px solid #E2DDD6;padding:8px 14px;border-radius:16px 16px 16px 4px;
+  font-size:13px;line-height:1.45;color:#1E1A16
+}
+.chat-loading { align-self:flex-start;display:flex;gap:5px;padding:10px }
+.chat-dot { width:7px;height:7px;border-radius:50%;background:#C5A089;animation:dot-bounce .8s infinite }
+.chat-dot:nth-child(2){ animation-delay:.15s }
+.chat-dot:nth-child(3){ animation-delay:.3s }
+@keyframes dot-bounce { 0%,80%,100%{ transform:translateY(0) } 40%{ transform:translateY(-7px) } }
+.toast-ia {
+  position:fixed;bottom:28px;left:50%;transform:translateX(-50%) translateY(60px);
+  background:#1E1A16;color:#fff;padding:10px 22px;border-radius:99px;font-size:13px;font-weight:600;
+  transition:transform .3s,opacity .3s;opacity:0;z-index:9999
+}
+.toast-ia.show { transform:translateX(-50%) translateY(0);opacity:1 }
+</style>
+
+<!-- Toast -->
+<div id="toast-ia" class="toast-ia">✓ Configurações salvas!</div>
+
+<!-- ── SEÇÃO 1 — FORMULÁRIO ──────────────────────────────────────────────────── -->
+<form id="ia-form">
+<div class="ia-section">
+  <p class="ia-section-title">🧠 Identidade &amp; Estratégia</p>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+
+    <!-- COLUNA ESQUERDA -->
+    <div style="display:flex;flex-direction:column;gap:14px">
+      <div>
+        <label class="ia-form-label">Nome do assistente</label>
+        <input type="text" name="nome_assistente" class="ia-input" value="{{ cfg.nome_assistente or 'Bia' }}" placeholder="Ex: Bia">
+      </div>
+      <div>
+        <label class="ia-form-label">Personalidade</label>
+        <textarea name="personalidade" class="ia-textarea" rows="3" placeholder="Como a IA se comporta e se comunica">{{ cfg.personalidade or '' }}</textarea>
+      </div>
+      <div>
+        <label class="ia-form-label">Tom de comunicação</label>
+        <select name="tom" class="ia-select">
+          {% for opt, lbl in [('consultivo','Consultivo (recomendado)'),('formal','Formal'),('informal','Informal e descontraído'),('tecnico','Técnico'),('urgente','Urgente e direto')] %}
+          <option value="{{ opt }}" {% if cfg.tom == opt %}selected{% endif %}>{{ lbl }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label class="ia-form-label">Objetivo principal</label>
+        <textarea name="objetivo_principal" class="ia-textarea" rows="2" placeholder="O que a IA deve alcançar em cada conversa">{{ cfg.objetivo_principal or '' }}</textarea>
+      </div>
+    </div>
+
+    <!-- COLUNA DIREITA -->
+    <div style="display:flex;flex-direction:column;gap:14px">
+      <div>
+        <label class="ia-form-label">Estratégia de vendas</label>
+        <textarea name="estrategia" class="ia-textarea" rows="3" placeholder="Abordagem e táticas de venda">{{ cfg.estrategia or '' }}</textarea>
+      </div>
+      <div>
+        <label class="ia-form-label">Estilo de escrita</label>
+        <textarea name="estilo_escrita" class="ia-textarea" rows="2" placeholder="Como escrever WhatsApp, e-mail etc.">{{ cfg.estilo_escrita or '' }}</textarea>
+      </div>
+      <div>
+        <label class="ia-form-label">Restrições absolutas</label>
+        <textarea name="restricoes" class="ia-textarea" rows="2" placeholder="O que a IA NUNCA deve fazer">{{ cfg.restricoes or '' }}</textarea>
+      </div>
+      <div>
+        <label class="ia-form-label">Contexto da empresa</label>
+        <textarea name="contexto_empresa" class="ia-textarea" rows="3" placeholder="Produtos, diferencial e missão da Krylo">{{ cfg.contexto_empresa or '' }}</textarea>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── SEÇÃO 2 — MENSAGENS PADRÃO ───────────────────────────────────────────── -->
+<div class="ia-section">
+  <p class="ia-section-title">✉ Mensagens Padrão</p>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+    <div>
+      <label class="ia-form-label">Saudação WhatsApp <span style="color:var(--muted);font-size:10px;font-weight:400">(use {nome} para personalizar)</span></label>
+      <input type="text" name="saudacao_whatsapp" class="ia-input" value="{{ cfg.saudacao_whatsapp or '' }}" placeholder="Olá {nome}! Tudo bem? Sou a Bia da Krylo.">
+    </div>
+    <div>
+      <label class="ia-form-label">Saudação E-mail</label>
+      <input type="text" name="saudacao_email" class="ia-input" value="{{ cfg.saudacao_email or '' }}" placeholder="Prezado(a) {nome},">
+    </div>
+    <div style="grid-column:1/-1">
+      <label class="ia-form-label">Assinatura E-mail</label>
+      <textarea name="assinatura_email" class="ia-textarea" rows="2" placeholder="Atenciosamente,&#10;Bia | Consultora Krylo">{{ cfg.assinatura_email or '' }}</textarea>
+    </div>
+  </div>
+</div>
+
+<!-- Botões -->
+<div style="display:flex;gap:10px;margin-bottom:24px">
+  <button type="button" id="btn-salvar" onclick="salvarConfig()" class="btn btn-primary">
+    💾 Salvar configurações
+  </button>
+  <button type="button" onclick="restaurarPadroes()" class="btn btn-outline">
+    ↺ Restaurar padrões
+  </button>
+</div>
+</form>
+
+<!-- ── SEÇÃO 3 — CHAT AO VIVO ────────────────────────────────────────────────── -->
+<div class="ia-section">
+  <p class="ia-section-title">💬 Teste a IA agora — fale com <span id="nome-assistente-label">{{ cfg.nome_assistente or 'Bia' }}</span></p>
+
+  <div style="margin-bottom:12px">
+    <label class="ia-form-label">Contexto da conversa <span style="color:var(--muted);font-size:10px;font-weight:400">(opcional)</span></label>
+    <input type="text" id="chat-contexto" class="ia-input"
+           placeholder="Ex: Lead é gerente de RH de construtora com 200 funcionários">
+  </div>
+
+  <div id="chat-area" class="chat-area" style="margin-bottom:12px"></div>
+
+  <div style="display:flex;gap:8px;margin-bottom:10px">
+    <input type="text" id="chat-input" class="ia-input" placeholder="Digite sua mensagem…"
+           onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();enviarChat()}">
+    <button onclick="enviarChat()" class="btn btn-primary" style="white-space:nowrap">Enviar</button>
+    <button onclick="limparChat()" class="btn btn-outline" style="white-space:nowrap">🗑 Limpar</button>
+  </div>
+  <button onclick="abrirModalPitch()" class="btn btn-outline btn-sm">⚡ Testar pitch WhatsApp</button>
+</div>
+
+<!-- ── SEÇÃO 4 — PRÉVIA DE PITCH ─────────────────────────────────────────────── -->
+<div class="ia-section">
+  <p class="ia-section-title">⚡ Prévia de Pitch</p>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+
+    <div>
+      <p style="font-size:13px;font-weight:600;margin-bottom:10px;color:#4A3F35">📱 Pitch WhatsApp</p>
+      <div style="display:flex;gap:8px;margin-bottom:10px">
+        <input type="text" id="pitch-wpp-empresa" class="ia-input" placeholder="Nome da empresa">
+        <input type="text" id="pitch-wpp-produto" class="ia-input" placeholder="Produto (opcional)">
+      </div>
+      <button onclick="gerarPitch('whatsapp')" class="btn btn-outline btn-sm" style="margin-bottom:10px">Gerar pitch</button>
+      <div id="pitch-wpp-result" style="display:none;background:#F0FDF4;border:1px solid #BBF7D0;border-radius:8px;padding:12px;font-size:13px;white-space:pre-wrap;line-height:1.6"></div>
+    </div>
+
+    <div>
+      <p style="font-size:13px;font-weight:600;margin-bottom:10px;color:#4A3F35">📧 Pitch E-mail</p>
+      <div style="display:flex;gap:8px;margin-bottom:10px">
+        <input type="text" id="pitch-email-empresa" class="ia-input" placeholder="Nome da empresa">
+        <input type="text" id="pitch-email-produto" class="ia-input" placeholder="Produto (opcional)">
+      </div>
+      <button onclick="gerarPitch('email')" class="btn btn-outline btn-sm" style="margin-bottom:10px">Gerar pitch</button>
+      <div id="pitch-email-result" style="display:none;background:#EFF6FF;border:1px solid #BFDBFE;border-radius:8px;padding:12px;font-size:13px;line-height:1.6"></div>
+    </div>
+
+  </div>
+</div>
+
+<!-- Modal pitch rápido -->
+<div id="modal-pitch" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:1000;align-items:center;justify-content:center">
+  <div style="background:#fff;border-radius:14px;padding:28px;width:420px;max-width:95vw">
+    <p style="font-size:15px;font-weight:700;margin-bottom:16px">⚡ Gerar pitch rápido</p>
+    <label class="ia-form-label">Empresa</label>
+    <input type="text" id="modal-empresa" class="ia-input" placeholder="Ex: Construtora Alfa" style="margin-bottom:10px">
+    <label class="ia-form-label">Produto</label>
+    <input type="text" id="modal-produto" class="ia-input" placeholder="Ex: Vale Combustível" style="margin-bottom:16px">
+    <div id="modal-result" style="display:none;background:#F0FDF4;border-radius:8px;padding:12px;font-size:13px;white-space:pre-wrap;line-height:1.6;margin-bottom:16px"></div>
+    <div style="display:flex;gap:8px">
+      <button onclick="gerarPitchModal()" class="btn btn-primary">Gerar</button>
+      <button onclick="document.getElementById('modal-pitch').style.display='none'" class="btn btn-outline">Fechar</button>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+let _chatHistorico = [];
+const _nomePadrao = {{ (cfg.nome_assistente or 'Bia') | tojson }};
+
+// ── Autosave com debounce ─────────────────────────────────────────────────────
+let _saveTimer = null;
+document.querySelectorAll('#ia-form input, #ia-form textarea, #ia-form select').forEach(el => {
+  el.addEventListener('input', () => {
+    clearTimeout(_saveTimer);
+    _saveTimer = setTimeout(salvarConfig, 2000);
+  });
+});
+
+async function salvarConfig() {
+  const f   = document.getElementById('ia-form');
+  const els = f.querySelectorAll('[name]');
+  const obj = {};
+  els.forEach(e => { obj[e.name] = e.value; });
+  try {
+    const r = await fetch('/ia/config/salvar', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(obj),
+    });
+    const d = await r.json();
+    if (d.status === 'salvo') {
+      mostrarToast('✓ Configurações salvas!');
+      const nome = obj.nome_assistente || _nomePadrao;
+      document.getElementById('nome-assistente-label').textContent = nome;
+    }
+  } catch(e) { mostrarToast('Erro ao salvar: ' + e.message, true); }
+}
+
+function mostrarToast(msg, erro = false) {
+  const t = document.getElementById('toast-ia');
+  t.textContent = msg;
+  t.style.background = erro ? '#DC2626' : '#1E1A16';
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2800);
+}
+
+function restaurarPadroes() {
+  if (!confirm('Restaurar todos os campos para os valores padrão?')) return;
+  location.reload();
+}
+
+// ── Chat ──────────────────────────────────────────────────────────────────────
+function _addMsg(role, text) {
+  const area = document.getElementById('chat-area');
+  if (role === 'user') {
+    const d = document.createElement('div');
+    d.className = 'chat-msg-user';
+    d.textContent = text;
+    area.appendChild(d);
+  } else {
+    const nome = document.getElementById('nome-assistente-label').textContent || _nomePadrao;
+    const wrap = document.createElement('div');
+    wrap.className = 'chat-msg-ia';
+    wrap.innerHTML = `
+      <div class="chat-msg-ia-avatar">${nome.charAt(0).toUpperCase()}</div>
+      <div class="chat-msg-ia-bubble">${text.replace(/\n/g,'<br>')}</div>`;
+    area.appendChild(wrap);
+  }
+  area.scrollTop = area.scrollHeight;
+}
+
+function _addLoading() {
+  const area = document.getElementById('chat-area');
+  const d = document.createElement('div');
+  d.className = 'chat-loading';
+  d.id = 'chat-loading';
+  d.innerHTML = '<div class="chat-dot"></div><div class="chat-dot"></div><div class="chat-dot"></div>';
+  area.appendChild(d);
+  area.scrollTop = area.scrollHeight;
+}
+
+async function enviarChat() {
+  const input   = document.getElementById('chat-input');
+  const contexto = document.getElementById('chat-contexto').value.trim();
+  const msg     = input.value.trim();
+  if (!msg) return;
+  input.value = '';
+  _addMsg('user', msg);
+  _chatHistorico.push({ role: 'user', content: msg });
+  _addLoading();
+  try {
+    const r = await fetch('/ia/chat', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ mensagem: msg, historico: _chatHistorico.slice(-20), contexto }),
+    });
+    const d = await r.json();
+    document.getElementById('chat-loading')?.remove();
+    const resposta = d.resposta || d.error || 'Erro desconhecido';
+    _addMsg('ia', resposta);
+    _chatHistorico.push({ role: 'assistant', content: resposta });
+  } catch(e) {
+    document.getElementById('chat-loading')?.remove();
+    _addMsg('ia', 'Erro: ' + e.message);
+  }
+}
+
+function limparChat() {
+  document.getElementById('chat-area').innerHTML = '';
+  _chatHistorico = [];
+}
+
+// ── Pitch ─────────────────────────────────────────────────────────────────────
+async function gerarPitch(canal) {
+  const empresa = document.getElementById(`pitch-${canal === 'whatsapp' ? 'wpp' : 'email'}-empresa`).value.trim();
+  const produto = document.getElementById(`pitch-${canal === 'whatsapp' ? 'wpp' : 'email'}-produto`).value.trim();
+  const resId   = `pitch-${canal === 'whatsapp' ? 'wpp' : 'email'}-result`;
+  const el      = document.getElementById(resId);
+  if (!empresa) { alert('Informe o nome da empresa'); return; }
+  el.style.display = 'block';
+  el.textContent   = '⏳ Gerando…';
+  try {
+    const r = await fetch('/ia/testar-pitch', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ empresa, produto, canal }),
+    });
+    const d = await r.json();
+    if (canal === 'email') {
+      el.innerHTML = `<strong>Assunto:</strong> ${d.assunto || ''}<br><br>${(d.corpo || '').replace(/\n/g,'<br>')}`;
+    } else {
+      el.textContent = d.mensagem || d.error || 'Sem resultado';
+    }
+  } catch(e) { el.textContent = 'Erro: ' + e.message; }
+}
+
+function abrirModalPitch() {
+  document.getElementById('modal-pitch').style.display = 'flex';
+  document.getElementById('modal-result').style.display = 'none';
+}
+
+async function gerarPitchModal() {
+  const empresa = document.getElementById('modal-empresa').value.trim();
+  const produto = document.getElementById('modal-produto').value.trim();
+  const el = document.getElementById('modal-result');
+  if (!empresa) { alert('Informe o nome da empresa'); return; }
+  el.style.display = 'block';
+  el.textContent   = '⏳ Gerando…';
+  try {
+    const r = await fetch('/ia/testar-pitch', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ empresa, produto, canal: 'whatsapp' }),
+    });
+    const d = await r.json();
+    el.textContent = d.mensagem || d.error || 'Sem resultado';
+  } catch(e) { el.textContent = 'Erro: ' + e.message; }
+}
+</script>
+{% endblock %}

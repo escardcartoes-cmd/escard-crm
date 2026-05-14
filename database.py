@@ -188,6 +188,24 @@ _SQLITE_DDL = """
         importado_em   TEXT    DEFAULT (datetime('now', 'localtime'))
     );
 
+    CREATE TABLE IF NOT EXISTS ia_config (
+        id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+        nome_assistente    TEXT    DEFAULT 'Bia',
+        personalidade      TEXT    DEFAULT 'Profissional, direta e empática. Fala de forma natural e consultiva, nunca como vendedora agressiva.',
+        tom                TEXT    DEFAULT 'consultivo',
+        estrategia         TEXT    DEFAULT 'Foco em entender a dor do cliente antes de apresentar solução. Perguntar antes de propor.',
+        estilo_escrita     TEXT    DEFAULT 'Mensagens curtas no WhatsApp (máximo 2 frases). E-mails formais mas acessíveis. Sem jargões técnicos.',
+        contexto_empresa   TEXT    DEFAULT 'Krylo é uma empresa de cartão de benefícios B2B oferecendo VR, VA, combustível, premiação, Welhub e Vidalink.',
+        objetivo_principal TEXT    DEFAULT 'Qualificar leads e agendar reuniões com decisores de RH.',
+        restricoes         TEXT    DEFAULT 'Nunca mencionar concorrentes. Nunca prometer preços sem consultar o time. Nunca ser insistente após 3 tentativas.',
+        saudacao_whatsapp  TEXT    DEFAULT 'Olá {nome}! Tudo bem? Sou a Bia da Krylo.',
+        saudacao_email     TEXT    DEFAULT 'Prezado(a) {nome},',
+        assinatura_email   TEXT    DEFAULT 'Atenciosamente,\nBia | Consultora Krylo\ncontato@krylo.com.br',
+        modo_chat          INTEGER DEFAULT 1,
+        ativo              INTEGER DEFAULT 1,
+        atualizado_em      TEXT    DEFAULT (datetime('now', 'localtime'))
+    );
+
     CREATE TABLE IF NOT EXISTS ramos_atividade (
         id          INTEGER PRIMARY KEY AUTOINCREMENT,
         nome        TEXT    NOT NULL,
@@ -338,6 +356,12 @@ def init_db() -> None:
             conn.commit()
         except Exception:
             pass
+    # Seed: ia_config — garante que sempre exista a linha id=1
+    try:
+        conn.execute("INSERT OR IGNORE INTO ia_config (id) VALUES (1)")
+        conn.commit()
+    except Exception:
+        pass
     # Seed: ramos_atividade — insere apenas se a tabela estiver vazia
     try:
         _cnt = conn.execute("SELECT COUNT(*) AS cnt FROM ramos_atividade").fetchone()
