@@ -48,7 +48,7 @@
         </div>
         <div class="detail-field">
           <label>Cadastrado em</label>
-          <p>{{ empresa.criado_em[:10] if empresa.criado_em else '—' }}</p>
+          <p>{{ (empresa.criado_em | string)[:10] if empresa.criado_em else '—' }}</p>
         </div>
       </div>
     </div>

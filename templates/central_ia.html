@@ -210,7 +210,7 @@
             <div class="kb-doc-info">
               <div class="kb-doc-nome">{{ d.nome }}</div>
               <div class="kb-doc-meta">
-                {{ d.tipo }} · {{ (d.tamanho / 1024)|round(1) }} KB · {{ d.data_upload[:10] if d.data_upload else '—' }}
+                {{ d.tipo }} · {{ (d.tamanho / 1024)|round(1) }} KB · {{ (d.data_upload | string)[:10] if d.data_upload else '—' }}
               </div>
             </div>
             <button class="kb-doc-del" onclick="excluirDoc({{ d.id }})">Excluir</button>
