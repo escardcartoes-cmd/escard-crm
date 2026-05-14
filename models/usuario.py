@@ -1,6 +1,6 @@
 import bcrypt
 from functools import wraps
-from flask import flash, redirect, url_for
+from flask import flash, redirect, url_for, request, jsonify
 from flask_login import UserMixin, current_user
 from database import get_connection
 
@@ -34,6 +34,14 @@ class Usuario(UserMixin):
         return NIVEL.get(self.perfil, 0)
 
 
+def _wants_json():
+    return (
+        request.is_json
+        or request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+        or 'application/json' in request.headers.get('Accept', '')
+    )
+
+
 def require_perfil(min_perfil: str):
     """Decorator: exige que current_user.perfil tenha nível >= min_perfil."""
     def decorator(f):
@@ -41,6 +49,8 @@ def require_perfil(min_perfil: str):
         def wrapper(*args, **kwargs):
             nivel_atual = NIVEL.get(getattr(current_user, 'perfil', ''), 0)
             if nivel_atual < NIVEL.get(min_perfil, 0):
+                if _wants_json():
+                    return jsonify({"error": "Acesso negado. Você não tem permissão para esta área."}), 403
                 flash('Acesso negado. Você não tem permissão para esta área.', 'danger')
                 return redirect(url_for('dashboard'))
             return f(*args, **kwargs)

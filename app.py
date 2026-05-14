@@ -32,6 +32,17 @@ login_manager.login_message_category = "danger"
 def load_user(user_id):
     return user_model.buscar_por_id(int(user_id))
 
+
+@login_manager.unauthorized_handler
+def unauthorized():
+    if (
+        request.is_json
+        or request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+        or 'application/json' in request.headers.get('Accept', '')
+    ):
+        return jsonify({"error": "Sessão expirada. Faça login novamente."}), 401
+    return redirect(url_for('login', next=request.url))
+
 _START_TIME = str(time.time())
 
 database.init_db()
