@@ -262,6 +262,49 @@ _SQLITE_DDL = """
         num_itens_analisados INTEGER,
         criado_em            TIMESTAMP DEFAULT (datetime('now', 'localtime'))
     );
+
+    CREATE TABLE IF NOT EXISTS sdr_config (
+        id                         INTEGER PRIMARY KEY AUTOINCREMENT,
+        nome_campanha              TEXT    DEFAULT 'Campanha Principal',
+        ativo                      INTEGER DEFAULT 1,
+        rodar_continuo             INTEGER DEFAULT 1,
+        intervalo_horas            INTEGER DEFAULT 6,
+        estados                    TEXT    DEFAULT 'ES,SP',
+        cidades                    TEXT    DEFAULT '',
+        cnaes                      TEXT    DEFAULT '',
+        funcionarios_min           INTEGER DEFAULT 10,
+        funcionarios_max           INTEGER DEFAULT 5000,
+        capital_social_min         REAL    DEFAULT 50000,
+        tipo_empresa               TEXT    DEFAULT 'MATRIZ',
+        idade_empresa_min          INTEGER DEFAULT 0,
+        idade_empresa_max          INTEGER DEFAULT 50,
+        tem_email                  INTEGER DEFAULT 0,
+        tem_telefone               INTEGER DEFAULT 1,
+        situacao_cadastral         TEXT    DEFAULT 'ATIVA',
+        score_minimo               INTEGER DEFAULT 6,
+        max_tentativas_por_empresa INTEGER DEFAULT 3,
+        dias_recontato             INTEGER DEFAULT 30,
+        excluir_ja_prospectados    INTEGER DEFAULT 1,
+        canal_primario             TEXT    DEFAULT 'whatsapp',
+        canal_secundario           TEXT    DEFAULT 'email',
+        horario_inicio             INTEGER DEFAULT 8,
+        horario_fim                INTEGER DEFAULT 18,
+        dias_semana                TEXT    DEFAULT 'seg,ter,qua,qui,sex',
+        max_leads_por_execucao     INTEGER DEFAULT 20,
+        max_cadencias_por_dia      INTEGER DEFAULT 50,
+        produto_foco               TEXT    DEFAULT 'todos',
+        atualizado_em              TIMESTAMP DEFAULT (datetime('now', 'localtime'))
+    );
+
+    CREATE TABLE IF NOT EXISTS sdr_execucoes (
+        id           INTEGER PRIMARY KEY AUTOINCREMENT,
+        encontrados  INTEGER DEFAULT 0,
+        salvos       INTEGER DEFAULT 0,
+        cadencias    INTEGER DEFAULT 0,
+        descartados  INTEGER DEFAULT 0,
+        log          TEXT,
+        executado_em TIMESTAMP DEFAULT (datetime('now', 'localtime'))
+    );
 """
 
 
@@ -511,6 +554,47 @@ def run_migrations(conn) -> None:
             num_itens_analisados INTEGER,
             criado_em            TIMESTAMP DEFAULT (datetime('now', 'localtime'))
         )""",
+        """CREATE TABLE IF NOT EXISTS sdr_config (
+            id                         INTEGER PRIMARY KEY AUTOINCREMENT,
+            nome_campanha              TEXT    DEFAULT 'Campanha Principal',
+            ativo                      INTEGER DEFAULT 1,
+            rodar_continuo             INTEGER DEFAULT 1,
+            intervalo_horas            INTEGER DEFAULT 6,
+            estados                    TEXT    DEFAULT 'ES,SP',
+            cidades                    TEXT    DEFAULT '',
+            cnaes                      TEXT    DEFAULT '',
+            funcionarios_min           INTEGER DEFAULT 10,
+            funcionarios_max           INTEGER DEFAULT 5000,
+            capital_social_min         REAL    DEFAULT 50000,
+            tipo_empresa               TEXT    DEFAULT 'MATRIZ',
+            idade_empresa_min          INTEGER DEFAULT 0,
+            idade_empresa_max          INTEGER DEFAULT 50,
+            tem_email                  INTEGER DEFAULT 0,
+            tem_telefone               INTEGER DEFAULT 1,
+            situacao_cadastral         TEXT    DEFAULT 'ATIVA',
+            score_minimo               INTEGER DEFAULT 6,
+            max_tentativas_por_empresa INTEGER DEFAULT 3,
+            dias_recontato             INTEGER DEFAULT 30,
+            excluir_ja_prospectados    INTEGER DEFAULT 1,
+            canal_primario             TEXT    DEFAULT 'whatsapp',
+            canal_secundario           TEXT    DEFAULT 'email',
+            horario_inicio             INTEGER DEFAULT 8,
+            horario_fim                INTEGER DEFAULT 18,
+            dias_semana                TEXT    DEFAULT 'seg,ter,qua,qui,sex',
+            max_leads_por_execucao     INTEGER DEFAULT 20,
+            max_cadencias_por_dia      INTEGER DEFAULT 50,
+            produto_foco               TEXT    DEFAULT 'todos',
+            atualizado_em              TIMESTAMP DEFAULT (datetime('now', 'localtime'))
+        )""",
+        """CREATE TABLE IF NOT EXISTS sdr_execucoes (
+            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            encontrados  INTEGER DEFAULT 0,
+            salvos       INTEGER DEFAULT 0,
+            cadencias    INTEGER DEFAULT 0,
+            descartados  INTEGER DEFAULT 0,
+            log          TEXT,
+            executado_em TIMESTAMP DEFAULT (datetime('now', 'localtime'))
+        )""",
     ]
 
     for sql in _ALTER + _CREATE:
@@ -528,6 +612,7 @@ def run_migrations(conn) -> None:
     _seeds = [
         "INSERT OR IGNORE INTO ia_config (id) VALUES (1)",
         "INSERT OR IGNORE INTO empresa_config (id) VALUES (1)",
+        "INSERT OR IGNORE INTO sdr_config (id) VALUES (1)",
     ]
     for sql in _seeds:
         try:

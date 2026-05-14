@@ -96,6 +96,25 @@ user_model.criar_admin_se_necessario()
 # ── APScheduler — SDR Autônomo ────────────────────────────────────────────────
 
 def _job_prospeccao_autonoma():
+    from datetime import datetime as _dt2
+    # Verifica sdr_config antes de rodar
+    try:
+        _c = database.get_connection()
+        _cfg = _c.execute(
+            "SELECT ativo, horario_inicio, horario_fim FROM sdr_config WHERE id=1"
+        ).fetchone()
+        _c.close()
+        if _cfg:
+            if not _cfg["ativo"]:
+                print("[SCHEDULER] SDR pausado, pulando execução")
+                return
+            _hora = _dt2.now().hour
+            if _hora < int(_cfg["horario_inicio"] or 8) or _hora >= int(_cfg["horario_fim"] or 18):
+                print(f"[SCHEDULER] Fora do horário ({_hora}h), pulando")
+                return
+    except Exception as _e:
+        print(f"[SCHEDULER] Aviso ao ler sdr_config: {_e}")
+
     try:
         from models.prospeccao_autonoma import rodar_prospeccao_autonoma
         resultado = rodar_prospeccao_autonoma()
@@ -104,11 +123,22 @@ def _job_prospeccao_autonoma():
         print(f"[SCHEDULER] Erro: {e}")
 
 
+# Lê intervalo de execução do sdr_config (padrão 6h)
+try:
+    _conn_sched = database.get_connection()
+    _sdr_row = _conn_sched.execute(
+        "SELECT intervalo_horas FROM sdr_config WHERE id=1"
+    ).fetchone()
+    _conn_sched.close()
+    _sdr_interval = int(_sdr_row["intervalo_horas"]) if _sdr_row else 6
+except Exception:
+    _sdr_interval = 6
+
 scheduler = BackgroundScheduler(timezone="America/Sao_Paulo")
 scheduler.add_job(
     func=_job_prospeccao_autonoma,
     trigger="interval",
-    hours=6,
+    hours=max(1, _sdr_interval),
     id="prospeccao_autonoma",
     replace_existing=True,
 )
@@ -2100,6 +2130,148 @@ def configuracoes_empresa_salvar():
         conn.commit()
         conn.close()
         return jsonify({"status": "salvo"})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+# ── SDR Autônomo — Painel e Config ───────────────────────────────────────────
+
+@app.route("/sdr/painel")
+@login_required
+@require_perfil("gerente")
+def sdr_painel():
+    from models.prospeccao_autonoma import get_sdr_config
+    conn = database.get_connection()
+    config = get_sdr_config(conn)
+    pipeline = [dict(r) for r in conn.execute(
+        "SELECT * FROM prospeccao_automatica ORDER BY importado_em DESC LIMIT 20"
+    ).fetchall()]
+    execucoes = [dict(r) for r in conn.execute(
+        "SELECT * FROM sdr_execucoes ORDER BY executado_em DESC LIMIT 10"
+    ).fetchall()]
+    stats_row = conn.execute("""
+        SELECT
+            COUNT(*) AS total,
+            SUM(CASE WHEN status='novo'       THEN 1 ELSE 0 END) AS novos,
+            SUM(CASE WHEN status='importado'  THEN 1 ELSE 0 END) AS importados,
+            SUM(CASE WHEN status='descartado' THEN 1 ELSE 0 END) AS descartados
+        FROM prospeccao_automatica
+    """).fetchone()
+    conn.close()
+    try:
+        job = scheduler.get_job("prospeccao_autonoma")
+        proxima = job.next_run_time.strftime("%d/%m/%Y %H:%M") if job and job.next_run_time else None
+    except Exception:
+        proxima = None
+    return render_template(
+        "sdr_painel.html",
+        config=config,
+        pipeline=pipeline,
+        execucoes=execucoes,
+        stats=dict(stats_row) if stats_row else {"total": 0, "novos": 0, "importados": 0, "descartados": 0},
+        proxima_execucao=proxima,
+    )
+
+
+@app.route("/sdr/config/salvar", methods=["POST"])
+@login_required
+@require_perfil("gerente")
+def sdr_config_salvar():
+    try:
+        import datetime as _dt
+        f = request.json or {}
+        campos = [
+            "estados", "cidades", "cnaes", "capital_social_min", "tipo_empresa",
+            "tem_telefone", "tem_email", "score_minimo", "max_leads_por_execucao",
+            "canal_primario", "canal_secundario", "horario_inicio", "horario_fim",
+            "dias_semana", "intervalo_horas", "max_tentativas_por_empresa",
+            "dias_recontato", "excluir_ja_prospectados", "produto_foco", "ativo",
+            "funcionarios_min", "funcionarios_max", "idade_empresa_min",
+            "idade_empresa_max", "max_cadencias_por_dia", "nome_campanha",
+        ]
+        _agora = _dt.datetime.now().isoformat(sep=" ", timespec="seconds")
+        conn = database.get_connection()
+        for campo in campos:
+            if campo in f:
+                conn.execute(
+                    f"UPDATE sdr_config SET {campo}=:v, atualizado_em=:t WHERE id=1",
+                    {"v": f[campo], "t": _agora},
+                )
+        conn.commit()
+        conn.close()
+        return jsonify({"status": "salvo"})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/sdr/config/toggle", methods=["POST"])
+@login_required
+@require_perfil("gerente")
+def sdr_config_toggle():
+    try:
+        import datetime as _dt
+        conn = database.get_connection()
+        row = conn.execute("SELECT ativo FROM sdr_config WHERE id=1").fetchone()
+        atual = bool(row["ativo"]) if row else True
+        novo = 0 if atual else 1
+        _agora = _dt.datetime.now().isoformat(sep=" ", timespec="seconds")
+        conn.execute(
+            "UPDATE sdr_config SET ativo=:v, atualizado_em=:t WHERE id=1",
+            {"v": novo, "t": _agora},
+        )
+        conn.commit()
+        conn.close()
+        return jsonify({"status": "ok", "ativo": bool(novo)})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/sdr/execucoes")
+@login_required
+def sdr_execucoes_json():
+    conn = database.get_connection()
+    rows = [dict(r) for r in conn.execute(
+        "SELECT * FROM sdr_execucoes ORDER BY executado_em DESC LIMIT 10"
+    ).fetchall()]
+    conn.close()
+    return jsonify(rows)
+
+
+@app.route("/sdr/otimizar", methods=["POST"])
+@login_required
+@require_perfil("gerente")
+def sdr_otimizar():
+    try:
+        import models.ia_config as ia_mod
+        conn = database.get_connection()
+        execucoes = [dict(r) for r in conn.execute(
+            "SELECT encontrados, salvos, cadencias, descartados, executado_em "
+            "FROM sdr_execucoes ORDER BY executado_em DESC LIMIT 5"
+        ).fetchall()]
+        config_row = conn.execute("SELECT * FROM sdr_config WHERE id=1").fetchone()
+        cfg = dict(config_row) if config_row else {}
+        stats = [dict(r) for r in conn.execute("""
+            SELECT uf, cnae_descricao, COUNT(*) AS total,
+                   AVG(score_fit) AS avg_score
+            FROM prospeccao_automatica
+            GROUP BY uf, cnae_descricao
+            ORDER BY total DESC LIMIT 10
+        """).fetchall()]
+        contexto = (
+            f"Histórico de execuções (últimas 5): {execucoes}\n"
+            f"Config atual: estados={cfg.get('estados')}, score_min={cfg.get('score_minimo')}, "
+            f"max_leads={cfg.get('max_leads_por_execucao')}, produto_foco={cfg.get('produto_foco')}, "
+            f"horário={cfg.get('horario_inicio')}h-{cfg.get('horario_fim')}h\n"
+            f"Performance por UF/CNAE: {stats}"
+        )
+        resposta = ia_mod.chat_com_ia(
+            conn,
+            "Analise o histórico do SDR autônomo e sugira 3 ajustes específicos nos "
+            "filtros para melhorar a taxa de conversão. Seja direto e prático.",
+            contexto=contexto,
+        )
+        conn.close()
+        return jsonify({"sugestao": resposta})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
