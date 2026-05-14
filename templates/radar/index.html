@@ -9,6 +9,49 @@
 
 {% block content %}
 
+<!-- Card Análise IA -->
+<div class="card" style="margin-bottom:20px;border-left:4px solid #7C3AED">
+  <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:12px">
+    <div style="display:flex;align-items:center;gap:10px">
+      <div style="width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#7C3AED,#A855F7);
+                  display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">🤖</div>
+      <div>
+        <div style="font-weight:700;font-size:15px">Análise de Oportunidades por IA</div>
+        <div class="text-muted text-sm">Claude analisa as notícias não lidas e identifica oportunidades de negócio</div>
+      </div>
+    </div>
+    <button id="btnAnalisar" onclick="analisarOportunidades(this)" class="btn btn-primary btn-sm"
+            style="background:linear-gradient(135deg,#7C3AED,#A855F7);border:none;flex-shrink:0">
+      ✨ Analisar oportunidades agora
+    </button>
+  </div>
+
+  <div id="analiseBox" style="display:none">
+    <div style="border-top:1px solid var(--border);padding-top:14px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+        <span id="analiseOportBadge" style="
+          background:#EDE9FE;color:#7C3AED;font-size:11px;font-weight:700;
+          padding:3px 10px;border-radius:20px;display:none">
+        </span>
+        <span id="analiseDataBadge" style="font-size:11px;color:var(--muted)"></span>
+      </div>
+      <div id="analiseConteudo" style="
+        font-size:13px;line-height:1.7;color:#374151;
+        background:#FAFAFA;border-radius:8px;padding:16px"></div>
+    </div>
+  </div>
+
+  <div id="analiseLoading" style="display:none;padding:20px 0;text-align:center">
+    <div style="display:inline-flex;align-items:center;gap:10px;color:#7C3AED">
+      <svg style="animation:spin 1s linear infinite;width:20px;height:20px" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+          d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+      </svg>
+      <span style="font-size:13px;font-weight:500">Consultando Claude, aguarde…</span>
+    </div>
+  </div>
+</div>
+
 <!-- Cards resumo -->
 <div class="cards-grid" style="margin-bottom:20px">
   <div class="card">
@@ -204,7 +247,49 @@
 {% endblock %}
 
 {% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<style>
+@keyframes spin { to { transform: rotate(360deg); } }
+#analiseConteudo h2 { font-size:14px;font-weight:700;color:#1F2937;margin:14px 0 6px; }
+#analiseConteudo p  { margin:0 0 8px; }
+#analiseConteudo ul { padding-left:18px;margin:0 0 8px; }
+#analiseConteudo li { margin-bottom:4px; }
+#analiseConteudo strong { font-weight:700; }
+</style>
 <script>
+async function analisarOportunidades(btn) {
+  const orig = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<span style="opacity:.6">Analisando…</span>';
+  document.getElementById('analiseLoading').style.display = 'block';
+  document.getElementById('analiseBox').style.display = 'none';
+  try {
+    const r = await fetch('/radar/analisar-oportunidades', {
+      method: 'POST',
+      headers: { 'X-Requested-With': 'XMLHttpRequest' }
+    });
+    const d = await r.json();
+    if (d.error) {
+      alert('Erro: ' + d.error);
+    } else {
+      document.getElementById('analiseConteudo').innerHTML = marked.parse(d.analise);
+      const badge = document.getElementById('analiseOportBadge');
+      if (d.oportunidades > 0) {
+        badge.textContent = d.oportunidades + ' item(ns) analisado(s)';
+        badge.style.display = 'inline';
+      }
+      document.getElementById('analiseDataBadge').textContent =
+        'Analisado em ' + new Date().toLocaleString('pt-BR');
+      document.getElementById('analiseBox').style.display = 'block';
+    }
+  } catch(e) {
+    alert('Erro de conexão: ' + e.message);
+  }
+  document.getElementById('analiseLoading').style.display = 'none';
+  btn.disabled = false;
+  btn.innerHTML = orig;
+}
+
 async function buscarAgora(btn) {
   const orig = btn.innerHTML;
   btn.disabled = true;
