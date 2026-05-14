@@ -127,7 +127,12 @@ def _job_prospeccao_autonoma():
 
     try:
         from models.prospeccao_autonoma import rodar_prospeccao_autonoma
-        resultado = rodar_prospeccao_autonoma()
+        _db_sdr = database.get_connection()
+        resultado = rodar_prospeccao_autonoma(_db_sdr)
+        try:
+            _db_sdr.close()
+        except Exception:
+            pass
         print(f"[SCHEDULER] prospeccao_autonoma: {resultado}")
     except Exception as e:
         print(f"[SCHEDULER] Erro: {e}")
@@ -1022,7 +1027,12 @@ def prospeccao_autonoma_rodar():
 
     def _rodar():
         try:
-            resultado = rodar_prospeccao_autonoma()
+            _db = database.get_connection()
+            resultado = rodar_prospeccao_autonoma(_db)
+            try:
+                _db.close()
+            except Exception:
+                pass
             print(f"[MANUAL] prospeccao_autonoma: {resultado}")
         except Exception as e:
             print(f"[MANUAL] Erro: {e}")
@@ -2554,6 +2564,132 @@ def sdr_otimizar():
         )
         conn.close()
         return jsonify({"sugestao": resposta})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+# ── SDR — Log ao vivo, pausar, relatório, sessões ────────────────────────────
+
+@app.route("/sdr/log-ao-vivo")
+@login_required
+def sdr_log_ao_vivo():
+    try:
+        conn = database.get_connection()
+        sessao = conn.execute(
+            "SELECT * FROM sdr_sessoes ORDER BY iniciado_em DESC LIMIT 1"
+        ).fetchone()
+        if not sessao:
+            conn.close()
+            return jsonify({"ativo": False, "eventos": [], "stats": {
+                "encontrados": 0, "aprovados": 0, "importados": 0,
+                "cadencias": 0, "descartados": 0, "filtrados": 0,
+            }})
+        sessao = dict(sessao)
+        eventos = [dict(e) for e in conn.execute("""
+            SELECT * FROM sdr_log_ao_vivo WHERE sessao_id=?
+            ORDER BY criado_em DESC LIMIT 80
+        """, (sessao["sessao_id"],)).fetchall()]
+        conn.close()
+        for e in eventos:
+            for k, v in e.items():
+                if hasattr(v, 'isoformat'):
+                    e[k] = v.isoformat()
+        for k, v in sessao.items():
+            if hasattr(v, 'isoformat'):
+                sessao[k] = v.isoformat()
+        return jsonify({
+            "ativo":        sessao["status"] == "rodando",
+            "status":       sessao["status"],
+            "sessao_id":    sessao["sessao_id"],
+            "stats": {
+                "encontrados": sessao.get("encontrados", 0),
+                "aprovados":   sessao.get("aprovados", 0),
+                "importados":  sessao.get("importados", 0),
+                "cadencias":   sessao.get("cadencias", 0),
+                "descartados": sessao.get("descartados", 0),
+                "filtrados":   sessao.get("filtrados", 0),
+            },
+            "produto_atual": sessao.get("produto_atual") or "",
+            "estado_atual":  sessao.get("estado_atual") or "",
+            "empresa_atual": sessao.get("empresa_atual") or "",
+            "ultima_acao":   sessao.get("ultima_acao") or "",
+            "iniciado_em":   str(sessao.get("iniciado_em") or ""),
+            "finalizado_em": str(sessao.get("finalizado_em")) if sessao.get("finalizado_em") else None,
+            "eventos":       eventos,
+        })
+    except Exception as e:
+        return jsonify({"ativo": False, "eventos": [], "error": str(e), "stats": {}}), 500
+
+
+@app.route("/sdr/pausar", methods=["POST"])
+@login_required
+@require_perfil("gerente")
+def sdr_pausar():
+    try:
+        conn = database.get_connection()
+        sessao = conn.execute(
+            "SELECT sessao_id FROM sdr_sessoes WHERE status='rodando' ORDER BY iniciado_em DESC LIMIT 1"
+        ).fetchone()
+        if sessao:
+            conn.execute(
+                "UPDATE sdr_sessoes SET status='pausado', finalizado_em=datetime('now', 'localtime') WHERE sessao_id=?",
+                (sessao["sessao_id"],)
+            )
+            conn.commit()
+        conn.close()
+        return jsonify({"status": "pausado"})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/sdr/relatorio/<sessao_id>")
+@login_required
+def sdr_relatorio(sessao_id):
+    try:
+        conn = database.get_connection()
+        sessao = conn.execute(
+            "SELECT * FROM sdr_sessoes WHERE sessao_id=?", (sessao_id,)
+        ).fetchone()
+        if not sessao:
+            conn.close()
+            flash("Sessão não encontrada.", "danger")
+            return redirect(url_for("sdr_painel"))
+        sessao = dict(sessao)
+        eventos = [dict(e) for e in conn.execute("""
+            SELECT * FROM sdr_log_ao_vivo WHERE sessao_id=?
+            ORDER BY criado_em ASC
+        """, (sessao_id,)).fetchall()]
+        leads = [dict(r) for r in conn.execute("""
+            SELECT * FROM prospeccao_automatica
+            WHERE importado_em >= ?
+            ORDER BY score_fit DESC LIMIT 100
+        """, (str(sessao.get("iniciado_em") or ""),)).fetchall()]
+        conn.close()
+        for e in eventos:
+            for k, v in e.items():
+                if hasattr(v, 'isoformat'):
+                    e[k] = v.isoformat()
+        return render_template("sdr_relatorio.html",
+                               sessao=sessao, eventos=eventos, leads=leads)
+    except Exception as e:
+        flash(f"Erro ao carregar relatório: {e}", "danger")
+        return redirect(url_for("sdr_painel"))
+
+
+@app.route("/sdr/sessoes")
+@login_required
+def sdr_sessoes_lista():
+    try:
+        conn = database.get_connection()
+        sessoes = [dict(r) for r in conn.execute(
+            "SELECT * FROM sdr_sessoes ORDER BY iniciado_em DESC LIMIT 20"
+        ).fetchall()]
+        conn.close()
+        for s in sessoes:
+            for k, v in s.items():
+                if hasattr(v, 'isoformat'):
+                    s[k] = v.isoformat()
+        return jsonify(sessoes)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
