@@ -136,6 +136,32 @@
 
 </div>
 
+<!-- Radar de Mercado card -->
+<div class="card radar-mercado-card" style="margin-bottom:20px">
+  <div class="flex items-center gap-2" style="justify-content:space-between;margin-bottom:14px">
+    <div>
+      <p class="card-title" style="margin-bottom:2px">
+        📡 Radar de Mercado
+      </p>
+      <p class="text-muted text-sm">Editais públicos e alertas de concorrentes em tempo real</p>
+    </div>
+    <button id="dashRadarBtn" onclick="dashBuscarRadar(this)" class="btn btn-outline btn-sm">
+      🔍 Buscar agora
+    </button>
+  </div>
+  <div style="display:flex;gap:20px;flex-wrap:wrap">
+    <a href="{{ url_for('radar_index') }}" class="radar-mercado-stat" style="color:#1D4ED8">
+      <span class="radar-mercado-num">{{ radar_badge.editais }}</span>
+      <span class="radar-mercado-lbl">edital(is) novo{{ 's' if radar_badge.editais != 1 }}</span>
+    </a>
+    <a href="{{ url_for('radar_index') }}" class="radar-mercado-stat" style="color:#D97706">
+      <span class="radar-mercado-num">{{ radar_badge.concorrentes }}</span>
+      <span class="radar-mercado-lbl">alerta{{ 's' if radar_badge.concorrentes != 1 }} de concorrentes</span>
+    </a>
+  </div>
+  <div id="dashRadarMsg" style="display:none;font-size:12px;color:var(--muted);margin-top:10px"></div>
+</div>
+
 <!-- Charts -->
 <div class="charts-grid">
   <div class="card">
@@ -271,6 +297,23 @@
 {% block scripts %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
 <script>
+async function dashBuscarRadar(btn) {
+  const orig = btn.innerHTML;
+  const msg = document.getElementById('dashRadarMsg');
+  btn.disabled = true;
+  btn.innerHTML = '<span style="opacity:.6">🔍 Buscando…</span>';
+  msg.style.display = 'block';
+  msg.textContent = 'Consultando Diário Oficial e Google News…';
+  try {
+    const r = await fetch('/radar/buscar', {method:'POST', headers:{'X-Requested-With':'XMLHttpRequest'}});
+    const d = await r.json();
+    if (d.error) { msg.textContent = 'Erro: ' + d.error; }
+    else { msg.textContent = `✓ ${d.editais} edital(is) e ${d.concorrentes} alerta(s) novos encontrados.`; }
+  } catch(e) { msg.textContent = 'Erro: ' + e.message; }
+  btn.disabled = false;
+  btn.innerHTML = orig;
+}
+
 async function atualizarRadar(btn) {
   const orig = btn.innerHTML;
   btn.disabled = true;

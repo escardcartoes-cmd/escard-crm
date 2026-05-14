@@ -21,6 +21,7 @@ import models.cadencia as cad_model
 import models.expansao as exp_model
 import models.cobranca as cob_model
 import models.recebivel as rec_model
+import models.radar as radar_model
 from models.usuario import require_perfil, PERFIS, PERFIL_LABELS
 import ai
 
@@ -36,9 +37,16 @@ login_manager.login_message_category = "danger"
 @app.context_processor
 def _inject_cadencias_badge():
     try:
-        return {"cadencias_hoje_count": cad_model.contar_hoje()}
+        radar_nao_lidos = radar_model.contar_nao_lidos()
     except Exception:
-        return {"cadencias_hoje_count": 0}
+        radar_nao_lidos = {"editais": 0, "concorrentes": 0, "total": 0}
+    try:
+        return {
+            "cadencias_hoje_count": cad_model.contar_hoje(),
+            "radar_nao_lidos": radar_nao_lidos,
+        }
+    except Exception:
+        return {"cadencias_hoje_count": 0, "radar_nao_lidos": radar_nao_lidos}
 
 
 @login_manager.user_loader
@@ -112,6 +120,7 @@ def dashboard():
     cob_resumo = cob_model.resumo()
     mes_atual = str(date.today())[:7]
     rec_resumo = rec_model.resumo_mes(mes_atual)
+    radar_badge = radar_model.contar_nao_lidos()
     return render_template(
         "dashboard.html",
         status_counts=status_counts,
@@ -127,6 +136,7 @@ def dashboard():
         cob_resumo=cob_resumo,
         rec_resumo=rec_resumo,
         mes_atual=mes_atual,
+        radar_badge=radar_badge,
     )
 
 
@@ -334,6 +344,7 @@ def oportunidades_nova():
         empresas=emp_model.listar(),
         estagios=op_model.ESTAGIOS, labels=op_model.ESTAGIO_LABELS,
         action=url_for("oportunidades_nova"),
+        pre_titulo=request.args.get("titulo", ""),
     )
 
 
@@ -1017,6 +1028,85 @@ def cadencia_concluir(id):
 def cadencia_cancelar(id):
     cad_model.cancelar(id)
     return jsonify({"ok": True})
+
+
+# ── Radar de Mercado ─────────────────────────────────────────────────────────
+
+@app.route("/radar")
+@login_required
+def radar_index():
+    dados = radar_model.listar()
+    badge = radar_model.contar_nao_lidos()
+    return render_template(
+        "radar/index.html",
+        editais=dados["editais"],
+        concorrentes=dados["concorrentes"],
+        badge=badge,
+    )
+
+
+@app.route("/radar/buscar", methods=["POST"])
+@login_required
+@require_perfil('vendedor')
+def radar_buscar():
+    try:
+        resultado = radar_model.buscar_feeds()
+        return jsonify(resultado)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/radar/<int:id>/lido", methods=["POST"])
+@login_required
+def radar_marcar_lido(id):
+    radar_model.marcar_lido(id)
+    return jsonify({"ok": True})
+
+
+@app.route("/radar/<int:id>", methods=["DELETE"])
+@login_required
+@require_perfil('vendedor')
+def radar_excluir(id):
+    radar_model.excluir(id)
+    return jsonify({"ok": True})
+
+
+@app.route("/radar/<int:id>/mensagem", methods=["POST"])
+@login_required
+@require_perfil('vendedor')
+def radar_mensagem(id):
+    import re as _re
+    try:
+        conn = database.get_connection()
+        item = conn.execute("SELECT * FROM radar_mercado WHERE id=?", (id,)).fetchone()
+        conn.close()
+        if not item:
+            return jsonify({"error": "Item não encontrado"}), 404
+        titulo = item["titulo"] or ""
+        prompt = f"""Você é um consultor comercial da Krylo Cartão de Benefícios B2B.
+Um concorrente está com problemas. Use isso para gerar uma mensagem de WhatsApp de abordagem.
+Retorne SOMENTE um JSON válido: {{"mensagem": "<texto completo>"}}
+
+Notícia: {titulo}
+
+Regras: mensagem curta (máx 4 linhas), mencione o problema do concorrente de forma delicada,
+destaque a estabilidade e confiabilidade da Krylo, termine com CTA para uma conversa rápida.
+Tom amigável e consultivo, não agressivo."""
+
+        import anthropic as _ant
+        client = _ant.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+        resp = client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=400,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        raw = resp.content[0].text.strip()
+        raw = _re.sub(r"^```(?:json)?\s*", "", raw, flags=_re.MULTILINE)
+        raw = _re.sub(r"```\s*$", "", raw, flags=_re.MULTILINE)
+        result = json.loads(raw.strip())
+        return jsonify({"ok": True, "mensagem": result.get("mensagem", "")})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 # ── Motor de Expansão ────────────────────────────────────────────────────────
