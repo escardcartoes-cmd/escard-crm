@@ -1,25 +1,52 @@
 from database import get_connection
 
 PRODUTOS = [
-    "Alimentação",
-    "Refeição",
+    "Vale Refeição",
+    "Vale Alimentação",
     "Combustível",
-    "Cultura",
-    "Saúde",
+    "Premiação",
+    "Welhub",
+    "Vidalink",
     "Private Label",
+    "Cobrança",
 ]
 
 TICKET_MEDIO = {
+    "Vale Refeição":   550,
+    "Vale Alimentação": 400,
+    "Combustível":     300,
+    "Premiação":       200,
+    "Welhub":          150,
+    "Vidalink":        120,
+    "Private Label":   500,
+    "Cobrança":          0,
+    # legado
     "Alimentação": 350,
-    "Refeição": 550,
-    "Combustível": 200,
-    "Cultura": 50,
-    "Saúde": 80,
-    "Private Label": 200,
+    "Refeição":    550,
+    "Cultura":      50,
+    "Saúde":        80,
 }
 
 
+def _carregar_produtos_db() -> tuple:
+    """Retorna (lista_nomes, ticket_medio_dict) do banco ou fallback."""
+    try:
+        conn = get_connection()
+        rows = conn.execute(
+            "SELECT nome, valor_por_funcionario FROM produtos_krylo WHERE ativo=1 ORDER BY nome"
+        ).fetchall()
+        conn.close()
+        if rows:
+            nomes  = [r["nome"] for r in rows]
+            ticket = {r["nome"]: float(r["valor_por_funcionario"] or 0) for r in rows}
+            return nomes, ticket
+    except Exception:
+        pass
+    return PRODUTOS, TICKET_MEDIO
+
+
 def listar_oportunidades() -> list:
+    produtos_list, ticket_medio = _carregar_produtos_db()
     conn = get_connection()
     rows = conn.execute(
         """SELECT id, nome, num_funcionarios, valor_mensal, produtos_ativos,
@@ -32,13 +59,13 @@ def listar_oportunidades() -> list:
     resultado = []
     for r in rows:
         row = dict(r)
-        ativos = [p.strip() for p in (row.get("produtos_ativos") or "").split(",") if p.strip()]
-        faltando = [p for p in PRODUTOS if p not in ativos]
-        funcs = row.get("num_funcionarios") or 0
-        potencial = sum(TICKET_MEDIO[p] * funcs for p in faltando) if funcs else 0
+        ativos   = [p.strip() for p in (row.get("produtos_ativos") or "").split(",") if p.strip()]
+        faltando = [p for p in produtos_list if p not in ativos]
+        funcs    = row.get("num_funcionarios") or 0
+        potencial = sum(ticket_medio.get(p, 0) * funcs for p in faltando) if funcs else 0
         row["produtos_ativos_lista"] = ativos
-        row["produtos_faltando"] = faltando
-        row["potencial_mensal"] = potencial
+        row["produtos_faltando"]     = faltando
+        row["potencial_mensal"]      = potencial
         resultado.append(row)
     resultado.sort(key=lambda x: x["potencial_mensal"], reverse=True)
     return resultado

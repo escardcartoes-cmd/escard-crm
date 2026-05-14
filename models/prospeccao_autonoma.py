@@ -94,6 +94,40 @@ REGRAS_POR_PRODUTO = [
 ]
 
 
+def carregar_produtos_do_banco(db) -> list:
+    """
+    Carrega produtos ativos de produtos_krylo e retorna no formato de regras.
+    Faz fallback para REGRAS_POR_PRODUTO se a tabela estiver vazia.
+    """
+    try:
+        rows = db.execute(
+            "SELECT * FROM produtos_krylo WHERE ativo=1 ORDER BY nome"
+        ).fetchall()
+        if not rows:
+            return REGRAS_POR_PRODUTO
+        regras = []
+        for p in rows:
+            cnaes = [c.strip() for c in (p["cnaes_alvo"] or "").split(",") if c.strip()]
+            ufs   = [e.strip() for e in (p["estados_alvo"] or "ES,SP").split(",") if e.strip()]
+            regras.append({
+                "produto":              p["nome"],
+                "descricao":            p["descricao"] or "",
+                "cnaes":                cnaes,
+                "ufs":                  ufs or ["ES", "SP"],
+                "pitch":                p["pitch_whatsapp"] or "",
+                "pitch_email":          p["pitch_email"] or "",
+                "beneficios":           p["beneficios"] or "",
+                "objecoes":             p["objecoes_comuns"] or "",
+                "como_responder":       p["como_responder_objecoes"] or "",
+                "score_min_cadencia":   int(p["score_min"] or 6),
+                "capital_min":          float(p["capital_min"] or 50000),
+                "valor_por_funcionario": float(p["valor_por_funcionario"] or 0),
+            })
+        return regras if regras else REGRAS_POR_PRODUTO
+    except Exception:
+        return REGRAS_POR_PRODUTO
+
+
 def _carregar_regras_do_banco() -> list:
     try:
         conn = get_connection()
@@ -403,15 +437,22 @@ def empresa_deve_ser_recontato(cnpj: str, config: dict, db) -> tuple:
     return (True, f"Tentativa {tentativas + 1}")
 
 
-def gerar_pitch_ia(db, empresa_nome: str, cnae_desc: str, produto: str, canal: str) -> str:
-    """Gera pitch personalizado via Claude Haiku."""
+def gerar_pitch_ia(db, empresa_nome: str, cnae_desc: str, produto: str, canal: str,
+                   beneficios: str = "", objecoes: str = "") -> str:
+    """Gera pitch personalizado via Claude Haiku usando dados do produto."""
     try:
         import models.ia_config as ia_mod
         limite = "máximo 150 caracteres" if canal == "whatsapp" else "3-4 frases"
+        extra = ""
+        if beneficios:
+            extra += f"\nBenefícios do produto:\n{beneficios}"
+        if objecoes:
+            extra += f"\nObjeções comuns e respostas:\n{objecoes}"
         msg = (
             f"Gere uma mensagem de prospecção para {canal} para a empresa '{empresa_nome}' "
             f"(setor: {cnae_desc}). Produto: {produto}. "
             f"Use o nome da empresa, destaque um benefício concreto. {limite}. Sem emojis excessivos."
+            + extra
         )
         return ia_mod.chat_com_ia(db, msg)
     except Exception:
@@ -449,7 +490,10 @@ def rodar_prospeccao_autonoma(db=None, config_override: dict = None) -> dict:
                     "motivo": f"Fora do horário ({hora_atual}h, janela {h_ini}h–{h_fim}h)"}
 
         regras_banco = _carregar_regras_do_banco()
-        regras       = regras_banco if regras_banco else REGRAS_POR_PRODUTO
+        if regras_banco:
+            regras = regras_banco
+        else:
+            regras = carregar_produtos_do_banco(db)
 
         estados_cfg   = [e.strip() for e in (cfg.get("estados") or "").split(",") if e.strip()]
         max_leads     = int(cfg.get("max_leads_por_execucao") or 20)
@@ -457,15 +501,21 @@ def rodar_prospeccao_autonoma(db=None, config_override: dict = None) -> dict:
         canal_prim    = cfg.get("canal_primario") or "whatsapp"
         score_minimo  = int(cfg.get("score_minimo") or 6)
 
-        # Build CNAE → produto map
-        cnaes_alvo: set   = set()
+        # Build CNAE → produto/dados map
+        cnaes_alvo: set    = set()
         produto_por_cnae: dict = {}
+        dados_por_cnae: dict   = {}  # beneficios, objecoes, pitch por CNAE
         for regra in regras:
             prod = regra["produto"] if produto_foco == "todos" else produto_foco
             for c in regra.get("cnaes", []):
                 c_clean = str(c).replace(".", "").replace("-", "")
                 cnaes_alvo.add(c_clean)
                 produto_por_cnae.setdefault(c_clean, prod)
+                dados_por_cnae.setdefault(c_clean, {
+                    "pitch":       regra.get("pitch") or "",
+                    "beneficios":  regra.get("beneficios") or "",
+                    "objecoes":    regra.get("objecoes") or "",
+                })
 
         # Fetch seeds concurrently
         brutos: list = []
@@ -593,13 +643,21 @@ def rodar_prospeccao_autonoma(db=None, config_override: dict = None) -> dict:
             # Auto-cadência para leads nota ≥ 8
             if score >= 8 and (emp.get("telefone") or emp.get("email")):
                 try:
-                    pitch = gerar_pitch_ia(
-                        db,
-                        emp.get("razao_social") or "",
-                        emp.get("cnae_descricao") or "",
-                        produto_alvo,
-                        canal_prim,
-                    )
+                    _dados_regra = dados_por_cnae.get(emp_cnae) or {}
+                    _pitch_base  = _dados_regra.get("pitch") or ""
+                    if _pitch_base:
+                        # Usa pitch pré-definido do produto substituindo {empresa}
+                        pitch = _pitch_base.replace("{empresa}", emp.get("razao_social") or "")
+                    else:
+                        pitch = gerar_pitch_ia(
+                            db,
+                            emp.get("razao_social") or "",
+                            emp.get("cnae_descricao") or "",
+                            produto_alvo,
+                            canal_prim,
+                            beneficios=_dados_regra.get("beneficios") or "",
+                            objecoes=_dados_regra.get("objecoes") or "",
+                        )
                     data_acao = (date.today() + timedelta(days=1)).isoformat()
                     db.execute(
                         """INSERT INTO cadencias
