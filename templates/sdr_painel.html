@@ -1,0 +1,577 @@
+{% extends 'base.html' %}
+{% block title %}SDR Autônomo — Krylo CRM{% endblock %}
+{% block topbar_title %}SDR Autônomo{% endblock %}
+
+{% block topbar_actions %}
+  <button id="btnToggle" onclick="toggleSDR(this)"
+          class="btn btn-sm {% if config.ativo %}btn-outline{% else %}btn-primary{% endif %}"
+          style="{% if config.ativo %}color:#DC2626;border-color:#DC2626{% endif %}">
+    {% if config.ativo %}⏸ Pausar SDR{% else %}▶ Ativar SDR{% endif %}
+  </button>
+  <button onclick="rodarAgora(this)" class="btn btn-primary btn-sm" style="margin-left:8px">
+    ⚡ Rodar agora
+  </button>
+{% endblock %}
+
+{% block content %}
+
+<div id="toast" style="display:none;position:fixed;top:20px;right:20px;z-index:9999;
+  background:#16A34A;color:#fff;padding:12px 20px;border-radius:8px;
+  font-size:14px;font-weight:600;box-shadow:0 4px 12px rgba(0,0,0,.2)">✓ Salvo!</div>
+
+<!-- ── SEÇÃO 1 — Status ao vivo ───────────────────────────────────────────── -->
+<div class="cards-grid" style="margin-bottom:20px">
+
+  <div class="card" style="border-left:4px solid {% if config.ativo %}#16A34A{% else %}#9CA3AF{% endif %}">
+    <div style="display:flex;align-items:center;gap:12px">
+      <div style="width:14px;height:14px;border-radius:50%;flex-shrink:0;
+        background:{% if config.ativo %}#16A34A{% else %}#9CA3AF{% endif %};
+        {% if config.ativo %}box-shadow:0 0 0 4px rgba(22,163,74,.25);animation:pulse 2s infinite{% endif %}">
+      </div>
+      <div>
+        <div style="font-weight:700;font-size:15px">
+          {% if config.ativo %}SDR Ativo{% else %}SDR Pausado{% endif %}
+        </div>
+        <div class="text-muted text-sm">
+          {% if proxima_execucao %}Próxima: {{ proxima_execucao }}{% else %}Intervalo: {{ config.intervalo_horas }}h{% endif %}
+        </div>
+        <div class="text-muted text-sm">Horário: {{ config.horario_inicio }}h–{{ config.horario_fim }}h</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="kpi">
+      <div>
+        <div class="kpi-val">{{ stats.total or 0 }}</div>
+        <div class="kpi-lbl">Total prospectado</div>
+      </div>
+      <div class="kpi-icon" style="background:#EFF6FF;color:#1D4ED8">
+        <svg width="22" height="22" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/>
+        </svg>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="kpi">
+      <div>
+        <div class="kpi-val" style="color:#D97706">{{ stats.novos or 0 }}</div>
+        <div class="kpi-lbl">Aguardando ação</div>
+      </div>
+      <div class="kpi-icon ic-orange">
+        <svg width="22" height="22" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+        </svg>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="kpi">
+      <div>
+        <div class="kpi-val" style="color:#16A34A">{{ stats.importados or 0 }}</div>
+        <div class="kpi-lbl">Importados/Convertidos</div>
+      </div>
+      <div class="kpi-icon" style="background:#F0FDF4;color:#16A34A">
+        <svg width="22" height="22" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+        </svg>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ── SEÇÃO 2 — Filtros ──────────────────────────────────────────────────── -->
+<div class="card" style="margin-bottom:20px">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:8px">
+    <div class="card-title">⚙ Filtros de Prospecção</div>
+    <div style="display:flex;gap:8px">
+      <button onclick="salvarFiltros()" class="btn btn-outline btn-sm">💾 Salvar filtros</button>
+      <button onclick="salvarERodar()" class="btn btn-primary btn-sm">💾⚡ Salvar e rodar agora</button>
+    </div>
+  </div>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+
+    <!-- Localização -->
+    <div>
+      <div style="font-weight:600;font-size:13px;color:#4A3F35;margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid var(--border)">📍 Localização</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:6px">Estados:</div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px" id="checkEstados">
+        {% set estados_sel = config.estados.split(',') if config.estados else [] %}
+        {% for uf in ['ES','SP','MG','RJ','BA','PR','SC','RS','GO','DF'] %}
+        <label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:12px">
+          <input type="checkbox" value="{{ uf }}" {% if uf in estados_sel %}checked{% endif %}
+                 onchange="marcarAlterado()"> {{ uf }}
+        </label>
+        {% endfor %}
+      </div>
+      <label class="form-label" style="font-size:12px">Cidades específicas (opcional)</label>
+      <input type="text" id="cidades" class="form-input" style="font-size:12px"
+             value="{{ config.cidades or '' }}" placeholder="Ex: Vitória, Vila Velha"
+             oninput="marcarAlterado()">
+    </div>
+
+    <!-- Porte -->
+    <div>
+      <div style="font-weight:600;font-size:13px;color:#4A3F35;margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid var(--border)">📊 Porte da Empresa</div>
+      <label class="form-label" style="font-size:12px">Capital social mínimo</label>
+      <select id="capital_social_min" class="form-input" style="font-size:12px;margin-bottom:10px" onchange="marcarAlterado()">
+        {% for v, l in [(0,'Sem restrição'),(50000,'R$ 50 mil'),(100000,'R$ 100 mil'),(500000,'R$ 500 mil'),(1000000,'R$ 1 milhão'),(5000000,'R$ 5 milhões')] %}
+        <option value="{{ v }}" {% if (config.capital_social_min or 50000)|int == v %}selected{% endif %}>{{ l }}</option>
+        {% endfor %}
+      </select>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
+        <div>
+          <label class="form-label" style="font-size:12px">Idade mín. (anos)</label>
+          <input type="number" id="idade_empresa_min" class="form-input" style="font-size:12px"
+                 value="{{ config.idade_empresa_min or 0 }}" min="0" max="50" oninput="marcarAlterado()">
+        </div>
+        <div>
+          <label class="form-label" style="font-size:12px">Idade máx. (anos)</label>
+          <input type="number" id="idade_empresa_max" class="form-input" style="font-size:12px"
+                 value="{{ config.idade_empresa_max or 50 }}" min="0" max="100" oninput="marcarAlterado()">
+        </div>
+      </div>
+      <label class="form-label" style="font-size:12px">Tipo de empresa</label>
+      <div style="display:flex;gap:12px;flex-wrap:wrap" id="radioTipo">
+        {% for v, l in [('MATRIZ','Matriz'),('FILIAL','Filial'),('','Ambos')] %}
+        <label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:12px">
+          <input type="radio" name="tipo_empresa" value="{{ v }}"
+                 {% if (config.tipo_empresa or 'MATRIZ') == v %}checked{% endif %}
+                 onchange="marcarAlterado()"> {{ l }}
+        </label>
+        {% endfor %}
+      </div>
+    </div>
+
+    <!-- Perfil -->
+    <div>
+      <div style="font-weight:600;font-size:13px;color:#4A3F35;margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid var(--border)">🎯 Perfil</div>
+      {% for campo, label in [
+        ('tem_telefone','Exigir telefone'),
+        ('tem_email','Exigir e-mail'),
+        ('excluir_ja_prospectados','Excluir já prospectados')
+      ] %}
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-bottom:8px;font-size:13px">
+        <div class="toggle-wrap" onclick="toggleSwitch('{{ campo }}')" id="toggle_{{ campo }}"
+             style="width:36px;height:20px;border-radius:10px;cursor:pointer;transition:background .2s;flex-shrink:0;
+                    background:{% if config[campo] %}#16A34A{% else %}#D1D5DB{% endif %};position:relative">
+          <div style="width:16px;height:16px;border-radius:50%;background:#fff;position:absolute;top:2px;
+                      transition:left .2s;left:{% if config[campo] %}18px{% else %}2px{% endif %}"></div>
+        </div>
+        {{ label }}
+        <input type="hidden" id="{{ campo }}" value="{{ '1' if config[campo] else '0' }}">
+      </label>
+      {% endfor %}
+    </div>
+
+    <!-- Produto foco -->
+    <div>
+      <div style="font-weight:600;font-size:13px;color:#4A3F35;margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid var(--border)">🎁 Produto Foco</div>
+      <label class="form-label" style="font-size:12px">Produto prioritário</label>
+      <select id="produto_foco" class="form-input" style="font-size:12px" onchange="marcarAlterado()">
+        {% for v in ['todos','VR','VA','Combustível','Premiação','Welhub','Vidalink','Private Label','Cobrança'] %}
+        <option value="{{ v }}" {% if (config.produto_foco or 'todos') == v %}selected{% endif %}>{{ v | capitalize }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <!-- Cadência -->
+    <div style="grid-column:1/-1">
+      <div style="font-weight:600;font-size:13px;color:#4A3F35;margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid var(--border)">📅 Cadência e Execução</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px">
+        <div>
+          <label class="form-label" style="font-size:12px">Score mínimo (1–10)</label>
+          <input type="range" id="score_minimo" min="1" max="10" step="1"
+                 value="{{ config.score_minimo or 6 }}" oninput="atualizarLabel('score_minimo');marcarAlterado()"
+                 style="width:100%">
+          <div style="font-size:11px;color:var(--muted);text-align:center" id="lbl_score_minimo">{{ config.score_minimo or 6 }}</div>
+        </div>
+        <div>
+          <label class="form-label" style="font-size:12px">Máx leads / execução</label>
+          <input type="number" id="max_leads_por_execucao" class="form-input" style="font-size:12px"
+                 value="{{ config.max_leads_por_execucao or 20 }}" min="1" max="200" oninput="marcarAlterado()">
+        </div>
+        <div>
+          <label class="form-label" style="font-size:12px">Canal primário</label>
+          <select id="canal_primario" class="form-input" style="font-size:12px" onchange="marcarAlterado()">
+            {% for v in ['whatsapp','email'] %}
+            <option value="{{ v }}" {% if (config.canal_primario or 'whatsapp') == v %}selected{% endif %}>{{ v | capitalize }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label class="form-label" style="font-size:12px">Intervalo execuções</label>
+          <select id="intervalo_horas" class="form-input" style="font-size:12px" onchange="marcarAlterado()">
+            {% for v, l in [(1,'1 hora'),(3,'3 horas'),(6,'6 horas'),(12,'12 horas'),(24,'24 horas')] %}
+            <option value="{{ v }}" {% if (config.intervalo_horas or 6)|int == v %}selected{% endif %}>{{ l }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label class="form-label" style="font-size:12px">Horário início</label>
+          <select id="horario_inicio" class="form-input" style="font-size:12px" onchange="marcarAlterado()">
+            {% for h in range(6, 13) %}
+            <option value="{{ h }}" {% if (config.horario_inicio or 8)|int == h %}selected{% endif %}>{{ h }}h</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label class="form-label" style="font-size:12px">Horário fim</label>
+          <select id="horario_fim" class="form-input" style="font-size:12px" onchange="marcarAlterado()">
+            {% for h in range(17, 23) %}
+            <option value="{{ h }}" {% if (config.horario_fim or 18)|int == h %}selected{% endif %}>{{ h }}h</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label class="form-label" style="font-size:12px">Máx tentativas / empresa</label>
+          <select id="max_tentativas_por_empresa" class="form-input" style="font-size:12px" onchange="marcarAlterado()">
+            {% for v in [1, 2, 3, 5] %}
+            <option value="{{ v }}" {% if (config.max_tentativas_por_empresa or 3)|int == v %}selected{% endif %}>{{ v }}x</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label class="form-label" style="font-size:12px">Dias para recontato</label>
+          <select id="dias_recontato" class="form-input" style="font-size:12px" onchange="marcarAlterado()">
+            {% for v in [15, 30, 45, 60] %}
+            <option value="{{ v }}" {% if (config.dias_recontato or 30)|int == v %}selected{% endif %}>{{ v }} dias</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label class="form-label" style="font-size:12px">Dias da semana</label>
+          <div id="checkDias" style="display:flex;flex-wrap:wrap;gap:5px">
+            {% set dias_sel = config.dias_semana.split(',') if config.dias_semana else ['seg','ter','qua','qui','sex'] %}
+            {% for v, l in [('seg','Seg'),('ter','Ter'),('qua','Qua'),('qui','Qui'),('sex','Sex'),('sab','Sáb'),('dom','Dom')] %}
+            <label style="font-size:11px;cursor:pointer;display:flex;align-items:center;gap:3px">
+              <input type="checkbox" value="{{ v }}" {% if v in dias_sel %}checked{% endif %}
+                     onchange="marcarAlterado()"> {{ l }}
+            </label>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ── SEÇÃO 3 — Histórico de execuções ──────────────────────────────────── -->
+<div class="card" style="margin-bottom:20px">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+    <div class="card-title">📋 Histórico de Execuções</div>
+    <button onclick="recarregarExecucoes()" class="btn btn-outline btn-sm">↻ Atualizar</button>
+  </div>
+  {% if execucoes %}
+  <div style="overflow-x:auto">
+    <table class="cob-table" id="tblExecucoes">
+      <thead><tr>
+        <th>Data</th><th style="text-align:right">Encontrados</th>
+        <th style="text-align:right">Salvos</th><th style="text-align:right">Cadências</th>
+        <th style="text-align:right">Descartados</th><th>Log</th>
+      </tr></thead>
+      <tbody>
+        {% for ex in execucoes %}
+        <tr>
+          <td style="font-size:12px;white-space:nowrap">{{ ex.executado_em[:16] if ex.executado_em else '—' }}</td>
+          <td style="text-align:right;font-weight:600">{{ ex.encontrados or 0 }}</td>
+          <td style="text-align:right;color:#16A34A;font-weight:600">{{ ex.salvos or 0 }}</td>
+          <td style="text-align:right">{{ ex.cadencias or 0 }}</td>
+          <td style="text-align:right;color:#DC2626">{{ ex.descartados or 0 }}</td>
+          <td style="font-size:11px;color:var(--muted);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
+              title="{{ ex.log or '' }}">{{ ex.log or 'OK' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="empty-state" style="padding:24px 0">
+    <p>Nenhuma execução registrada ainda.</p>
+    <p class="text-muted text-sm">Clique em "Rodar agora" para iniciar.</p>
+  </div>
+  {% endif %}
+</div>
+
+<!-- ── SEÇÃO 4 — Pipeline ─────────────────────────────────────────────────── -->
+<div class="card" style="margin-bottom:20px">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+    <div class="card-title">🔍 Pipeline — Últimos 20 leads</div>
+    <a href="{{ url_for('prospeccao_automatica') }}" class="btn btn-outline btn-sm">Ver todos →</a>
+  </div>
+  {% if pipeline %}
+  <div style="overflow-x:auto">
+    <table class="cob-table">
+      <thead><tr>
+        <th style="width:60px;text-align:center">Score</th>
+        <th>Empresa</th><th style="width:50px">UF</th>
+        <th>CNAE</th><th style="width:80px;text-align:center">Status</th>
+        <th style="width:140px;text-align:center">Ação</th>
+      </tr></thead>
+      <tbody>
+        {% for lead in pipeline %}
+        <tr id="lead-row-{{ lead.id }}">
+          <td style="text-align:center">
+            {% set s = lead.score_fit or 0 %}
+            <span style="
+              display:inline-block;width:32px;height:32px;border-radius:50%;
+              background:{% if s >= 7 %}#D1FAE5{% elif s >= 4 %}#FEF3C7{% else %}#FEE2E2{% endif %};
+              color:{% if s >= 7 %}#065F46{% elif s >= 4 %}#92400E{% else %}#991B1B{% endif %};
+              font-weight:700;font-size:12px;line-height:32px;text-align:center">
+              {{ s }}
+            </span>
+          </td>
+          <td>
+            <div style="font-weight:600;font-size:13px">{{ lead.razao_social or '—' }}</div>
+            <div style="font-size:11px;color:var(--muted)">{{ lead.municipio or '' }}</div>
+          </td>
+          <td style="font-size:12px;font-weight:600">{{ lead.uf or '—' }}</td>
+          <td style="font-size:11px;color:var(--muted);max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
+              title="{{ lead.cnae_descricao or '' }}">{{ (lead.cnae_descricao or '—')[:35] }}</td>
+          <td style="text-align:center">
+            {% if lead.status == 'novo' %}
+            <span style="background:#EFF6FF;color:#1D4ED8;font-size:11px;padding:2px 8px;border-radius:4px;font-weight:600">Novo</span>
+            {% elif lead.status == 'importado' %}
+            <span style="background:#F0FDF4;color:#15803D;font-size:11px;padding:2px 8px;border-radius:4px;font-weight:600">Importado</span>
+            {% else %}
+            <span style="background:#FEF2F2;color:#B91C1C;font-size:11px;padding:2px 8px;border-radius:4px;font-weight:600">Descartado</span>
+            {% endif %}
+          </td>
+          <td style="text-align:center">
+            {% if lead.status == 'novo' %}
+            <div style="display:flex;gap:4px;justify-content:center">
+              <button class="btn btn-sm btn-primary" style="font-size:11px;padding:3px 8px"
+                      onclick="importarLead({{ lead.id }}, this)">+ Cadência</button>
+              <button class="btn btn-sm btn-outline" style="font-size:11px;padding:3px 8px;color:#DC2626;border-color:#DC2626"
+                      onclick="descartarLead({{ lead.id }}, this)">✕</button>
+            </div>
+            {% else %}—{% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="empty-state" style="padding:24px 0">
+    <p>Nenhum lead encontrado ainda.</p>
+    <p class="text-muted text-sm">Execute o SDR para buscar empresas automaticamente.</p>
+  </div>
+  {% endif %}
+</div>
+
+<!-- ── SEÇÃO 5 — Otimizar com IA ─────────────────────────────────────────── -->
+<div style="margin-bottom:32px">
+  <button onclick="otimizarComIA(this)" class="btn btn-outline"
+          style="border-color:#7C3AED;color:#7C3AED">
+    🤖 Otimizar filtros com IA
+  </button>
+  <span class="text-muted text-sm" style="margin-left:10px">
+    Claude analisa seu histórico e sugere ajustes nos filtros
+  </span>
+</div>
+
+<!-- Modal otimização IA -->
+<div id="modalOtimizar" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);
+  z-index:9000;align-items:center;justify-content:center">
+  <div style="background:#fff;border-radius:12px;width:min(620px,90vw);max-height:80vh;
+              overflow:hidden;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.3)">
+    <div style="padding:18px 22px;border-bottom:1px solid var(--border);
+                display:flex;justify-content:space-between;align-items:center">
+      <div style="font-weight:700;font-size:15px">🤖 Sugestões de Otimização</div>
+      <button onclick="document.getElementById('modalOtimizar').style.display='none'"
+              style="background:none;border:none;cursor:pointer;font-size:20px;color:var(--muted)">✕</button>
+    </div>
+    <div id="modalOtimizarCorpo" style="padding:20px 22px;overflow-y:auto;
+         font-size:13px;line-height:1.7;color:#374151;white-space:pre-wrap">
+      Carregando análise…
+    </div>
+  </div>
+</div>
+
+<style>
+@keyframes pulse {
+  0%,100% { box-shadow: 0 0 0 4px rgba(22,163,74,.25); }
+  50%      { box-shadow: 0 0 0 8px rgba(22,163,74,.08); }
+}
+</style>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+let _alterado = false;
+function marcarAlterado() { _alterado = true; }
+
+function atualizarLabel(id) {
+  const el = document.getElementById(id);
+  const lbl = document.getElementById('lbl_' + id);
+  if (el && lbl) lbl.textContent = el.value;
+}
+
+function toggleSwitch(campo) {
+  const input = document.getElementById(campo);
+  const wrap  = document.getElementById('toggle_' + campo);
+  const dot   = wrap.querySelector('div');
+  const atual = input.value === '1';
+  input.value = atual ? '0' : '1';
+  wrap.style.background = atual ? '#D1D5DB' : '#16A34A';
+  dot.style.left = atual ? '2px' : '18px';
+  marcarAlterado();
+}
+
+function coletarFiltros() {
+  const estadosCks = [...document.querySelectorAll('#checkEstados input:checked')].map(c => c.value);
+  const diasCks    = [...document.querySelectorAll('#checkDias input:checked')].map(c => c.value);
+  const tipoRadio  = document.querySelector('input[name="tipo_empresa"]:checked');
+  return {
+    estados:                    estadosCks.join(','),
+    cidades:                    document.getElementById('cidades').value,
+    capital_social_min:         parseFloat(document.getElementById('capital_social_min').value) || 0,
+    tipo_empresa:               tipoRadio ? tipoRadio.value : '',
+    idade_empresa_min:          parseInt(document.getElementById('idade_empresa_min').value) || 0,
+    idade_empresa_max:          parseInt(document.getElementById('idade_empresa_max').value) || 50,
+    tem_telefone:               parseInt(document.getElementById('tem_telefone').value) || 0,
+    tem_email:                  parseInt(document.getElementById('tem_email').value) || 0,
+    excluir_ja_prospectados:    parseInt(document.getElementById('excluir_ja_prospectados').value) || 0,
+    produto_foco:               document.getElementById('produto_foco').value,
+    score_minimo:               parseInt(document.getElementById('score_minimo').value) || 6,
+    max_leads_por_execucao:     parseInt(document.getElementById('max_leads_por_execucao').value) || 20,
+    canal_primario:             document.getElementById('canal_primario').value,
+    intervalo_horas:            parseInt(document.getElementById('intervalo_horas').value) || 6,
+    horario_inicio:             parseInt(document.getElementById('horario_inicio').value) || 8,
+    horario_fim:                parseInt(document.getElementById('horario_fim').value) || 18,
+    max_tentativas_por_empresa: parseInt(document.getElementById('max_tentativas_por_empresa').value) || 3,
+    dias_recontato:             parseInt(document.getElementById('dias_recontato').value) || 30,
+    dias_semana:                diasCks.join(','),
+  };
+}
+
+async function salvarFiltros() {
+  const r = await fetch('/sdr/config/salvar', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+    body: JSON.stringify(coletarFiltros()),
+  });
+  const d = await r.json();
+  if (d.status === 'salvo') {
+    const t = document.getElementById('toast');
+    t.style.display = 'block';
+    setTimeout(() => t.style.display = 'none', 2500);
+    _alterado = false;
+  } else {
+    alert('Erro: ' + (d.error || 'desconhecido'));
+  }
+}
+
+async function salvarERodar() {
+  await salvarFiltros();
+  rodarAgora(document.querySelector('button[onclick*="rodarAgora"]'));
+}
+
+async function rodarAgora(btn) {
+  const orig = btn ? btn.innerHTML : '';
+  if (btn) { btn.disabled = true; btn.innerHTML = '<span style="opacity:.6">Rodando…</span>'; }
+  try {
+    const r = await fetch('/prospeccao/autonoma/rodar', {
+      method: 'POST', headers: { 'X-Requested-With': 'XMLHttpRequest' }
+    });
+    const d = await r.json();
+    alert(d.mensagem || 'SDR iniciado em background!');
+    setTimeout(() => location.reload(), 3000);
+  } catch(e) {
+    alert('Erro: ' + e.message);
+  }
+  if (btn) { btn.disabled = false; btn.innerHTML = orig; }
+}
+
+async function toggleSDR(btn) {
+  const r = await fetch('/sdr/config/toggle', {
+    method: 'POST', headers: { 'X-Requested-With': 'XMLHttpRequest' }
+  });
+  const d = await r.json();
+  if (d.status === 'ok') location.reload();
+  else alert('Erro: ' + (d.error || 'desconhecido'));
+}
+
+async function importarLead(id, btn) {
+  btn.disabled = true;
+  btn.textContent = '…';
+  try {
+    const r = await fetch('/prospeccao/automatica/' + id + '/importar', {
+      method: 'POST', headers: { 'X-Requested-With': 'XMLHttpRequest' }
+    });
+    const d = await r.json();
+    if (d.ok) {
+      const row = document.getElementById('lead-row-' + id);
+      const statusCell = row.querySelector('td:nth-child(5)');
+      if (statusCell) statusCell.innerHTML = '<span style="background:#F0FDF4;color:#15803D;font-size:11px;padding:2px 8px;border-radius:4px;font-weight:600">Importado</span>';
+      const actionCell = row.querySelector('td:last-child');
+      if (actionCell) actionCell.textContent = '—';
+    } else { btn.disabled = false; btn.textContent = '+ Cadência'; alert(d.error || 'Erro'); }
+  } catch(e) { btn.disabled = false; btn.textContent = '+ Cadência'; }
+}
+
+async function descartarLead(id, btn) {
+  btn.disabled = true;
+  try {
+    await fetch('/prospeccao/automatica/' + id + '/status', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+      body: JSON.stringify({ status: 'descartado' })
+    });
+    const row = document.getElementById('lead-row-' + id);
+    const statusCell = row.querySelector('td:nth-child(5)');
+    if (statusCell) statusCell.innerHTML = '<span style="background:#FEF2F2;color:#B91C1C;font-size:11px;padding:2px 8px;border-radius:4px;font-weight:600">Descartado</span>';
+    const actionCell = row.querySelector('td:last-child');
+    if (actionCell) actionCell.textContent = '—';
+  } catch(e) { btn.disabled = false; }
+}
+
+async function otimizarComIA(btn) {
+  const modal = document.getElementById('modalOtimizar');
+  modal.style.display = 'flex';
+  document.getElementById('modalOtimizarCorpo').textContent = 'Analisando histórico com Claude…';
+  btn.disabled = true;
+  try {
+    const r = await fetch('/sdr/otimizar', {
+      method: 'POST', headers: { 'X-Requested-With': 'XMLHttpRequest' }
+    });
+    const d = await r.json();
+    document.getElementById('modalOtimizarCorpo').textContent = d.sugestao || d.error || 'Erro ao gerar análise.';
+  } catch(e) {
+    document.getElementById('modalOtimizarCorpo').textContent = 'Erro de conexão: ' + e.message;
+  }
+  btn.disabled = false;
+}
+
+async function recarregarExecucoes() {
+  const r = await fetch('/sdr/execucoes');
+  const rows = await r.json();
+  const tbody = document.querySelector('#tblExecucoes tbody');
+  if (!tbody || !rows.length) return;
+  tbody.innerHTML = rows.map(ex => `
+    <tr>
+      <td style="font-size:12px;white-space:nowrap">${(ex.executado_em||'—').slice(0,16)}</td>
+      <td style="text-align:right;font-weight:600">${ex.encontrados||0}</td>
+      <td style="text-align:right;color:#16A34A;font-weight:600">${ex.salvos||0}</td>
+      <td style="text-align:right">${ex.cadencias||0}</td>
+      <td style="text-align:right;color:#DC2626">${ex.descartados||0}</td>
+      <td style="font-size:11px;color:var(--muted);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${ex.log||'OK'}</td>
+    </tr>`).join('');
+}
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') document.getElementById('modalOtimizar').style.display = 'none';
+});
+</script>
+{% endblock %}
