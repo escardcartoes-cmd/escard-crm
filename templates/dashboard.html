@@ -217,6 +217,61 @@
 
 </div>
 
+<!-- Prospecção Automática card -->
+<div class="card" style="margin-bottom:20px;cursor:pointer" onclick="location.href='{{ url_for('prospeccao_automatica') }}'">
+  <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
+    <div>
+      <p class="card-title" style="margin-bottom:4px">🔍 Prospecção Automática</p>
+      <p class="text-muted text-sm">Leads encontrados via BrasilAPI por CNAE</p>
+    </div>
+    <a href="{{ url_for('prospeccao_automatica') }}" class="btn btn-outline btn-sm no-click-stop"
+       onclick="event.stopPropagation()">Ver todos →</a>
+  </div>
+  <div style="display:flex;gap:20px;flex-wrap:wrap;margin-top:14px">
+    <div class="radar-mercado-stat" style="color:#1D4ED8;text-decoration:none">
+      <span class="radar-mercado-num">{{ pauto_resumo.novos_hoje }}</span>
+      <span class="radar-mercado-lbl">novos hoje</span>
+    </div>
+    <div class="radar-mercado-stat" style="color:#16A34A;text-decoration:none">
+      <span class="radar-mercado-num">{{ pauto_resumo.prontos }}</span>
+      <span class="radar-mercado-lbl">prontos (score ≥ 7)</span>
+    </div>
+    <a href="{{ url_for('prospeccao_automatica') }}" class="btn btn-sm" onclick="event.stopPropagation()"
+       style="background:linear-gradient(135deg,#C5A089,#B8936A);color:#fff;align-self:center;margin-left:auto">
+      🔍 Buscar agora
+    </a>
+  </div>
+</div>
+
+<!-- SDR Autônomo card -->
+<div class="card" style="margin-bottom:20px">
+  <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:14px">
+    <div>
+      <p class="card-title" style="margin-bottom:4px">🤖 SDR Autônomo</p>
+      <p class="text-muted text-sm">Prospecção automática rodando a cada 6 horas</p>
+    </div>
+    <button id="sdrRodarBtn" onclick="sdrRodarAgora(this)" class="btn btn-primary btn-sm">
+      ▶ Rodar agora
+    </button>
+  </div>
+  <div style="display:flex;gap:20px;flex-wrap:wrap;align-items:center">
+    <div class="radar-mercado-stat" style="color:#1D4ED8">
+      <span class="radar-mercado-num" id="sdrTotal">—</span>
+      <span class="radar-mercado-lbl">total encontrados</span>
+    </div>
+    <div class="radar-mercado-stat" style="color:#16A34A">
+      <span class="radar-mercado-num" id="sdrNovos">—</span>
+      <span class="radar-mercado-lbl">novos (não importados)</span>
+    </div>
+    <div class="radar-mercado-stat" style="color:#D97706">
+      <span class="radar-mercado-num" id="sdrImportados">—</span>
+      <span class="radar-mercado-lbl">já importados ao CRM</span>
+    </div>
+  </div>
+  <p id="sdrUltimaExec" style="font-size:11px;color:var(--muted);margin-top:10px"></p>
+  <p id="sdrMsg" style="font-size:12px;color:var(--muted);margin-top:6px;display:none"></p>
+</div>
+
 <!-- Radar de Mercado card -->
 <div class="card radar-mercado-card" style="margin-bottom:20px">
   <div class="flex items-center gap-2" style="justify-content:space-between;margin-bottom:14px">
@@ -410,6 +465,40 @@ async function dashBuscarRadar(btn) {
   btn.disabled = false;
   btn.innerHTML = orig;
 }
+
+async function sdrCarregarStatus() {
+  try {
+    const r = await fetch('/prospeccao/autonoma/status');
+    const d = await r.json();
+    document.getElementById('sdrTotal').textContent      = d.total      ?? '—';
+    document.getElementById('sdrNovos').textContent      = d.novos      ?? '—';
+    document.getElementById('sdrImportados').textContent = d.importados ?? '—';
+    const el = document.getElementById('sdrUltimaExec');
+    el.textContent = d.ultima_execucao
+      ? 'Última execução: ' + d.ultima_execucao
+      : 'Ainda não executou.';
+  } catch(e) {}
+}
+
+async function sdrRodarAgora(btn) {
+  const orig = btn.innerHTML;
+  const msg = document.getElementById('sdrMsg');
+  btn.disabled = true;
+  btn.innerHTML = '<span style="opacity:.6">⏳ Executando…</span>';
+  msg.style.display = 'block';
+  msg.textContent = 'Iniciando prospecção autônoma em background…';
+  try {
+    const r = await fetch('/prospeccao/autonoma/rodar', {method:'POST', headers:{'X-Requested-With':'XMLHttpRequest'}});
+    const d = await r.json();
+    msg.textContent = d.message || 'Iniciado.';
+  } catch(e) {
+    msg.textContent = 'Erro: ' + e.message;
+  }
+  btn.disabled = false;
+  btn.innerHTML = orig;
+}
+
+document.addEventListener('DOMContentLoaded', sdrCarregarStatus);
 
 async function atualizarRadar(btn) {
   const orig = btn.innerHTML;
