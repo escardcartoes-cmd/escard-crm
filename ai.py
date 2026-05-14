@@ -171,6 +171,24 @@ Pontos fortes: {", ".join(pontos_fortes) if pontos_fortes else "não disponível
     return _parse_json(msg.content[0].text)
 
 
+def proximos_passos_semanal(dados: dict) -> str:
+    import json as _json
+    dados_resumo = {k: v for k, v in dados.items() if k != "top_ops"}
+    prompt = (
+        "Você é consultor comercial da Krylo, empresa de benefícios B2B. "
+        f"Dados desta semana:\n{_json.dumps(dados_resumo, ensure_ascii=False, indent=2)}\n\n"
+        "Gere exatamente 3 próximos passos prioritários, diretos e acionáveis, "
+        "para maximizar receita. Formato: lista numerada, máximo 2 linhas cada. "
+        "Sem introdução ou conclusão."
+    )
+    msg = _get_client().messages.create(
+        model=MODEL,
+        max_tokens=400,
+        messages=[{"role": "user", "content": prompt}],
+    )
+    return msg.content[0].text.strip()
+
+
 def proxima_acao(oportunidade_id: int) -> dict:
     import models.oportunidade as op_model
     import models.empresa as emp_model
