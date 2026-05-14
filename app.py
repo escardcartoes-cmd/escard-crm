@@ -56,6 +56,22 @@ def _inject_cadencias_badge():
         return {"cadencias_hoje_count": 0, "radar_nao_lidos": radar_nao_lidos}
 
 
+@app.context_processor
+def inject_empresa():
+    try:
+        conn = database.get_connection()
+        cfg = conn.execute(
+            "SELECT nome, nome_fantasia, whatsapp FROM empresa_config WHERE id=1"
+        ).fetchone()
+        conn.close()
+        return {
+            "empresa_nome": cfg["nome"] if cfg else "Krylo",
+            "empresa_whatsapp": cfg["whatsapp"] if cfg else "",
+        }
+    except Exception:
+        return {"empresa_nome": "Krylo", "empresa_whatsapp": ""}
+
+
 @login_manager.user_loader
 def load_user(user_id):
     return user_model.buscar_por_id(int(user_id))
@@ -1268,6 +1284,63 @@ def radar_excluir(id):
     return jsonify({"ok": True})
 
 
+@app.route("/radar/analisar-oportunidades", methods=["POST"])
+@login_required
+@require_perfil("vendedor")
+def radar_analisar_oportunidades():
+    try:
+        import anthropic as _ant, models.ia_config as ia_mod
+        conn = database.get_connection()
+        itens = [dict(r) for r in conn.execute(
+            "SELECT id, tipo, titulo, fonte FROM radar_mercado WHERE lido=0"
+        ).fetchall()]
+        if not itens:
+            conn.close()
+            return jsonify({
+                "analise": "Nenhuma notícia não lida no radar. Clique em **Buscar agora** primeiro.",
+                "oportunidades": 0,
+            })
+        emp_row = conn.execute(
+            "SELECT nome FROM empresa_config WHERE id=1"
+        ).fetchone()
+        empresa_nome = emp_row["nome"] if emp_row else "Krylo"
+        system = ia_mod.get_system_prompt(conn)
+        conn.close()
+
+        lista = "\n".join(f"- [{it['tipo']}] {it['titulo']}" for it in itens)
+        prompt = (
+            f"Analise estas {len(itens)} notícias e alertas de mercado encontrados hoje:\n\n"
+            f"{lista}\n\n"
+            f"Com base no que você sabe sobre a empresa ({empresa_nome}) e seus produtos/serviços, identifique:\n\n"
+            "1. OPORTUNIDADES IMEDIATAS (máximo 3): situações onde a empresa pode agir HOJE para gerar negócio\n"
+            "2. AMEAÇAS A MONITORAR (máximo 2): movimentos de mercado que precisam de atenção\n"
+            "3. AÇÃO RECOMENDADA: uma ação específica e concreta para executar nas próximas 24h\n\n"
+            "Seja direto e específico. Cite os nomes das empresas/situações das notícias.\n"
+            "Formato: use markdown com ## para seções."
+        )
+
+        client = _ant.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+        resp = client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=1000,
+            system=system,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        analise = resp.content[0].text.strip()
+
+        conn2 = database.get_connection()
+        conn2.execute(
+            "INSERT INTO radar_analises (analise, num_itens_analisados) VALUES (?, ?)",
+            (analise, len(itens)),
+        )
+        conn2.commit()
+        conn2.close()
+
+        return jsonify({"analise": analise, "oportunidades": len(itens)})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route("/radar/<int:id>/mensagem", methods=["POST"])
 @login_required
 @require_perfil('vendedor')
@@ -1988,6 +2061,47 @@ def configuracoes_ramos_toggle(id):
     conn.commit()
     conn.close()
     return jsonify({"ok": True, "ativo": novo})
+
+
+# ── Configurações — Empresa Proprietária ─────────────────────────────────────
+
+@app.route("/configuracoes/empresa")
+@login_required
+@require_perfil("gerente")
+def configuracoes_empresa():
+    conn = database.get_connection()
+    row  = conn.execute("SELECT * FROM empresa_config WHERE id=1").fetchone()
+    conn.close()
+    return render_template("configuracoes_empresa.html", cfg=dict(row) if row else {})
+
+
+@app.route("/configuracoes/empresa/salvar", methods=["POST"])
+@login_required
+@require_perfil("gerente")
+def configuracoes_empresa_salvar():
+    try:
+        import datetime as _dt
+        f = request.json or {}
+        campos = [
+            "nome", "nome_fantasia", "cnpj", "telefone", "whatsapp", "email",
+            "site", "instagram", "linkedin", "tiktok", "ramo_atividade",
+            "descricao", "missao", "diferenciais", "publico_alvo",
+            "produtos_servicos", "regiao_atuacao", "historico",
+            "tom_da_marca", "palavras_chave", "concorrentes",
+        ]
+        _agora = _dt.datetime.now().isoformat(sep=" ", timespec="seconds")
+        conn = database.get_connection()
+        for campo in campos:
+            if campo in f:
+                conn.execute(
+                    f"UPDATE empresa_config SET {campo}=:v, atualizado_em=:t WHERE id=1",
+                    {"v": f[campo], "t": _agora},
+                )
+        conn.commit()
+        conn.close()
+        return jsonify({"status": "salvo"})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 # ── Dev ping (usado pelo hot-reload do browser) ───────────────────────────────

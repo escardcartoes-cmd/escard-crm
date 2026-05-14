@@ -21,6 +21,17 @@ _DEFAULTS = {
 }
 
 
+def get_empresa_config(db) -> dict:
+    """Retorna configuração da empresa proprietária do banco."""
+    try:
+        row = db.execute("SELECT * FROM empresa_config WHERE id=1").fetchone()
+        if row:
+            return dict(row)
+    except Exception:
+        pass
+    return {}
+
+
 def get_ia_config(db) -> dict:
     """Retorna configuração da IA do banco. db deve ser um objeto de conexão."""
     try:
@@ -57,6 +68,28 @@ OBJETIVO PRINCIPAL:
 
 RESTRIÇÕES ABSOLUTAS:
 {cfg['restricoes']}"""
+
+    empresa = get_empresa_config(db)
+    if empresa.get("nome"):
+        prompt += f"""
+
+SOBRE A EMPRESA QUE VOCÊ REPRESENTA:
+Nome: {empresa.get('nome', 'Krylo')}
+Ramo: {empresa.get('ramo_atividade', '')}
+Descrição: {empresa.get('descricao', '')}
+Missão: {empresa.get('missao', '')}
+Diferenciais: {empresa.get('diferenciais', '')}
+Público-alvo: {empresa.get('publico_alvo', '')}
+Produtos/Serviços: {empresa.get('produtos_servicos', '')}
+Região: {empresa.get('regiao_atuacao', '')}
+Histórico: {empresa.get('historico', '')}
+Tom da marca: {empresa.get('tom_da_marca', '')}
+Concorrentes: {empresa.get('concorrentes', '')}
+Site: {empresa.get('site', '')}
+Instagram: {empresa.get('instagram', '')}
+LinkedIn: {empresa.get('linkedin', '')}
+
+USE SEMPRE o nome "{empresa.get('nome', 'Krylo')}" ao se referir à empresa."""
 
     if contexto_adicional:
         prompt += f"\n\nCONTEXTO ADICIONAL:\n{contexto_adicional}"

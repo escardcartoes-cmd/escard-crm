@@ -1,0 +1,278 @@
+{% extends 'base.html' %}
+{% block title %}Minha Empresa — Krylo CRM{% endblock %}
+{% block topbar_title %}Configurações — Minha Empresa{% endblock %}
+
+{% block topbar_actions %}
+  <button onclick="salvar()" id="btnSalvar" class="btn btn-primary btn-sm">💾 Salvar configurações</button>
+{% endblock %}
+
+{% block content %}
+
+<div id="toast" style="
+  display:none;position:fixed;top:20px;right:20px;z-index:9999;
+  background:#16A34A;color:#fff;padding:12px 20px;border-radius:8px;
+  font-size:14px;font-weight:600;box-shadow:0 4px 12px rgba(0,0,0,.2)">
+  ✓ Configurações salvas!
+</div>
+
+<div style="max-width:860px">
+
+  <!-- Seção 1 — Identidade -->
+  <div class="card" style="margin-bottom:20px">
+    <div class="card-title" style="margin-bottom:16px">🏢 Identidade da Empresa</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+      <div>
+        <label class="form-label">Nome da empresa</label>
+        <input type="text" id="nome" class="form-input" value="{{ cfg.get('nome','Krylo') }}"
+               placeholder="Ex: Krylo">
+        <div style="font-size:11px;color:var(--muted);margin-top:3px">Substitui "Krylo" em todo o sistema</div>
+      </div>
+      <div>
+        <label class="form-label">Nome fantasia</label>
+        <input type="text" id="nome_fantasia" class="form-input" value="{{ cfg.get('nome_fantasia','Krylo') }}"
+               placeholder="Ex: Krylo">
+      </div>
+      <div>
+        <label class="form-label">CNPJ</label>
+        <input type="text" id="cnpj" class="form-input" value="{{ cfg.get('cnpj','') }}"
+               placeholder="00.000.000/0001-00">
+      </div>
+      <div>
+        <label class="form-label">Ramo de atividade</label>
+        <input type="text" id="ramo_atividade" class="form-input"
+               value="{{ cfg.get('ramo_atividade','Benefícios Corporativos B2B') }}"
+               placeholder="Ex: Benefícios Corporativos B2B">
+      </div>
+    </div>
+    <div style="margin-top:14px">
+      <label class="form-label">Descrição da empresa</label>
+      <textarea id="descricao" class="form-input" rows="3"
+                placeholder="O que faz, como faz, para quem…">{{ cfg.get('descricao','') }}</textarea>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px">
+      <div>
+        <label class="form-label">Missão</label>
+        <textarea id="missao" class="form-input" rows="3"
+                  placeholder="Qual a missão da empresa?">{{ cfg.get('missao','') }}</textarea>
+      </div>
+      <div>
+        <label class="form-label">Diferenciais</label>
+        <textarea id="diferenciais" class="form-input" rows="3"
+                  placeholder="O que te diferencia dos concorrentes?">{{ cfg.get('diferenciais','') }}</textarea>
+      </div>
+      <div>
+        <label class="form-label">Público-alvo</label>
+        <textarea id="publico_alvo" class="form-input" rows="3"
+                  placeholder="Quem você atende? Ex: empresas B2B com 50+ funcionários">{{ cfg.get('publico_alvo','') }}</textarea>
+      </div>
+      <div>
+        <label class="form-label">Produtos e serviços</label>
+        <textarea id="produtos_servicos" class="form-input" rows="3"
+                  placeholder="Liste todos os produtos/serviços oferecidos">{{ cfg.get('produtos_servicos','') }}</textarea>
+      </div>
+    </div>
+    <div style="margin-top:14px">
+      <label class="form-label">Região de atuação</label>
+      <input type="text" id="regiao_atuacao" class="form-input"
+             value="{{ cfg.get('regiao_atuacao','') }}"
+             placeholder="Ex: ES, SP, MG, RJ">
+    </div>
+  </div>
+
+  <!-- Seção 2 — Contato e presença digital -->
+  <div class="card" style="margin-bottom:20px">
+    <div class="card-title" style="margin-bottom:16px">📡 Contato e Presença Digital</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+      <div>
+        <label class="form-label">Telefone</label>
+        <input type="text" id="telefone" class="form-input" value="{{ cfg.get('telefone','') }}"
+               placeholder="(27) 99999-9999">
+      </div>
+      <div>
+        <label class="form-label">WhatsApp</label>
+        <input type="text" id="whatsapp" class="form-input" value="{{ cfg.get('whatsapp','') }}"
+               placeholder="5527999999999">
+        <div style="font-size:11px;color:var(--muted);margin-top:3px">Substitui KRYLO_WHATSAPP no sistema</div>
+      </div>
+      <div>
+        <label class="form-label">E-mail</label>
+        <input type="email" id="email" class="form-input" value="{{ cfg.get('email','') }}"
+               placeholder="contato@empresa.com.br">
+      </div>
+      <div>
+        <label class="form-label">Site</label>
+        <input type="url" id="site" class="form-input" value="{{ cfg.get('site','') }}"
+               placeholder="https://www.empresa.com.br">
+      </div>
+      <div>
+        <label class="form-label">Instagram</label>
+        <div style="display:flex;align-items:center;gap:6px">
+          <span style="color:var(--muted);font-size:14px">@</span>
+          <input type="text" id="instagram" class="form-input"
+                 value="{{ cfg.get('instagram','').lstrip('@') }}"
+                 placeholder="nomenainstagram">
+        </div>
+      </div>
+      <div>
+        <label class="form-label">TikTok</label>
+        <div style="display:flex;align-items:center;gap:6px">
+          <span style="color:var(--muted);font-size:14px">@</span>
+          <input type="text" id="tiktok" class="form-input"
+                 value="{{ cfg.get('tiktok','').lstrip('@') }}"
+                 placeholder="nomenotiktok">
+        </div>
+      </div>
+      <div style="grid-column:1/-1">
+        <label class="form-label">LinkedIn (URL)</label>
+        <input type="url" id="linkedin" class="form-input" value="{{ cfg.get('linkedin','') }}"
+               placeholder="https://linkedin.com/company/empresa">
+      </div>
+    </div>
+  </div>
+
+  <!-- Seção 3 — Inteligência da marca -->
+  <div class="card" style="margin-bottom:20px">
+    <div class="card-title" style="margin-bottom:16px">🧠 Inteligência da Marca (usada pela IA)</div>
+    <div style="margin-bottom:14px">
+      <label class="form-label">Histórico da empresa</label>
+      <textarea id="historico" class="form-input" rows="4"
+                placeholder="Como surgiu, principais conquistas, marcos importantes…">{{ cfg.get('historico','') }}</textarea>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+      <div>
+        <label class="form-label">Tom da marca</label>
+        <select id="tom_da_marca" class="form-input">
+          {% for opt in ['profissional e consultivo','consultivo','descontraído','técnico','premium'] %}
+          <option value="{{ opt }}" {% if cfg.get('tom_da_marca','profissional e consultivo') == opt %}selected{% endif %}>
+            {{ opt | capitalize }}
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label class="form-label">Palavras-chave da marca</label>
+        <input type="text" id="palavras_chave" class="form-input"
+               value="{{ cfg.get('palavras_chave','') }}"
+               placeholder="Ex: benefícios, cuidado, inovação">
+      </div>
+    </div>
+    <div style="margin-top:14px">
+      <label class="form-label">Concorrentes diretos</label>
+      <textarea id="concorrentes" class="form-input" rows="3"
+                placeholder="Quem compete com você? Ex: Alelo, Ticket, Sodexo, Flash">{{ cfg.get('concorrentes','') }}</textarea>
+    </div>
+  </div>
+
+  <!-- Seção 4 — Botões -->
+  <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:32px">
+    <button onclick="salvar()" id="btnSalvar2" class="btn btn-primary">
+      💾 Salvar configurações
+    </button>
+    <button onclick="abrirPreview()" class="btn btn-outline">
+      🤖 Pré-visualizar como a IA me vê
+    </button>
+  </div>
+
+</div>
+
+<!-- Modal preview IA -->
+<div id="modalPreview" style="
+  display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9000;
+  display:none;align-items:center;justify-content:center">
+  <div style="
+    background:#fff;border-radius:12px;width:min(700px,90vw);max-height:80vh;
+    overflow:hidden;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.3)">
+    <div style="padding:20px 24px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">
+      <div style="font-weight:700;font-size:16px">🤖 Como a IA enxerga sua empresa</div>
+      <button onclick="fecharPreview()" style="background:none;border:none;cursor:pointer;font-size:20px;color:var(--muted)">✕</button>
+    </div>
+    <div id="previewConteudo" style="
+      padding:20px 24px;overflow-y:auto;font-family:monospace;font-size:12px;
+      line-height:1.6;white-space:pre-wrap;color:#374151;background:#F9FAFB">
+      Carregando…
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+let _debounce;
+
+function coletarDados() {
+  return {
+    nome:             document.getElementById('nome').value,
+    nome_fantasia:    document.getElementById('nome_fantasia').value,
+    cnpj:             document.getElementById('cnpj').value,
+    telefone:         document.getElementById('telefone').value,
+    whatsapp:         document.getElementById('whatsapp').value,
+    email:            document.getElementById('email').value,
+    site:             document.getElementById('site').value,
+    instagram:        document.getElementById('instagram').value,
+    linkedin:         document.getElementById('linkedin').value,
+    tiktok:           document.getElementById('tiktok').value,
+    ramo_atividade:   document.getElementById('ramo_atividade').value,
+    descricao:        document.getElementById('descricao').value,
+    missao:           document.getElementById('missao').value,
+    diferenciais:     document.getElementById('diferenciais').value,
+    publico_alvo:     document.getElementById('publico_alvo').value,
+    produtos_servicos:document.getElementById('produtos_servicos').value,
+    regiao_atuacao:   document.getElementById('regiao_atuacao').value,
+    historico:        document.getElementById('historico').value,
+    tom_da_marca:     document.getElementById('tom_da_marca').value,
+    palavras_chave:   document.getElementById('palavras_chave').value,
+    concorrentes:     document.getElementById('concorrentes').value,
+  };
+}
+
+async function salvar() {
+  const btns = [document.getElementById('btnSalvar'), document.getElementById('btnSalvar2')];
+  btns.forEach(b => { if (b) { b.disabled = true; b.textContent = 'Salvando…'; } });
+  try {
+    const r = await fetch('/configuracoes/empresa/salvar', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+      body: JSON.stringify(coletarDados()),
+    });
+    const d = await r.json();
+    if (d.status === 'salvo') {
+      const toast = document.getElementById('toast');
+      toast.style.display = 'block';
+      setTimeout(() => { toast.style.display = 'none'; }, 3000);
+      // Atualiza o nome no sidebar sem reload
+      const logoEl = document.querySelector('.logo-name');
+      if (logoEl) logoEl.textContent = document.getElementById('nome').value || 'Krylo';
+    } else {
+      alert('Erro: ' + (d.error || 'desconhecido'));
+    }
+  } catch(e) {
+    alert('Erro de conexão: ' + e.message);
+  }
+  btns.forEach(b => { if (b) { b.disabled = false; b.innerHTML = b.id === 'btnSalvar' ? '💾 Salvar configurações' : '💾 Salvar configurações'; } });
+}
+
+async function abrirPreview() {
+  const modal = document.getElementById('modalPreview');
+  modal.style.display = 'flex';
+  document.getElementById('previewConteudo').textContent = 'Gerando preview…';
+  try {
+    const r = await fetch('/ia/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+      body: JSON.stringify({ mensagem: 'Me apresente: quem é você, qual empresa representa, qual seu tom e objetivo?' }),
+    });
+    const d = await r.json();
+    document.getElementById('previewConteudo').textContent = d.resposta || d.error || 'Erro ao gerar preview.';
+  } catch(e) {
+    document.getElementById('previewConteudo').textContent = 'Erro de conexão: ' + e.message;
+  }
+}
+
+function fecharPreview() {
+  document.getElementById('modalPreview').style.display = 'none';
+}
+
+document.addEventListener('keydown', e => { if (e.key === 'Escape') fecharPreview(); });
+</script>
+{% endblock %}

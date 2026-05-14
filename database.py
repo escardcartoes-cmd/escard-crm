@@ -229,6 +229,39 @@ _SQLITE_DDL = """
         ativo       INTEGER NOT NULL DEFAULT 1,
         criado_em   TEXT    DEFAULT (datetime('now', 'localtime'))
     );
+
+    CREATE TABLE IF NOT EXISTS empresa_config (
+        id                INTEGER PRIMARY KEY AUTOINCREMENT,
+        nome              TEXT      DEFAULT 'Krylo',
+        nome_fantasia     TEXT      DEFAULT 'Krylo',
+        cnpj              TEXT      DEFAULT '',
+        telefone          TEXT      DEFAULT '',
+        whatsapp          TEXT      DEFAULT '',
+        email             TEXT      DEFAULT '',
+        site              TEXT      DEFAULT '',
+        instagram         TEXT      DEFAULT '',
+        linkedin          TEXT      DEFAULT '',
+        tiktok            TEXT      DEFAULT '',
+        ramo_atividade    TEXT      DEFAULT 'Benefícios Corporativos B2B',
+        descricao         TEXT      DEFAULT '',
+        missao            TEXT      DEFAULT '',
+        diferenciais      TEXT      DEFAULT '',
+        publico_alvo      TEXT      DEFAULT '',
+        produtos_servicos TEXT      DEFAULT '',
+        regiao_atuacao    TEXT      DEFAULT '',
+        historico         TEXT      DEFAULT '',
+        tom_da_marca      TEXT      DEFAULT 'profissional e consultivo',
+        palavras_chave    TEXT      DEFAULT '',
+        concorrentes      TEXT      DEFAULT '',
+        atualizado_em     TIMESTAMP DEFAULT (datetime('now', 'localtime'))
+    );
+
+    CREATE TABLE IF NOT EXISTS radar_analises (
+        id                   INTEGER PRIMARY KEY AUTOINCREMENT,
+        analise              TEXT,
+        num_itens_analisados INTEGER,
+        criado_em            TIMESTAMP DEFAULT (datetime('now', 'localtime'))
+    );
 """
 
 
@@ -447,6 +480,37 @@ def run_migrations(conn) -> None:
             ativo       INTEGER DEFAULT 1,
             criado_em   TEXT    DEFAULT (datetime('now', 'localtime'))
         )""",
+        """CREATE TABLE IF NOT EXISTS empresa_config (
+            id                INTEGER PRIMARY KEY AUTOINCREMENT,
+            nome              TEXT      DEFAULT 'Krylo',
+            nome_fantasia     TEXT      DEFAULT 'Krylo',
+            cnpj              TEXT      DEFAULT '',
+            telefone          TEXT      DEFAULT '',
+            whatsapp          TEXT      DEFAULT '',
+            email             TEXT      DEFAULT '',
+            site              TEXT      DEFAULT '',
+            instagram         TEXT      DEFAULT '',
+            linkedin          TEXT      DEFAULT '',
+            tiktok            TEXT      DEFAULT '',
+            ramo_atividade    TEXT      DEFAULT 'Benefícios Corporativos B2B',
+            descricao         TEXT      DEFAULT '',
+            missao            TEXT      DEFAULT '',
+            diferenciais      TEXT      DEFAULT '',
+            publico_alvo      TEXT      DEFAULT '',
+            produtos_servicos TEXT      DEFAULT '',
+            regiao_atuacao    TEXT      DEFAULT '',
+            historico         TEXT      DEFAULT '',
+            tom_da_marca      TEXT      DEFAULT 'profissional e consultivo',
+            palavras_chave    TEXT      DEFAULT '',
+            concorrentes      TEXT      DEFAULT '',
+            atualizado_em     TIMESTAMP DEFAULT (datetime('now', 'localtime'))
+        )""",
+        """CREATE TABLE IF NOT EXISTS radar_analises (
+            id                   INTEGER PRIMARY KEY AUTOINCREMENT,
+            analise              TEXT,
+            num_itens_analisados INTEGER,
+            criado_em            TIMESTAMP DEFAULT (datetime('now', 'localtime'))
+        )""",
     ]
 
     for sql in _ALTER + _CREATE:
@@ -463,6 +527,7 @@ def run_migrations(conn) -> None:
     # Seeds
     _seeds = [
         "INSERT OR IGNORE INTO ia_config (id) VALUES (1)",
+        "INSERT OR IGNORE INTO empresa_config (id) VALUES (1)",
     ]
     for sql in _seeds:
         try:
