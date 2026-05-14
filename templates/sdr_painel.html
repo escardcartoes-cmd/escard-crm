@@ -265,6 +265,29 @@
   </div>
 </div>
 
+<!-- ── SEÇÃO 2.5 — Inteligência do SDR ───────────────────────────────────── -->
+<div class="card" style="margin-bottom:20px">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+    <div class="card-title">🧠 Inteligência do SDR</div>
+    <button onclick="carregarInteligencia()" class="btn btn-outline btn-sm">↻ Atualizar</button>
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px" id="inteligenciaGrid">
+    {% for key, label, suffix in [
+      ('taxa_conversao','Taxa conversão','%'),
+      ('score_medio','Score médio',''),
+      ('melhor_produto','Melhor produto',''),
+      ('melhor_uf','Melhor UF',''),
+      ('melhor_hora','Melhor hora','')
+    ] %}
+    <div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:14px;text-align:center"
+         id="intel_{{ key }}">
+      <div style="font-size:22px;font-weight:700;color:#1D4ED8" id="intel_val_{{ key }}">—</div>
+      <div style="font-size:11px;color:var(--muted);margin-top:4px">{{ label }}</div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+
 <!-- ── SEÇÃO 3 — Histórico de execuções ──────────────────────────────────── -->
 <div class="card" style="margin-bottom:20px">
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
@@ -569,6 +592,27 @@ async function recarregarExecucoes() {
       <td style="font-size:11px;color:var(--muted);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${ex.log||'OK'}</td>
     </tr>`).join('');
 }
+
+async function carregarInteligencia() {
+  try {
+    const r = await fetch('/sdr/pipeline');
+    const d = await r.json();
+    if (d.error) return;
+    const map = {
+      taxa_conversao: d.taxa_conversao !== undefined ? d.taxa_conversao + '%' : '—',
+      score_medio:    d.score_medio    !== undefined ? d.score_medio          : '—',
+      melhor_produto: d.melhor_produto || '—',
+      melhor_uf:      d.melhor_uf      || '—',
+      melhor_hora:    d.melhor_hora    || '—',
+    };
+    Object.entries(map).forEach(([key, val]) => {
+      const el = document.getElementById('intel_val_' + key);
+      if (el) el.textContent = val;
+    });
+  } catch(e) {}
+}
+
+document.addEventListener('DOMContentLoaded', carregarInteligencia);
 
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') document.getElementById('modalOtimizar').style.display = 'none';

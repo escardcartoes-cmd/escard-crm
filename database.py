@@ -174,18 +174,26 @@ _SQLITE_DDL = """
     );
 
     CREATE TABLE IF NOT EXISTS prospeccao_automatica (
-        id             INTEGER PRIMARY KEY AUTOINCREMENT,
-        cnpj           TEXT    UNIQUE,
-        razao_social   TEXT,
-        municipio      TEXT,
-        uf             TEXT,
-        cnae_descricao TEXT,
-        telefone       TEXT,
-        email          TEXT,
-        capital_social REAL    DEFAULT 0,
-        score_fit      INTEGER DEFAULT 0,
-        status         TEXT    DEFAULT 'novo',
-        importado_em   TEXT    DEFAULT (datetime('now', 'localtime'))
+        id                INTEGER PRIMARY KEY AUTOINCREMENT,
+        cnpj              TEXT    UNIQUE,
+        razao_social      TEXT,
+        municipio         TEXT,
+        uf                TEXT,
+        cnae_descricao    TEXT,
+        telefone          TEXT,
+        email             TEXT,
+        capital_social    REAL    DEFAULT 0,
+        score_fit         INTEGER DEFAULT 0,
+        status            TEXT    DEFAULT 'novo',
+        tentativas        INTEGER DEFAULT 0,
+        ultima_tentativa  TEXT,
+        motivo_descarte   TEXT,
+        fonte             TEXT    DEFAULT 'brasilapi',
+        idade_empresa     INTEGER DEFAULT 0,
+        natureza_juridica TEXT    DEFAULT '',
+        porte             TEXT    DEFAULT '',
+        produto_alvo      TEXT    DEFAULT '',
+        importado_em      TEXT    DEFAULT (datetime('now', 'localtime'))
     );
 
     CREATE TABLE IF NOT EXISTS ia_config (
@@ -412,6 +420,15 @@ def run_migrations(conn) -> None:
         # cadencias — Brevo e-mail tracking
         f"ALTER TABLE cadencias ADD COLUMN{_ifne} email_status TEXT NOT NULL DEFAULT 'sem_email'",
         f"ALTER TABLE cadencias ADD COLUMN{_ifne} email_brevo_id TEXT",
+        # prospeccao_automatica — SDR avançado
+        f"ALTER TABLE prospeccao_automatica ADD COLUMN{_ifne} tentativas INTEGER DEFAULT 0",
+        f"ALTER TABLE prospeccao_automatica ADD COLUMN{_ifne} ultima_tentativa TEXT",
+        f"ALTER TABLE prospeccao_automatica ADD COLUMN{_ifne} motivo_descarte TEXT",
+        f"ALTER TABLE prospeccao_automatica ADD COLUMN{_ifne} fonte TEXT DEFAULT 'brasilapi'",
+        f"ALTER TABLE prospeccao_automatica ADD COLUMN{_ifne} idade_empresa INTEGER DEFAULT 0",
+        f"ALTER TABLE prospeccao_automatica ADD COLUMN{_ifne} natureza_juridica TEXT DEFAULT ''",
+        f"ALTER TABLE prospeccao_automatica ADD COLUMN{_ifne} porte TEXT DEFAULT ''",
+        f"ALTER TABLE prospeccao_automatica ADD COLUMN{_ifne} produto_alvo TEXT DEFAULT ''",
     ]
 
     _CREATE = [
@@ -481,18 +498,26 @@ def run_migrations(conn) -> None:
             criado_em TEXT    DEFAULT (datetime('now', 'localtime'))
         )""",
         """CREATE TABLE IF NOT EXISTS prospeccao_automatica (
-            id             INTEGER PRIMARY KEY AUTOINCREMENT,
-            cnpj           TEXT    UNIQUE,
-            razao_social   TEXT,
-            municipio      TEXT,
-            uf             TEXT,
-            cnae_descricao TEXT,
-            telefone       TEXT,
-            email          TEXT,
-            capital_social REAL    DEFAULT 0,
-            score_fit      INTEGER DEFAULT 0,
-            status         TEXT    DEFAULT 'novo',
-            importado_em   TEXT    DEFAULT (datetime('now', 'localtime'))
+            id                INTEGER PRIMARY KEY AUTOINCREMENT,
+            cnpj              TEXT    UNIQUE,
+            razao_social      TEXT,
+            municipio         TEXT,
+            uf                TEXT,
+            cnae_descricao    TEXT,
+            telefone          TEXT,
+            email             TEXT,
+            capital_social    REAL    DEFAULT 0,
+            score_fit         INTEGER DEFAULT 0,
+            status            TEXT    DEFAULT 'novo',
+            tentativas        INTEGER DEFAULT 0,
+            ultima_tentativa  TEXT,
+            motivo_descarte   TEXT,
+            fonte             TEXT    DEFAULT 'brasilapi',
+            idade_empresa     INTEGER DEFAULT 0,
+            natureza_juridica TEXT    DEFAULT '',
+            porte             TEXT    DEFAULT '',
+            produto_alvo      TEXT    DEFAULT '',
+            importado_em      TEXT    DEFAULT (datetime('now', 'localtime'))
         )""",
         """CREATE TABLE IF NOT EXISTS ia_config (
             id                 INTEGER PRIMARY KEY AUTOINCREMENT,

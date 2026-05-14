@@ -2237,6 +2237,65 @@ def sdr_execucoes_json():
     return jsonify(rows)
 
 
+@app.route("/sdr/pipeline")
+@login_required
+def sdr_pipeline():
+    try:
+        conn = database.get_connection()
+        stats = conn.execute("""
+            SELECT
+                COUNT(*) AS total,
+                SUM(CASE WHEN status='novo'       THEN 1 ELSE 0 END) AS novos,
+                SUM(CASE WHEN status='importado'  THEN 1 ELSE 0 END) AS importados,
+                SUM(CASE WHEN status='descartado' THEN 1 ELSE 0 END) AS descartados,
+                AVG(score_fit) AS score_medio
+            FROM prospeccao_automatica
+        """).fetchone()
+        melhor_uf = conn.execute("""
+            SELECT uf, COUNT(*) AS cnt FROM prospeccao_automatica
+            WHERE status='importado' GROUP BY uf ORDER BY cnt DESC LIMIT 1
+        """).fetchone()
+        melhor_prod = conn.execute("""
+            SELECT produto_alvo, COUNT(*) AS cnt FROM prospeccao_automatica
+            WHERE produto_alvo IS NOT NULL AND produto_alvo != ''
+            GROUP BY produto_alvo ORDER BY cnt DESC LIMIT 1
+        """).fetchone()
+        all_times = conn.execute(
+            "SELECT importado_em FROM prospeccao_automatica WHERE importado_em IS NOT NULL LIMIT 500"
+        ).fetchall()
+        conn.close()
+
+        from collections import Counter
+        horas = []
+        for r in (all_times or []):
+            try:
+                ts = str(r["importado_em"])
+                h = int(ts[11:13]) if len(ts) > 12 else int(ts.split("T")[-1][:2])
+                horas.append(h)
+            except Exception:
+                pass
+        melhor_hora = f"{Counter(horas).most_common(1)[0][0]}h" if horas else "—"
+
+        s = dict(stats) if stats else {}
+        total    = int(s.get("total") or 0)
+        importados = int(s.get("importados") or 0)
+        taxa     = round(importados / total * 100, 1) if total > 0 else 0.0
+
+        return jsonify({
+            "total":          total,
+            "novos":          int(s.get("novos") or 0),
+            "importados":     importados,
+            "descartados":    int(s.get("descartados") or 0),
+            "score_medio":    round(float(s.get("score_medio") or 0), 1),
+            "taxa_conversao": taxa,
+            "melhor_uf":      melhor_uf["uf"]          if melhor_uf   else "—",
+            "melhor_produto": melhor_prod["produto_alvo"] if melhor_prod else "—",
+            "melhor_hora":    melhor_hora,
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route("/sdr/otimizar", methods=["POST"])
 @login_required
 @require_perfil("gerente")
