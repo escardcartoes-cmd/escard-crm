@@ -1,0 +1,255 @@
+{% extends 'base.html' %}
+{% block title %}Módulo de Cobrança — Krylo CRM{% endblock %}
+{% block topbar_title %}Módulo de Cobrança{% endblock %}
+{% block topbar_actions %}
+  <a href="{{ url_for('cobranca_cliente_novo') }}" class="btn btn-outline btn-sm">+ Cliente</a>
+{% endblock %}
+
+{% block content %}
+
+<!-- KPI Cards -->
+<div class="cards-grid" style="margin-bottom:20px">
+  <div class="card">
+    <div class="kpi">
+      <div>
+        <div class="kpi-val">{{ resumo.clientes_ativos }}</div>
+        <div class="kpi-lbl">Clientes Ativos</div>
+      </div>
+      <div class="kpi-icon ic-blue">
+        <svg width="22" height="22" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0H3"/>
+        </svg>
+      </div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="kpi">
+      <div>
+        <div class="kpi-val">R$&nbsp;{{ '{:,.0f}'.format(resumo.recuperado_mes) }}</div>
+        <div class="kpi-lbl">Recuperado no Mês</div>
+      </div>
+      <div class="kpi-icon ic-green">
+        <svg width="22" height="22" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+        </svg>
+      </div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="kpi">
+      <div>
+        <div class="kpi-val">R$&nbsp;{{ '{:,.0f}'.format(resumo.comissao_mes) }}</div>
+        <div class="kpi-lbl">Comissão do Mês</div>
+      </div>
+      <div class="kpi-icon ic-orange">
+        <svg width="22" height="22" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1"/>
+        </svg>
+      </div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="kpi">
+      <div>
+        <div class="kpi-val">R$&nbsp;{{ '{:,.0f}'.format(resumo.comissao_acumulada) }}</div>
+        <div class="kpi-lbl">Comissão Acumulada</div>
+      </div>
+      <div class="kpi-icon ic-purple">
+        <svg width="22" height="22" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10"/>
+        </svg>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="charts-grid">
+
+  <!-- Clientes -->
+  <div class="card" style="overflow:hidden;padding:0">
+    <div class="cob-section-header">
+      <strong>Clientes de Cobrança</strong>
+      <a href="{{ url_for('cobranca_cliente_novo') }}" class="btn btn-sm btn-outline">+ Novo</a>
+    </div>
+    {% if clientes %}
+    <table class="cob-table">
+      <thead>
+        <tr>
+          <th>Empresa</th>
+          <th>Contato</th>
+          <th style="text-align:center">Comissão %</th>
+          <th style="text-align:center">Status</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for c in clientes %}
+        <tr>
+          <td>
+            <strong>{{ c.nome }}</strong>
+            {% if c.cnpj %}<div class="text-muted text-sm">{{ c.cnpj }}</div>{% endif %}
+          </td>
+          <td>
+            {% if c.contato_nome %}<div>{{ c.contato_nome }}</div>{% endif %}
+            {% if c.contato_fone %}
+              <a href="https://wa.me/55{{ c.contato_fone | replace(' ','') | replace('-','') | replace('(','') | replace(')','') }}"
+                 class="text-muted text-sm" target="_blank">{{ c.contato_fone }}</a>
+            {% endif %}
+          </td>
+          <td style="text-align:center"><strong>{{ c.comissao_pct }}%</strong></td>
+          <td style="text-align:center">
+            <span class="cob-status cob-status-{{ c.status }}">{{ c.status.capitalize() }}</span>
+          </td>
+          <td>
+            <a href="{{ url_for('cobranca_cliente_editar', id=c.id) }}"
+               class="btn btn-sm btn-outline">Editar</a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="empty-state" style="padding:32px 0">
+      <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+          d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0H3"/>
+      </svg>
+      <p>Nenhum cliente cadastrado.</p>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- Gerar Relatório -->
+  <div class="card">
+    <p class="card-title">Gerar Relatório Mensal</p>
+    <form method="post" action="{{ url_for('cobranca_relatorio_gerar') }}">
+      <div class="form-group" style="margin-bottom:12px">
+        <label>Cliente</label>
+        <select name="cliente_id" required>
+          <option value="">Selecione…</option>
+          {% for c in clientes %}
+          <option value="{{ c.id }}">{{ c.nome }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-row" style="margin-bottom:12px">
+        <div class="form-group">
+          <label>Mês de Referência</label>
+          <input type="month" name="mes" value="{{ mes }}" required>
+        </div>
+        <div class="form-group">
+          <label>Total Cobrado (R$)</label>
+          <input type="number" name="total_cobrado" step="0.01" min="0" placeholder="0,00">
+        </div>
+      </div>
+      <div class="form-group" style="margin-bottom:12px">
+        <label>Total Recuperado (R$)</label>
+        <input type="number" name="total_recuperado" step="0.01" min="0" placeholder="0,00">
+      </div>
+      <div class="form-group" style="margin-bottom:16px">
+        <label>Observações</label>
+        <textarea name="observacoes" rows="2" placeholder="Observações adicionais…"></textarea>
+      </div>
+      <button type="submit" class="btn btn-primary btn-sm">Gerar Relatório</button>
+    </form>
+  </div>
+
+</div>
+
+<!-- Relatórios -->
+<div class="card" style="margin-top:20px">
+  <div class="flex items-center gap-2" style="justify-content:space-between;margin-bottom:16px">
+    <p class="card-title" style="margin-bottom:0">Relatórios</p>
+    <form method="get" action="{{ url_for('cobranca_index') }}" style="display:flex;gap:8px;align-items:center">
+      <input type="month" name="mes" value="{{ mes }}" class="form-control" style="height:34px;font-size:13px">
+      <button type="submit" class="btn btn-outline btn-sm">Filtrar</button>
+    </form>
+  </div>
+  {% if relatorios %}
+  <table class="cob-table">
+    <thead>
+      <tr>
+        <th>Mês</th>
+        <th>Cliente</th>
+        <th style="text-align:right">Cobrado</th>
+        <th style="text-align:right">Recuperado</th>
+        <th style="text-align:right">Comissão Krylo</th>
+        <th style="text-align:center">Status</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in relatorios %}
+      <tr id="rel-row-{{ r.id }}">
+        <td><strong>{{ r.mes_referencia }}</strong></td>
+        <td>{{ r.cliente_nome }}</td>
+        <td style="text-align:right">R$&nbsp;{{ '{:,.0f}'.format(r.total_cobrado) }}</td>
+        <td style="text-align:right">R$&nbsp;{{ '{:,.0f}'.format(r.total_recuperado) }}</td>
+        <td style="text-align:right"><strong style="color:#16A34A">R$&nbsp;{{ '{:,.2f}'.format(r.comissao_krylo) }}</strong></td>
+        <td style="text-align:center">
+          <span class="cob-status cob-status-rel-{{ r.status }}" id="rel-status-{{ r.id }}">
+            {{ {'rascunho':'Rascunho','enviado':'Enviado','retorno_recebido':'Retorno recebido'}[r.status] }}
+          </span>
+        </td>
+        <td>
+          <div style="display:flex;gap:6px">
+            {% if r.status == 'rascunho' %}
+            <button class="btn btn-sm btn-outline"
+                    onclick="marcarEnviado({{ r.id }})">✉ Enviado</button>
+            {% endif %}
+            {% if r.status != 'retorno_recebido' %}
+            <button class="btn btn-sm btn-outline"
+                    onclick="registrarRetorno({{ r.id }})">↩ Retorno</button>
+            {% endif %}
+          </div>
+        </td>
+      </tr>
+      {% if r.retorno_cliente %}
+      <tr style="background:#F8FAFC">
+        <td colspan="7" style="padding:8px 14px;font-size:12px;color:var(--muted)">
+          <strong>Retorno:</strong> {{ r.retorno_cliente }}
+        </td>
+      </tr>
+      {% endif %}
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="empty-state" style="padding:24px 0">
+    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+        d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+    </svg>
+    <p>Nenhum relatório para este mês.</p>
+  </div>
+  {% endif %}
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function marcarEnviado(id) {
+  const r = await fetch('/cobranca/relatorio/' + id + '/marcar-enviado', {
+    method:'POST', headers:{'X-Requested-With':'XMLHttpRequest'}});
+  if (r.ok) {
+    const span = document.getElementById('rel-status-' + id);
+    if (span) { span.textContent = 'Enviado'; span.className = 'cob-status cob-status-rel-enviado'; }
+  }
+}
+async function registrarRetorno(id) {
+  const texto = prompt('Digite o retorno do cliente:');
+  if (!texto) return;
+  const r = await fetch('/cobranca/relatorio/' + id + '/registrar-retorno', {
+    method:'POST',
+    headers:{'Content-Type':'application/json','X-Requested-With':'XMLHttpRequest'},
+    body: JSON.stringify({retorno: texto})
+  });
+  if (r.ok) location.reload();
+}
+</script>
+{% endblock %}

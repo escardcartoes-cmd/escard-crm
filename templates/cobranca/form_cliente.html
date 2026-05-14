@@ -1,0 +1,81 @@
+{% extends 'base.html' %}
+{% set editing = cliente is not none %}
+{% block title %}{{ 'Editar' if editing else 'Novo' }} Cliente de Cobrança — Krylo CRM{% endblock %}
+{% block topbar_title %}{{ 'Editar Cliente de Cobrança' if editing else 'Novo Cliente de Cobrança' }}{% endblock %}
+{% block topbar_actions %}
+  <a href="{{ url_for('cobranca_index') }}" class="btn btn-outline btn-sm">← Voltar</a>
+{% endblock %}
+
+{% block content %}
+<div class="form-wrap">
+  <div class="form-card">
+    <form method="post" action="{{ action }}">
+      <div class="form-section">
+        <div class="form-section-title">Dados da Empresa</div>
+        <div class="form-group">
+          <label>Nome da Empresa <span class="req">*</span></label>
+          <input type="text" name="nome" required value="{{ cliente.nome if editing else '' }}"
+                 placeholder="Ex: Loja do Zé Ltda">
+        </div>
+        <div class="form-group">
+          <label>CNPJ</label>
+          <input type="text" name="cnpj" value="{{ cliente.cnpj if editing else '' }}"
+                 placeholder="00.000.000/0001-00">
+        </div>
+      </div>
+
+      <div class="form-section">
+        <div class="form-section-title">Contato</div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Nome do Contato</label>
+            <input type="text" name="contato_nome"
+                   value="{{ cliente.contato_nome if editing else '' }}"
+                   placeholder="Nome do responsável">
+          </div>
+          <div class="form-group">
+            <label>Telefone / WhatsApp</label>
+            <input type="text" name="contato_fone"
+                   value="{{ cliente.contato_fone if editing else '' }}"
+                   placeholder="(11) 9 9999-0000">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>E-mail</label>
+          <input type="email" name="contato_email"
+                 value="{{ cliente.contato_email if editing else '' }}"
+                 placeholder="contato@empresa.com.br">
+        </div>
+      </div>
+
+      <div class="form-section">
+        <div class="form-section-title">Comercial</div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Comissão Krylo (%)</label>
+            <input type="number" name="comissao_pct" step="0.1" min="0" max="100"
+                   value="{{ cliente.comissao_pct if editing else '10' }}">
+          </div>
+          <div class="form-group">
+            <label>Status</label>
+            <select name="status">
+              {% for s in status_list %}
+              <option value="{{ s }}" {% if editing and cliente.status == s %}selected{% endif %}>
+                {{ s.capitalize() }}
+              </option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div class="form-actions">
+        <button type="submit" class="btn btn-primary">
+          {{ 'Salvar alterações' if editing else 'Cadastrar cliente' }}
+        </button>
+        <a href="{{ url_for('cobranca_index') }}" class="btn btn-outline">Cancelar</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

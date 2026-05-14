@@ -10,17 +10,23 @@ if not _USE_PG:
 
 _SQLITE_DDL = """
     CREATE TABLE IF NOT EXISTS empresas (
-        id          INTEGER PRIMARY KEY AUTOINCREMENT,
-        nome        TEXT    NOT NULL,
-        cnpj        TEXT    UNIQUE,
-        segmento    TEXT,
-        porte       TEXT,
-        status      TEXT    NOT NULL DEFAULT 'prospect',
-        telefone    TEXT,
-        email       TEXT,
-        cidade      TEXT,
-        estado      TEXT,
-        criado_em   TEXT    DEFAULT (datetime('now', 'localtime'))
+        id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+        nome                TEXT    NOT NULL,
+        cnpj                TEXT    UNIQUE,
+        segmento            TEXT,
+        porte               TEXT,
+        status              TEXT    NOT NULL DEFAULT 'prospect',
+        telefone            TEXT,
+        email               TEXT,
+        cidade              TEXT,
+        estado              TEXT,
+        produtos_ativos     TEXT,
+        num_funcionarios    INTEGER,
+        cliente_ativo       INTEGER DEFAULT 0,
+        valor_mensal        REAL,
+        tipo_cartao         TEXT,
+        nome_private_label  TEXT,
+        criado_em           TEXT    DEFAULT (datetime('now', 'localtime'))
     );
 
     CREATE TABLE IF NOT EXISTS contatos (
@@ -92,6 +98,46 @@ _SQLITE_DDL = """
         corpo_email       TEXT,
         status            TEXT    NOT NULL DEFAULT 'pendente',
         criado_em         TEXT    DEFAULT (datetime('now', 'localtime'))
+    );
+
+    CREATE TABLE IF NOT EXISTS clientes_cobranca (
+        id              INTEGER PRIMARY KEY AUTOINCREMENT,
+        nome            TEXT    NOT NULL,
+        cnpj            TEXT,
+        contato_nome    TEXT,
+        contato_fone    TEXT,
+        contato_email   TEXT,
+        comissao_pct    REAL    NOT NULL DEFAULT 10,
+        status          TEXT    NOT NULL DEFAULT 'ativo',
+        criado_em       TEXT    DEFAULT (datetime('now', 'localtime'))
+    );
+
+    CREATE TABLE IF NOT EXISTS relatorios_cobranca (
+        id               INTEGER PRIMARY KEY AUTOINCREMENT,
+        cliente_id       INTEGER NOT NULL,
+        mes_referencia   TEXT    NOT NULL,
+        total_cobrado    REAL    NOT NULL DEFAULT 0,
+        total_recuperado REAL    NOT NULL DEFAULT 0,
+        comissao_krylo   REAL    NOT NULL DEFAULT 0,
+        observacoes      TEXT,
+        retorno_cliente  TEXT,
+        status           TEXT    NOT NULL DEFAULT 'rascunho',
+        data_envio       TEXT,
+        criado_em        TEXT    DEFAULT (datetime('now', 'localtime')),
+        FOREIGN KEY (cliente_id) REFERENCES clientes_cobranca(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS recebiveis_krylo (
+        id              INTEGER PRIMARY KEY AUTOINCREMENT,
+        empresa_id      INTEGER NOT NULL,
+        mes_referencia  TEXT    NOT NULL,
+        valor           REAL    NOT NULL,
+        vencimento      TEXT,
+        status          TEXT    NOT NULL DEFAULT 'pendente',
+        data_pagamento  TEXT,
+        observacoes     TEXT,
+        criado_em       TEXT    DEFAULT (datetime('now', 'localtime')),
+        FOREIGN KEY (empresa_id) REFERENCES empresas(id) ON DELETE CASCADE
     );
 
     CREATE TABLE IF NOT EXISTS documentos_ia (
@@ -203,6 +249,20 @@ def init_db() -> None:
         conn.commit()
     except Exception:
         pass  # Column already exists
+    # Migration: Motor de Expansão columns
+    for _col in [
+        "ALTER TABLE empresas ADD COLUMN produtos_ativos TEXT",
+        "ALTER TABLE empresas ADD COLUMN num_funcionarios INTEGER",
+        "ALTER TABLE empresas ADD COLUMN cliente_ativo INTEGER DEFAULT 0",
+        "ALTER TABLE empresas ADD COLUMN valor_mensal REAL",
+        "ALTER TABLE empresas ADD COLUMN tipo_cartao TEXT",
+        "ALTER TABLE empresas ADD COLUMN nome_private_label TEXT",
+    ]:
+        try:
+            conn.execute(_col)
+            conn.commit()
+        except Exception:
+            pass
     # Migration: Deal Radar columns
     for _col in [
         "ALTER TABLE oportunidades ADD COLUMN score_fechamento INTEGER DEFAULT 0",

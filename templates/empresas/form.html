@@ -87,6 +87,63 @@
         </div>
       </div>
 
+      <div class="form-section">
+        <div class="form-section-title">Dados Comerciais</div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Nº de Funcionários</label>
+            <input type="number" name="num_funcionarios" min="0"
+                   value="{{ empresa.num_funcionarios if editing and empresa.num_funcionarios else '' }}"
+                   placeholder="Ex: 150">
+          </div>
+          <div class="form-group">
+            <label>Valor Mensal Atual (R$)</label>
+            <input type="number" name="valor_mensal" step="0.01" min="0"
+                   value="{{ empresa.valor_mensal if editing and empresa.valor_mensal else '' }}"
+                   placeholder="Ex: 52500.00">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Tipo de Cartão</label>
+          <select name="tipo_cartao">
+            <option value="">Selecione…</option>
+            {% for t in ['Alimentação','Refeição','Combustível','Cultura','Saúde','Private Label','Múltiplos'] %}
+            <option value="{{ t }}"
+              {% if editing and empresa.tipo_cartao == t %}selected{% endif %}>{{ t }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Nome Private Label</label>
+          <input type="text" name="nome_private_label"
+                 value="{{ empresa.nome_private_label if editing and empresa.nome_private_label else '' }}"
+                 placeholder="Nome personalizado do cartão (se houver)">
+        </div>
+        <div class="form-group">
+          <label>Produtos Ativos</label>
+          <div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:6px">
+            {% for p in ['Alimentação','Refeição','Combustível','Cultura','Saúde','Private Label'] %}
+            {% set is_checked = editing and empresa.produtos_ativos and p in empresa.produtos_ativos %}
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;
+                          font-size:13px;font-weight:400;color:var(--text)">
+              <input type="checkbox" name="produtos_ativos" value="{{ p }}"
+                     {% if is_checked %}checked{% endif %}
+                     style="width:15px;height:15px;accent-color:var(--orange-dk)">
+              {{ p }}
+            </label>
+            {% endfor %}
+          </div>
+        </div>
+        <div class="form-group">
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+            <input type="checkbox" name="cliente_ativo" value="1"
+                   {% if editing and empresa.cliente_ativo %}checked{% endif %}
+                   style="width:15px;height:15px;accent-color:var(--orange-dk)">
+            <span style="font-size:13px;font-weight:500">Cliente Ativo para Motor de Expansão e Recebíveis</span>
+          </label>
+        </div>
+      </div>
+
       <div class="form-actions">
         <button type="submit" class="btn btn-primary">
           {{ 'Salvar alterações' if editing else 'Cadastrar empresa' }}

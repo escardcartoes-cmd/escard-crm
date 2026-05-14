@@ -7,6 +7,7 @@ from datetime import timedelta
 from dotenv import load_dotenv
 load_dotenv(override=True)
 
+from datetime import date
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, Response
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
 import database
@@ -17,6 +18,9 @@ import models.atividade as atv_model
 import models.prospeccao as prosp_model
 import models.usuario as user_model
 import models.cadencia as cad_model
+import models.expansao as exp_model
+import models.cobranca as cob_model
+import models.recebivel as rec_model
 from models.usuario import require_perfil, PERFIS, PERFIL_LABELS
 import ai
 
@@ -104,6 +108,10 @@ def dashboard():
         1 for r in radar
         if r.get("dias_sem_contato") is not None and r["dias_sem_contato"] > 7
     )
+    potencial_expansao = exp_model.potencial_total()
+    cob_resumo = cob_model.resumo()
+    mes_atual = str(date.today())[:7]
+    rec_resumo = rec_model.resumo_mes(mes_atual)
     return render_template(
         "dashboard.html",
         status_counts=status_counts,
@@ -115,6 +123,10 @@ def dashboard():
         em_aberto=em_aberto,
         radar=radar[:5],
         radar_alerta_count=radar_alerta_count,
+        potencial_expansao=potencial_expansao,
+        cob_resumo=cob_resumo,
+        rec_resumo=rec_resumo,
+        mes_atual=mes_atual,
     )
 
 
@@ -200,6 +212,15 @@ def empresas_excluir_lote():
 
 
 def _form_empresa(f):
+    produtos = f.getlist("produtos_ativos") or []
+    try:
+        num_func = int(f.get("num_funcionarios", "") or 0) or None
+    except ValueError:
+        num_func = None
+    try:
+        val_mensal = float(f.get("valor_mensal", "").replace(",", ".") or 0) or None
+    except ValueError:
+        val_mensal = None
     return dict(
         nome=f.get("nome", "").strip(),
         cnpj=f.get("cnpj", "").strip() or None,
@@ -210,6 +231,12 @@ def _form_empresa(f):
         email=f.get("email", "").strip() or None,
         cidade=f.get("cidade", "").strip() or None,
         estado=f.get("estado", "").strip() or None,
+        produtos_ativos=", ".join(produtos) if produtos else None,
+        num_funcionarios=num_func,
+        cliente_ativo=1 if f.get("cliente_ativo") else 0,
+        valor_mensal=val_mensal,
+        tipo_cartao=f.get("tipo_cartao", "").strip() or None,
+        nome_private_label=f.get("nome_private_label", "").strip() or None,
     )
 
 
@@ -630,6 +657,9 @@ def _processar_linhas(linhas: list, mapa: dict) -> tuple:
                 "porte": None, "status": "prospect",
                 "telefone": None, "email": None,
                 "cidade": _v("cidade"), "estado": None,
+                "produtos_ativos": None, "num_funcionarios": None,
+                "cliente_ativo": 0, "valor_mensal": None,
+                "tipo_cartao": None, "nome_private_label": None,
             })
             empresas_cache[chave_emp] = emp_id
         else:
@@ -986,6 +1016,235 @@ def cadencia_concluir(id):
 @require_perfil("vendedor")
 def cadencia_cancelar(id):
     cad_model.cancelar(id)
+    return jsonify({"ok": True})
+
+
+# ── Motor de Expansão ────────────────────────────────────────────────────────
+
+@app.route("/expansao")
+@login_required
+@require_perfil('gerente')
+def expansao_index():
+    oportunidades = exp_model.listar_oportunidades()
+    potencial = sum(r["potencial_mensal"] for r in oportunidades)
+    return render_template(
+        "expansao/index.html",
+        oportunidades=oportunidades,
+        potencial=potencial,
+        produtos=exp_model.PRODUTOS,
+    )
+
+
+@app.route("/expansao/pitch/<int:empresa_id>", methods=["POST"])
+@login_required
+@require_perfil('vendedor')
+def expansao_pitch(empresa_id):
+    import re as _re
+    try:
+        emp = emp_model.buscar_por_id(empresa_id)
+        if not emp:
+            return jsonify({"error": "Empresa não encontrada"}), 404
+        emp = dict(emp)
+        ativos = [p.strip() for p in (emp.get("produtos_ativos") or "").split(",") if p.strip()]
+        faltando = [p for p in exp_model.PRODUTOS if p not in ativos]
+        if not faltando:
+            return jsonify({"pitch": "Esta empresa já utiliza todos os produtos Krylo disponíveis!"})
+        prompt = f"""Você é um especialista em vendas da Krylo Cartão de Benefícios B2B.
+Crie um pitch de upsell personalizado e convincente (máx 3 parágrafos) para a empresa abaixo.
+Retorne SOMENTE um JSON válido: {{"pitch": "<texto completo>"}}
+
+Empresa: {emp['nome']}
+Segmento: {emp.get('segmento') or 'não informado'} | Porte: {emp.get('porte') or 'não informado'}
+Funcionários: {emp.get('num_funcionarios') or 'não informado'}
+Produtos atuais: {', '.join(ativos) if ativos else 'nenhum'}
+Produtos para oferecer: {', '.join(faltando)}
+Valor mensal atual: R$ {emp.get('valor_mensal') or 0:,.0f}
+
+Destaque o benefício principal de cada produto faltando, o impacto para os funcionários e a facilidade de adicionar ao pacote atual. Tom consultivo e direto."""
+
+        import anthropic as _ant
+        client = _ant.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+        resp = client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=800,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        raw = resp.content[0].text.strip()
+        raw = _re.sub(r"^```(?:json)?\s*", "", raw, flags=_re.MULTILINE)
+        raw = _re.sub(r"```\s*$", "", raw, flags=_re.MULTILINE)
+        result = json.loads(raw.strip())
+        return jsonify({"ok": True, "pitch": result.get("pitch", "")})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/expansao/salvar/<int:empresa_id>", methods=["POST"])
+@login_required
+@require_perfil('gerente')
+def expansao_salvar(empresa_id):
+    dados = request.json or {}
+    produtos = dados.get("produtos_ativos", [])
+    try:
+        num_func = int(dados.get("num_funcionarios") or 0) or None
+    except (ValueError, TypeError):
+        num_func = None
+    try:
+        val_mensal = float(dados.get("valor_mensal") or 0) or None
+    except (ValueError, TypeError):
+        val_mensal = None
+    exp_model.atualizar_dados_comerciais(empresa_id, {
+        "produtos_ativos": ", ".join(produtos) if isinstance(produtos, list) else produtos,
+        "num_funcionarios": num_func,
+        "cliente_ativo": 1 if dados.get("cliente_ativo") else 0,
+        "valor_mensal": val_mensal,
+        "tipo_cartao": (dados.get("tipo_cartao") or "").strip() or None,
+        "nome_private_label": (dados.get("nome_private_label") or "").strip() or None,
+    })
+    return jsonify({"ok": True})
+
+
+# ── Módulo de Cobrança ────────────────────────────────────────────────────────
+
+@app.route("/cobranca")
+@login_required
+@require_perfil('gerente')
+def cobranca_index():
+    clientes = cob_model.listar_clientes()
+    resumo = cob_model.resumo()
+    mes = request.args.get("mes", str(date.today())[:7])
+    relatorios = cob_model.listar_relatorios(mes=mes)
+    return render_template(
+        "cobranca/index.html",
+        clientes=clientes,
+        resumo=resumo,
+        relatorios=relatorios,
+        mes=mes,
+        status_list=cob_model.STATUS_CLIENTE,
+    )
+
+
+@app.route("/cobranca/clientes/novo", methods=["GET", "POST"])
+@login_required
+@require_perfil('gerente')
+def cobranca_cliente_novo():
+    if request.method == "POST":
+        try:
+            pct = float(request.form.get("comissao_pct", "10").replace(",", ".") or 10)
+        except ValueError:
+            pct = 10
+        cob_model.criar_cliente({
+            "nome": request.form.get("nome", "").strip(),
+            "cnpj": request.form.get("cnpj", "").strip() or None,
+            "contato_nome": request.form.get("contato_nome", "").strip() or None,
+            "contato_fone": request.form.get("contato_fone", "").strip() or None,
+            "contato_email": request.form.get("contato_email", "").strip() or None,
+            "comissao_pct": pct,
+            "status": request.form.get("status", "ativo"),
+        })
+        flash("Cliente de cobrança cadastrado.", "success")
+        return redirect(url_for("cobranca_index"))
+    return render_template("cobranca/form_cliente.html",
+                           cliente=None, action=url_for("cobranca_cliente_novo"),
+                           status_list=cob_model.STATUS_CLIENTE)
+
+
+@app.route("/cobranca/clientes/<int:id>/editar", methods=["GET", "POST"])
+@login_required
+@require_perfil('gerente')
+def cobranca_cliente_editar(id):
+    c = cob_model.buscar_cliente(id)
+    if not c:
+        flash("Cliente não encontrado.", "danger")
+        return redirect(url_for("cobranca_index"))
+    if request.method == "POST":
+        try:
+            pct = float(request.form.get("comissao_pct", "10").replace(",", ".") or 10)
+        except ValueError:
+            pct = 10
+        cob_model.atualizar_cliente(id, {
+            "nome": request.form.get("nome", "").strip(),
+            "cnpj": request.form.get("cnpj", "").strip() or None,
+            "contato_nome": request.form.get("contato_nome", "").strip() or None,
+            "contato_fone": request.form.get("contato_fone", "").strip() or None,
+            "contato_email": request.form.get("contato_email", "").strip() or None,
+            "comissao_pct": pct,
+            "status": request.form.get("status", "ativo"),
+        })
+        flash("Cliente atualizado.", "success")
+        return redirect(url_for("cobranca_index"))
+    return render_template("cobranca/form_cliente.html",
+                           cliente=c, action=url_for("cobranca_cliente_editar", id=id),
+                           status_list=cob_model.STATUS_CLIENTE)
+
+
+@app.route("/cobranca/relatorio/gerar", methods=["POST"])
+@login_required
+@require_perfil('gerente')
+def cobranca_relatorio_gerar():
+    try:
+        cliente_id = int(request.form.get("cliente_id") or 0)
+        mes = request.form.get("mes", str(date.today())[:7])
+        total_cobrado = float(request.form.get("total_cobrado", "0").replace(",", ".") or 0)
+        total_recuperado = float(request.form.get("total_recuperado", "0").replace(",", ".") or 0)
+        obs = request.form.get("observacoes", "").strip()
+        cob_model.gerar_relatorio(cliente_id, mes, total_cobrado, total_recuperado, obs)
+        flash("Relatório gerado com sucesso.", "success")
+    except Exception as e:
+        flash(f"Erro ao gerar relatório: {e}", "danger")
+    return redirect(url_for("cobranca_index", mes=request.form.get("mes", "")))
+
+
+@app.route("/cobranca/relatorio/<int:id>/marcar-enviado", methods=["POST"])
+@login_required
+@require_perfil('gerente')
+def cobranca_relatorio_enviado(id):
+    cob_model.marcar_enviado(id)
+    return jsonify({"ok": True})
+
+
+@app.route("/cobranca/relatorio/<int:id>/registrar-retorno", methods=["POST"])
+@login_required
+@require_perfil('gerente')
+def cobranca_relatorio_retorno(id):
+    retorno = (request.json or {}).get("retorno", "").strip()
+    if not retorno:
+        return jsonify({"error": "Retorno não pode ser vazio"}), 400
+    cob_model.registrar_retorno(id, retorno)
+    return jsonify({"ok": True})
+
+
+# ── Recebíveis da Krylo ───────────────────────────────────────────────────────
+
+@app.route("/recebiveis")
+@login_required
+@require_perfil('gerente')
+def recebiveis_index():
+    mes = request.args.get("mes", str(date.today())[:7])
+    recebiveis = rec_model.listar(mes=mes)
+    resumo = rec_model.resumo_mes(mes)
+    return render_template(
+        "recebiveis/index.html",
+        recebiveis=recebiveis,
+        resumo=resumo,
+        mes=mes,
+    )
+
+
+@app.route("/recebiveis/gerar-mensal", methods=["POST"])
+@login_required
+@require_perfil('gerente')
+def recebiveis_gerar():
+    mes = request.form.get("mes", str(date.today())[:7])
+    count = rec_model.gerar_mensal(mes)
+    flash(f"{count} recebível(eis) gerado(s) para {mes}.", "success")
+    return redirect(url_for("recebiveis_index", mes=mes))
+
+
+@app.route("/recebiveis/<int:id>/pagar", methods=["POST"])
+@login_required
+@require_perfil('gerente')
+def recebiveis_pagar(id):
+    rec_model.marcar_pago(id)
     return jsonify({"ok": True})
 
 
