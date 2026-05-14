@@ -541,7 +541,9 @@ def rodar_prospeccao_autonoma(db=None, config_override: dict = None) -> dict:
             finalizar_sessao(db, sessao_id, _stats0)
             return {"status": "inativo", "sessao_id": sessao_id, **_stats0, "salvos": 0}
 
-        hora_atual = datetime.now().hour
+        from datetime import timezone, timedelta
+        fuso_brasilia = timezone(timedelta(hours=-3))
+        hora_atual = datetime.now(fuso_brasilia).hour
         h_ini = int(cfg.get("horario_inicio") or 8)
         h_fim = int(cfg.get("horario_fim") or 18)
         if hora_atual < h_ini or hora_atual >= h_fim:
