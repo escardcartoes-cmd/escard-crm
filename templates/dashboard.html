@@ -97,7 +97,13 @@
       </p>
       <p class="text-muted text-sm">Top 5 oportunidades abertas por score de fechamento</p>
     </div>
-    <a href="{{ url_for('oportunidades_kanban') }}" class="btn btn-outline btn-sm">Ver kanban</a>
+    <div style="display:flex;gap:8px">
+      <a href="{{ url_for('cadencias_index') }}" class="btn btn-sm"
+         style="background:linear-gradient(135deg,#16A34A,#15803D);color:#fff">
+        ⚡ Ver Cadências
+      </a>
+      <a href="{{ url_for('oportunidades_kanban') }}" class="btn btn-outline btn-sm">Ver kanban</a>
+    </div>
   </div>
 
   {% if radar %}
