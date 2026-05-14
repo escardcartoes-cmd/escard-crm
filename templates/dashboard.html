@@ -20,6 +20,26 @@
 </div>
 {% endif %}
 
+<!-- Smart Alerts -->
+{% if rec_atrasados_count > 0 %}
+<div class="smart-alert smart-alert-red">
+  <span>🔴 <strong>{{ rec_atrasados_count }} recebível(is) atrasado(s)</strong> — tome ação antes que piore.</span>
+  <a href="{{ url_for('recebiveis_index') }}">Ver Recebíveis →</a>
+</div>
+{% endif %}
+{% if cadencias_hoje_count > 0 %}
+<div class="smart-alert smart-alert-yellow">
+  <span>⚡ <strong>{{ cadencias_hoje_count }} cadência(s) para hoje</strong> — não perca o timing de contato.</span>
+  <a href="{{ url_for('cadencias_index') }}">Ver Cadências →</a>
+</div>
+{% endif %}
+{% if radar_nao_lidos and radar_nao_lidos.total > 0 %}
+<div class="smart-alert smart-alert-blue">
+  <span>📡 <strong>{{ radar_nao_lidos.total }} novo(s) no Radar de Mercado</strong> — editais e alertas aguardando.</span>
+  <a href="{{ url_for('radar_index') }}">Ver Radar →</a>
+</div>
+{% endif %}
+
 <!-- KPI Cards -->
 <div class="cards-grid">
   <div class="card">
@@ -81,6 +101,67 @@
       </div>
     </div>
   </div>
+</div>
+
+<!-- Relatório da semana + Resumo do sistema -->
+<div style="display:grid;grid-template-columns:2fr 1fr;gap:18px;margin-bottom:20px">
+
+  <div class="card" style="display:flex;flex-direction:column;justify-content:space-between">
+    <div>
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:14px">
+        <div>
+          <p class="card-title" style="margin-bottom:2px">📊 Relatório da Semana</p>
+          <p class="text-muted text-sm">Meta mensal: R$ 100.000</p>
+        </div>
+        <a href="{{ url_for('relatorio_semanal') }}" class="btn btn-primary btn-sm" style="white-space:nowrap;flex-shrink:0">
+          📋 Ver completo
+        </a>
+      </div>
+      <div class="meta-bar-wrap" style="margin-bottom:10px">
+        <div class="meta-bar-track">
+          <div class="meta-bar-fill {% if pct_meta >= 80 %}meta-bar-green{% elif pct_meta >= 40 %}meta-bar-yellow{% else %}meta-bar-red{% endif %}"
+               style="width:{{ [pct_meta, 100]|min }}%"></div>
+        </div>
+        <span class="meta-bar-pct">{{ pct_meta }}%</span>
+      </div>
+      <p class="text-sm" style="color:var(--muted)">
+        R$&nbsp;{{ '{:,.0f}'.format(receita_mes) }} receita este mês &nbsp;·&nbsp;
+        {{ deals_fechados_semana }} deal(s) fechado(s) esta semana
+      </p>
+      {% if top_acao %}
+      <p class="text-sm" style="margin-top:8px;color:#4A3F35">
+        <strong>→</strong> {{ top_acao }}
+      </p>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="card">
+    <p class="card-title" style="margin-bottom:14px">🗂 Resumo do Sistema</p>
+    <div class="sistema-stats">
+      <div class="sistema-stat">
+        <span class="sistema-num">{{ total_empresas }}</span>
+        <span class="sistema-lbl">Empresas</span>
+      </div>
+      <div class="sistema-stat">
+        <span class="sistema-num">{{ em_aberto }}</span>
+        <span class="sistema-lbl">Oport. abertas</span>
+      </div>
+      <div class="sistema-stat">
+        <span class="sistema-num">{{ cadencias_ativas_count }}</span>
+        <span class="sistema-lbl">Cadências ativas</span>
+      </div>
+      <div class="sistema-stat">
+        <span class="sistema-num">{{ portais_ativos }}</span>
+        <span class="sistema-lbl">Portais ativos</span>
+      </div>
+      <div class="sistema-stat">
+        <span class="sistema-num">{{ cob_resumo.clientes_ativos }}</span>
+        <span class="sistema-lbl">Clientes cobrança</span>
+      </div>
+    </div>
+  </div>
+
 </div>
 
 <!-- Expansion + Cobrança + Recebíveis row -->
@@ -292,6 +373,22 @@
   </div>
   {% endif %}
 </div>
+<!-- Floating Action Buttons -->
+<div class="fab-cluster">
+  <a href="{{ url_for('oportunidades_nova') }}" class="fab-btn fab-btn-primary" title="Nova oportunidade">
+    <span class="fab-icon">+</span>
+    <span class="fab-lbl">Nova oportunidade</span>
+  </a>
+  <a href="{{ url_for('cadencias_index') }}" class="fab-btn fab-btn-green" title="Cadências de hoje">
+    <span class="fab-icon">⚡</span>
+    <span class="fab-lbl">Cadências de hoje</span>
+  </a>
+  <a href="{{ url_for('relatorio_semanal') }}" class="fab-btn fab-btn-brown" title="Relatório semanal">
+    <span class="fab-icon">📋</span>
+    <span class="fab-lbl">Relatório semanal</span>
+  </a>
+</div>
+
 {% endblock %}
 
 {% block scripts %}

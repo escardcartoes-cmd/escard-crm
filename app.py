@@ -23,6 +23,7 @@ import models.cobranca as cob_model
 import models.recebivel as rec_model
 import models.radar as radar_model
 import models.portal as portal_model
+import models.relatorio as rel_model
 from models.usuario import require_perfil, PERFIS, PERFIL_LABELS
 import ai
 
@@ -122,6 +123,8 @@ def dashboard():
     mes_atual = str(date.today())[:7]
     rec_resumo = rec_model.resumo_mes(mes_atual)
     radar_badge = radar_model.contar_nao_lidos()
+    dash_extra = rel_model.coletar_dashboard_extra(mes_atual)
+    top_acao = (radar[0].get("proxima_acao") or "") if radar else ""
     return render_template(
         "dashboard.html",
         status_counts=status_counts,
@@ -138,6 +141,13 @@ def dashboard():
         rec_resumo=rec_resumo,
         mes_atual=mes_atual,
         radar_badge=radar_badge,
+        portais_ativos=dash_extra["portais_ativos"],
+        rec_atrasados_count=dash_extra["rec_atrasados_count"],
+        deals_fechados_semana=dash_extra["deals_fechados_semana"],
+        receita_mes=dash_extra["receita_mes"],
+        pct_meta=dash_extra["pct_meta"],
+        cadencias_ativas_count=dash_extra["cadencias_ativas_count"],
+        top_acao=top_acao,
     )
 
 
@@ -1381,6 +1391,25 @@ def recebiveis_gerar():
 def recebiveis_pagar(id):
     rec_model.marcar_pago(id)
     return jsonify({"ok": True})
+
+
+# ── Relatório Executivo Semanal ───────────────────────────────────────────────
+
+@app.route("/relatorio/semanal")
+@login_required
+def relatorio_semanal():
+    dados = rel_model.coletar_semanal()
+    try:
+        proximos_passos = ai.proximos_passos_semanal(dados)
+    except Exception:
+        proximos_passos = "Configure ANTHROPIC_API_KEY para gerar sugestões de IA."
+    return render_template("relatorio_semanal.html", d=dados, proximos_passos=proximos_passos)
+
+
+@app.route("/relatorio/semanal/json")
+@login_required
+def relatorio_semanal_json():
+    return jsonify(rel_model.coletar_semanal())
 
 
 # ── Usuários ─────────────────────────────────────────────────────────────────
