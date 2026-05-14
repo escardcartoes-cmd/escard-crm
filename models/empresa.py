@@ -26,8 +26,14 @@ def buscar_por_id(id_: int):
 def criar(dados: dict) -> int:
     conn = get_connection()
     cur = conn.execute(
-        """INSERT INTO empresas (nome, cnpj, segmento, porte, status, telefone, email, cidade, estado)
-           VALUES (:nome, :cnpj, :segmento, :porte, :status, :telefone, :email, :cidade, :estado)""",
+        """INSERT INTO empresas
+               (nome, cnpj, segmento, porte, status, telefone, email, cidade, estado,
+                produtos_ativos, num_funcionarios, cliente_ativo, valor_mensal,
+                tipo_cartao, nome_private_label)
+           VALUES
+               (:nome, :cnpj, :segmento, :porte, :status, :telefone, :email, :cidade, :estado,
+                :produtos_ativos, :num_funcionarios, :cliente_ativo, :valor_mensal,
+                :tipo_cartao, :nome_private_label)""",
         dados,
     )
     conn.commit()
@@ -41,7 +47,10 @@ def atualizar(id_: int, dados: dict) -> None:
     conn.execute(
         """UPDATE empresas
            SET nome=:nome, cnpj=:cnpj, segmento=:segmento, porte=:porte,
-               status=:status, telefone=:telefone, email=:email, cidade=:cidade, estado=:estado
+               status=:status, telefone=:telefone, email=:email, cidade=:cidade, estado=:estado,
+               produtos_ativos=:produtos_ativos, num_funcionarios=:num_funcionarios,
+               cliente_ativo=:cliente_ativo, valor_mensal=:valor_mensal,
+               tipo_cartao=:tipo_cartao, nome_private_label=:nome_private_label
            WHERE id=:id""",
         {**dados, "id": id_},
     )

@@ -83,6 +83,59 @@
   </div>
 </div>
 
+<!-- Expansion + Cobrança + Recebíveis row -->
+<div class="cards-grid" style="margin-bottom:20px">
+
+  <div class="card" style="cursor:pointer" onclick="location.href='{{ url_for('expansao_index') }}'">
+    <div class="kpi">
+      <div>
+        <div class="kpi-val" style="color:#16A34A">R$&nbsp;{{ '{:,.0f}'.format(potencial_expansao) }}</div>
+        <div class="kpi-lbl">Potencial de Expansão/mês</div>
+      </div>
+      <div class="kpi-icon" style="background:#F0FDF4;color:#16A34A">
+        <svg width="22" height="22" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/>
+        </svg>
+      </div>
+    </div>
+    <div style="font-size:11px;color:var(--muted);margin-top:6px">→ Motor de Expansão</div>
+  </div>
+
+  <div class="card" style="cursor:pointer" onclick="location.href='{{ url_for('cobranca_index') }}'">
+    <div class="kpi">
+      <div>
+        <div class="kpi-val">R$&nbsp;{{ '{:,.0f}'.format(cob_resumo.comissao_mes) }}</div>
+        <div class="kpi-lbl">Comissão de Cobrança/mês</div>
+      </div>
+      <div class="kpi-icon ic-orange">
+        <svg width="22" height="22" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1"/>
+        </svg>
+      </div>
+    </div>
+    <div style="font-size:11px;color:var(--muted);margin-top:6px">{{ cob_resumo.clientes_ativos }} cliente(s) · → Módulo de Cobrança</div>
+  </div>
+
+  <div class="card" style="cursor:pointer" onclick="location.href='{{ url_for('recebiveis_index') }}'">
+    <div class="kpi">
+      <div>
+        <div class="kpi-val" style="color:#D97706">R$&nbsp;{{ '{:,.0f}'.format(rec_resumo.pendente) }}</div>
+        <div class="kpi-lbl">Recebíveis Pendentes</div>
+      </div>
+      <div class="kpi-icon ic-purple">
+        <svg width="22" height="22" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5l7 7v12a2 2 0 01-2 2z"/>
+        </svg>
+      </div>
+    </div>
+    <div style="font-size:11px;color:var(--muted);margin-top:6px">Mês {{ mes_atual }} · → Recebíveis</div>
+  </div>
+
+</div>
+
 <!-- Charts -->
 <div class="charts-grid">
   <div class="card">
