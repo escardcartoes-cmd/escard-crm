@@ -125,17 +125,23 @@ def _job_prospeccao_autonoma():
     except Exception as _e:
         print(f"[SCHEDULER] Aviso ao ler sdr_config: {_e}")
 
+    import traceback as _tb
+    _db_sdr = None
     try:
         from models.prospeccao_autonoma import rodar_prospeccao_autonoma
         _db_sdr = database.get_new_db_connection()
         resultado = rodar_prospeccao_autonoma(_db_sdr)
-        try:
-            _db_sdr.close()
-        except Exception:
-            pass
-        print(f"[SCHEDULER] prospeccao_autonoma: {resultado}")
+        print(f"[SCHEDULER] resultado: {resultado}")
     except Exception as e:
-        print(f"[SCHEDULER] Erro: {e}")
+        print(f"[SCHEDULER] ERRO: {e}")
+        _tb.print_exc()
+        if _db_sdr:
+            try: _db_sdr.rollback()
+            except Exception: pass
+    finally:
+        if _db_sdr:
+            try: _db_sdr.close()
+            except Exception: pass
 
 
 # Lê intervalo de execução do sdr_config (padrão 6h)
@@ -1026,16 +1032,22 @@ def prospeccao_autonoma_rodar():
     from models.prospeccao_autonoma import rodar_prospeccao_autonoma
 
     def _rodar():
+        import traceback
+        _db = None
         try:
             _db = database.get_new_db_connection()
             resultado = rodar_prospeccao_autonoma(_db)
-            try:
-                _db.close()
-            except Exception:
-                pass
-            print(f"[MANUAL] prospeccao_autonoma: {resultado}")
+            print(f"[SDR-MANUAL] resultado: {resultado}")
         except Exception as e:
-            print(f"[MANUAL] Erro: {e}")
+            print(f"[SDR-MANUAL] ERRO: {e}")
+            traceback.print_exc()
+            if _db:
+                try: _db.rollback()
+                except Exception: pass
+        finally:
+            if _db:
+                try: _db.close()
+                except Exception: pass
 
     threading.Thread(target=_rodar, daemon=True).start()
     return jsonify({"status": "iniciado", "mensagem": "Prospecção rodando em background"})

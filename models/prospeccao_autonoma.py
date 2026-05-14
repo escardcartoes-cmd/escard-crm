@@ -531,19 +531,25 @@ def rodar_prospeccao_autonoma(db=None, config_override: dict = None) -> dict:
         if config_override:
             cfg.update(config_override)
 
+        # Cria sessão ANTES dos checks para o terminal sempre mostrar algo
+        sessao_id = criar_sessao(db, cfg)
+        _stats0 = {"encontrados": 0, "aprovados": 0, "importados": 0,
+                   "cadencias": 0, "descartados": 0, "filtrados": 0}
+
         if not cfg.get("ativo", 1):
-            return {"status": "inativo", "encontrados": 0, "importados": 0,
-                    "salvos": 0, "cadencias": 0, "descartados": 0}
+            _log(db, sessao_id, "info", "SDR desativado — ative o SDR nas configurações para rodar")
+            finalizar_sessao(db, sessao_id, _stats0)
+            return {"status": "inativo", "sessao_id": sessao_id, **_stats0, "salvos": 0}
 
         hora_atual = datetime.now().hour
         h_ini = int(cfg.get("horario_inicio") or 8)
         h_fim = int(cfg.get("horario_fim") or 18)
         if hora_atual < h_ini or hora_atual >= h_fim:
-            return {"status": "fora_horario", "encontrados": 0, "importados": 0,
-                    "salvos": 0, "cadencias": 0, "descartados": 0,
-                    "motivo": f"Fora do horário ({hora_atual}h, janela {h_ini}h–{h_fim}h)"}
-
-        sessao_id = criar_sessao(db, cfg)
+            motivo = f"Fora do horário ({hora_atual}h, janela {h_ini}h–{h_fim}h)"
+            _log(db, sessao_id, "info", f"SDR não rodou: {motivo}")
+            finalizar_sessao(db, sessao_id, _stats0)
+            return {"status": "fora_horario", "sessao_id": sessao_id, **_stats0,
+                    "salvos": 0, "motivo": motivo}
 
         regras = carregar_produtos_do_banco(db)
 
