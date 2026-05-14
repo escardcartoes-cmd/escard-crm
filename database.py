@@ -292,6 +292,9 @@ class _PgConn:
     def commit(self):
         self._raw.commit()
 
+    def rollback(self):
+        self._raw.rollback()
+
     def close(self):
         self._raw.close()
 
@@ -309,60 +312,170 @@ def get_connection():
     return conn
 
 
-def init_db() -> None:
-    conn = get_connection()
-    conn.executescript(_SQLITE_DDL)
-    conn.commit()
-    # Migration: add perfil column if table already existed without it
-    try:
-        conn.execute("ALTER TABLE usuarios ADD COLUMN perfil TEXT NOT NULL DEFAULT 'admin'")
-        conn.commit()
-    except Exception:
-        pass  # Column already exists
-    # Migration: Motor de Expansão columns
-    for _col in [
-        "ALTER TABLE empresas ADD COLUMN produtos_ativos TEXT",
-        "ALTER TABLE empresas ADD COLUMN num_funcionarios INTEGER",
-        "ALTER TABLE empresas ADD COLUMN cliente_ativo INTEGER DEFAULT 0",
-        "ALTER TABLE empresas ADD COLUMN valor_mensal REAL",
-        "ALTER TABLE empresas ADD COLUMN tipo_cartao TEXT",
-        "ALTER TABLE empresas ADD COLUMN nome_private_label TEXT",
-    ]:
+def run_migrations(conn) -> None:
+    """Apply schema migrations safely — each statement is independent with rollback on failure."""
+    # PostgreSQL supports IF NOT EXISTS; SQLite does not — use plain ADD COLUMN there
+    _ifne = " IF NOT EXISTS" if _USE_PG else ""
+
+    _ALTER = [
+        # usuarios
+        f"ALTER TABLE usuarios ADD COLUMN{_ifne} perfil TEXT NOT NULL DEFAULT 'admin'",
+        # empresas — Motor de Expansão
+        f"ALTER TABLE empresas ADD COLUMN{_ifne} produtos_ativos TEXT",
+        f"ALTER TABLE empresas ADD COLUMN{_ifne} num_funcionarios INTEGER",
+        f"ALTER TABLE empresas ADD COLUMN{_ifne} cliente_ativo INTEGER DEFAULT 0",
+        f"ALTER TABLE empresas ADD COLUMN{_ifne} valor_mensal REAL",
+        f"ALTER TABLE empresas ADD COLUMN{_ifne} tipo_cartao TEXT",
+        f"ALTER TABLE empresas ADD COLUMN{_ifne} nome_private_label TEXT",
+        # oportunidades — Deal Radar
+        f"ALTER TABLE oportunidades ADD COLUMN{_ifne} score_fechamento INTEGER DEFAULT 0",
+        f"ALTER TABLE oportunidades ADD COLUMN{_ifne} data_ultimo_contato TEXT",
+        f"ALTER TABLE oportunidades ADD COLUMN{_ifne} num_interacoes INTEGER DEFAULT 0",
+        f"ALTER TABLE oportunidades ADD COLUMN{_ifne} dias_sem_contato INTEGER DEFAULT 0",
+        f"ALTER TABLE oportunidades ADD COLUMN{_ifne} proxima_acao_sugerida TEXT",
+        # cadencias — Brevo e-mail tracking
+        f"ALTER TABLE cadencias ADD COLUMN{_ifne} email_status TEXT NOT NULL DEFAULT 'sem_email'",
+        f"ALTER TABLE cadencias ADD COLUMN{_ifne} email_brevo_id TEXT",
+    ]
+
+    _CREATE = [
+        """CREATE TABLE IF NOT EXISTS clientes_cobranca (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            nome            TEXT    NOT NULL,
+            cnpj            TEXT,
+            contato_nome    TEXT,
+            contato_fone    TEXT,
+            contato_email   TEXT,
+            comissao_pct    REAL    NOT NULL DEFAULT 10,
+            status          TEXT    NOT NULL DEFAULT 'ativo',
+            criado_em       TEXT    DEFAULT (datetime('now', 'localtime'))
+        )""",
+        """CREATE TABLE IF NOT EXISTS relatorios_cobranca (
+            id               INTEGER PRIMARY KEY AUTOINCREMENT,
+            cliente_id       INTEGER NOT NULL,
+            mes_referencia   TEXT    NOT NULL,
+            total_cobrado    REAL    NOT NULL DEFAULT 0,
+            total_recuperado REAL    NOT NULL DEFAULT 0,
+            comissao_krylo   REAL    NOT NULL DEFAULT 0,
+            observacoes      TEXT,
+            retorno_cliente  TEXT,
+            status           TEXT    NOT NULL DEFAULT 'rascunho',
+            data_envio       TEXT,
+            criado_em        TEXT    DEFAULT (datetime('now', 'localtime')),
+            FOREIGN KEY (cliente_id) REFERENCES clientes_cobranca(id) ON DELETE CASCADE
+        )""",
+        """CREATE TABLE IF NOT EXISTS recebiveis_krylo (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            empresa_id      INTEGER NOT NULL,
+            mes_referencia  TEXT    NOT NULL,
+            valor           REAL    NOT NULL,
+            vencimento      TEXT,
+            status          TEXT    NOT NULL DEFAULT 'pendente',
+            data_pagamento  TEXT,
+            observacoes     TEXT,
+            criado_em       TEXT    DEFAULT (datetime('now', 'localtime')),
+            FOREIGN KEY (empresa_id) REFERENCES empresas(id) ON DELETE CASCADE
+        )""",
+        """CREATE TABLE IF NOT EXISTS documentos_ia (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            nome            TEXT    NOT NULL,
+            tipo            TEXT    NOT NULL,
+            conteudo_texto  TEXT,
+            data_upload     TEXT    DEFAULT (datetime('now', 'localtime')),
+            tamanho         INTEGER
+        )""",
+        """CREATE TABLE IF NOT EXISTS portal_acessos (
+            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            empresa_id    INTEGER,
+            empresa_nome  TEXT,
+            token_acesso  TEXT UNIQUE,
+            ativo         INTEGER DEFAULT 1,
+            ultimo_acesso TEXT,
+            criado_em     TEXT DEFAULT (datetime('now', 'localtime')),
+            FOREIGN KEY (empresa_id) REFERENCES empresas(id)
+        )""",
+        """CREATE TABLE IF NOT EXISTS radar_mercado (
+            id        INTEGER PRIMARY KEY AUTOINCREMENT,
+            tipo      TEXT,
+            titulo    TEXT,
+            resumo    TEXT,
+            link      TEXT,
+            fonte     TEXT,
+            lido      INTEGER DEFAULT 0,
+            criado_em TEXT    DEFAULT (datetime('now', 'localtime'))
+        )""",
+        """CREATE TABLE IF NOT EXISTS prospeccao_automatica (
+            id             INTEGER PRIMARY KEY AUTOINCREMENT,
+            cnpj           TEXT    UNIQUE,
+            razao_social   TEXT,
+            municipio      TEXT,
+            uf             TEXT,
+            cnae_descricao TEXT,
+            telefone       TEXT,
+            email          TEXT,
+            capital_social REAL    DEFAULT 0,
+            score_fit      INTEGER DEFAULT 0,
+            status         TEXT    DEFAULT 'novo',
+            importado_em   TEXT    DEFAULT (datetime('now', 'localtime'))
+        )""",
+        """CREATE TABLE IF NOT EXISTS ia_config (
+            id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+            nome_assistente    TEXT      DEFAULT 'Bia',
+            personalidade      TEXT      DEFAULT 'Profissional, direta e empática. Fala de forma natural e consultiva, nunca como vendedora agressiva.',
+            tom                TEXT      DEFAULT 'consultivo',
+            estrategia         TEXT      DEFAULT 'Foco em entender a dor do cliente antes de apresentar solução. Perguntar antes de propor.',
+            estilo_escrita     TEXT      DEFAULT 'Mensagens curtas no WhatsApp (máximo 2 frases). E-mails formais mas acessíveis. Sem jargões técnicos.',
+            contexto_empresa   TEXT      DEFAULT 'Krylo é uma empresa de cartão de benefícios B2B oferecendo VR, VA, combustível, premiação, Welhub e Vidalink.',
+            objetivo_principal TEXT      DEFAULT 'Qualificar leads e agendar reuniões com decisores de RH.',
+            restricoes         TEXT      DEFAULT 'Nunca mencionar concorrentes. Nunca prometer preços sem consultar o time. Nunca ser insistente após 3 tentativas.',
+            saudacao_whatsapp  TEXT      DEFAULT 'Olá {nome}! Tudo bem? Sou a Bia da Krylo.',
+            saudacao_email     TEXT      DEFAULT 'Prezado(a) {nome},',
+            assinatura_email   TEXT      DEFAULT 'Atenciosamente,\nBia | Consultora Krylo\ncontato@krylo.com.br',
+            modo_chat          INTEGER   DEFAULT 1,
+            ativo              INTEGER   DEFAULT 1,
+            atualizado_em      TIMESTAMP DEFAULT (datetime('now', 'localtime'))
+        )""",
+        """CREATE TABLE IF NOT EXISTS ramos_atividade (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            nome        TEXT    NOT NULL,
+            descricao   TEXT,
+            cnaes       TEXT,
+            pitch       TEXT,
+            score_min   INTEGER DEFAULT 6,
+            estados     TEXT    DEFAULT 'ES,SP',
+            capital_min INTEGER DEFAULT 100000,
+            ativo       INTEGER DEFAULT 1,
+            criado_em   TEXT    DEFAULT (datetime('now', 'localtime'))
+        )""",
+    ]
+
+    for sql in _ALTER + _CREATE:
         try:
-            conn.execute(_col)
+            conn.execute(sql)
             conn.commit()
-        except Exception:
-            pass
-    # Migration: Deal Radar columns
-    for _col in [
-        "ALTER TABLE oportunidades ADD COLUMN score_fechamento INTEGER DEFAULT 0",
-        "ALTER TABLE oportunidades ADD COLUMN data_ultimo_contato TEXT",
-        "ALTER TABLE oportunidades ADD COLUMN num_interacoes INTEGER DEFAULT 0",
-        "ALTER TABLE oportunidades ADD COLUMN dias_sem_contato INTEGER DEFAULT 0",
-        "ALTER TABLE oportunidades ADD COLUMN proxima_acao_sugerida TEXT",
-    ]:
+        except Exception as e:
+            print(f"Migration aviso (normal se coluna já existe): {e}")
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+
+    # Seeds
+    _seeds = [
+        "INSERT OR IGNORE INTO ia_config (id) VALUES (1)",
+    ]
+    for sql in _seeds:
         try:
-            conn.execute(_col)
+            conn.execute(sql)
             conn.commit()
-        except Exception:
-            pass
-    # Migration: Brevo e-mail tracking columns
-    for _col in [
-        "ALTER TABLE cadencias ADD COLUMN email_status TEXT NOT NULL DEFAULT 'sem_email'",
-        "ALTER TABLE cadencias ADD COLUMN email_brevo_id TEXT",
-    ]:
-        try:
-            conn.execute(_col)
-            conn.commit()
-        except Exception:
-            pass
-    # Seed: ia_config — garante que sempre exista a linha id=1
-    try:
-        conn.execute("INSERT OR IGNORE INTO ia_config (id) VALUES (1)")
-        conn.commit()
-    except Exception:
-        pass
-    # Seed: ramos_atividade — insere apenas se a tabela estiver vazia
+        except Exception as e:
+            print(f"Seed aviso: {e}")
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+
+    # Seed ramos_atividade only if empty
     try:
         _cnt = conn.execute("SELECT COUNT(*) AS cnt FROM ramos_atividade").fetchone()
         if (_cnt["cnt"] if _cnt else 0) == 0:
@@ -379,12 +492,21 @@ def init_db() -> None:
                  7, "ES,SP,MG,RJ"),
             ]:
                 conn.execute(
-                    """INSERT INTO ramos_atividade
-                           (nome, descricao, cnaes, pitch, score_min, estados)
-                       VALUES (?, ?, ?, ?, ?, ?)""",
+                    "INSERT INTO ramos_atividade (nome, descricao, cnaes, pitch, score_min, estados) VALUES (?, ?, ?, ?, ?, ?)",
                     _r,
                 )
             conn.commit()
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"Seed ramos aviso: {e}")
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+
+
+def init_db() -> None:
+    conn = get_connection()
+    conn.executescript(_SQLITE_DDL)
+    conn.commit()
+    run_migrations(conn)
     conn.close()
