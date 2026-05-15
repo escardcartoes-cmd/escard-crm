@@ -244,17 +244,32 @@ atexit.register(lambda: scheduler.shutdown(wait=False))
 def login():
     if current_user.is_authenticated:
         return redirect(url_for("dashboard"))
-    slug = request.args.get("t") or request.form.get("t_slug", "")
-    tenant_login = tenant_model.get_tenant_by_slug(slug) if slug else None
+
+    # Tenant lookup com fallback seguro
+    tenant_login = None
+    try:
+        slug = request.args.get("t") or request.form.get("t_slug", "")
+        if slug:
+            tenant_login = tenant_model.get_tenant_by_slug(slug)
+        if not tenant_login:
+            tenant_login = tenant_model.get_tenant_by_id(1)
+    except Exception:
+        tenant_login = None
+
     if request.method == "POST":
-        usuario = request.form.get("usuario", "").strip()
-        senha   = request.form.get("senha", "")
-        u = user_model.autenticar(usuario, senha)
-        if u:
-            login_user(u, remember=True)
-            session["tenant_id"] = u.tenant_id
-            return redirect(request.args.get("next") or url_for("dashboard"))
-        flash("Usuário ou senha incorretos.", "danger")
+        try:
+            usuario = request.form.get("usuario", "").strip()
+            senha   = request.form.get("senha", "")
+            u = user_model.autenticar(usuario, senha)
+            if u:
+                login_user(u, remember=True)
+                session["tenant_id"] = getattr(u, "tenant_id", 1) or 1
+                return redirect(request.args.get("next") or url_for("dashboard"))
+            flash("Usuário ou senha incorretos.", "danger")
+        except Exception as _e:
+            print(f"[LOGIN] Erro: {_e}")
+            flash("Erro ao processar login. Tente novamente.", "danger")
+
     return render_template("login.html", tenant_login=tenant_login)
 
 
