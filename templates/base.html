@@ -74,6 +74,9 @@
     </div>
 
     <nav class="sidebar-nav">
+      {%- set _p = current_user.perfil if current_user.is_authenticated else '' -%}
+      {%- set _is_admin = _p in ['admin','super_admin'] -%}
+      {%- set _is_manager = _p in ['admin','gerente','super_admin'] -%}
 
       {# ── Dashboard ── #}
       <a href="{{ url_for('dashboard') }}"
@@ -85,9 +88,12 @@
         Dashboard
       </a>
 
+      {% if current_user.is_authenticated %}
+
       {# ══ PROSPECÇÃO ══ #}
-      {% if current_user.is_authenticated and current_user.perfil in ['admin','gerente'] %}
       <p class="nav-section-label">Prospecção</p>
+
+      {% if _is_manager %}
       <a href="{{ url_for('sdr_painel') }}"
          class="nav-link {% if 'sdr' in (request.endpoint or '') %}active{% endif %}">
         <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -98,14 +104,13 @@
       </a>
       {% endif %}
 
-      {% if current_user.is_authenticated %}
       <a href="{{ url_for('cadencias_index') }}"
          class="nav-link {% if 'cadencias' in (request.endpoint or '') %}active{% endif %}">
         <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
             d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
         </svg>
-        📊 Cadências SDR
+        📬 Cadências SDR
         {% if cadencias_hoje_count > 0 %}
         <span class="menu-badge">{{ cadencias_hoje_count }}</span>
         {% endif %}
@@ -123,13 +128,12 @@
         <span class="menu-badge">{{ radar_nao_lidos.total }}</span>
         {% endif %}
       </a>
-      {% endif %}
 
       {# ══ VENDAS ══ #}
       <div class="nav-sep"></div>
       <p class="nav-section-label">Vendas</p>
 
-      {% if current_user.is_authenticated and current_user.perfil in ['admin','gerente'] %}
+      {% if _is_manager %}
       <a href="{{ url_for('empresas_lista') }}"
          class="nav-link {% if 'empresa' in (request.endpoint or '') %}active{% endif %}">
         <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -159,7 +163,7 @@
       </a>
 
       <a href="{{ url_for('simulador_index') }}"
-         class="nav-link {% if request.endpoint == 'simulador_index' or request.endpoint == 'simulador_gerar' %}active{% endif %}">
+         class="nav-link {% if request.endpoint in ['simulador_index','simulador_gerar'] %}active{% endif %}">
         <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
             d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"/>
@@ -180,7 +184,7 @@
       </a>
 
       {# ══ CLIENTES ══ #}
-      {% if current_user.is_authenticated and current_user.perfil in ['admin','gerente'] %}
+      {% if _is_manager %}
       <div class="nav-sep"></div>
       <p class="nav-section-label">Clientes</p>
 
@@ -202,8 +206,7 @@
         📈 Motor de Expansão
       </a>
 
-      <a href="{{ url_for('portal_gerar', empresa_id=0) if false else '#' }}"
-         onclick="location.href='{{ url_for('empresas_lista') }}?filter=cliente'; return false;"
+      <a href="{{ url_for('empresas_lista') }}?filter=cliente"
          class="nav-link {% if 'portal' in (request.endpoint or '') %}active{% endif %}">
         <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -224,7 +227,7 @@
         </svg>
         💰 Financeiro
       </a>
-      {% endif %}
+      {% endif %}{# _is_manager #}
 
       {# ══ SISTEMA ══ #}
       <div class="nav-sep"></div>
@@ -239,7 +242,7 @@
         🧠 Central de IA
       </a>
 
-      {% if current_user.is_authenticated and current_user.perfil in ['admin','gerente'] %}
+      {% if _is_manager %}
       <a href="{{ url_for('leads_importar_form') }}"
          class="nav-link {% if 'leads_importar' in (request.endpoint or '') %}active{% endif %}">
         <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -248,20 +251,7 @@
         </svg>
         📥 Importar Leads
       </a>
-      {% endif %}
 
-      {% if current_user.is_authenticated and current_user.perfil == 'admin' %}
-      <a href="{{ url_for('usuarios_lista') }}"
-         class="nav-link {% if 'usuarios' in (request.endpoint or '') %}active{% endif %}">
-        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-            d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/>
-        </svg>
-        👥 Usuários
-      </a>
-      {% endif %}
-
-      {% if current_user.is_authenticated and current_user.perfil in ['admin','gerente'] %}
       <a href="{{ url_for('ia_config_painel') }}"
          class="nav-link {% if request.endpoint and request.endpoint.startswith('ia_') %}active{% endif %}">
         <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -288,6 +278,18 @@
         </svg>
         🛡️ CQA
       </a>
+      {% endif %}{# _is_manager #}
+
+      {% if _is_admin %}
+      <a href="{{ url_for('usuarios_lista') }}"
+         class="nav-link {% if 'usuarios' in (request.endpoint or '') %}active{% endif %}">
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/>
+        </svg>
+        👥 Usuários
+      </a>
+      {% endif %}{# _is_admin #}
 
       <a href="{{ url_for('ajuda_index') }}"
          class="nav-link {% if request.endpoint == 'ajuda_index' %}active{% endif %}">
@@ -298,7 +300,7 @@
         ❓ Central de Ajuda
       </a>
 
-      {% if current_user.is_authenticated and current_user.perfil == 'super_admin' %}
+      {% if _p == 'super_admin' %}
       <a href="{{ url_for('admin_tenants') }}"
          class="nav-link {% if request.endpoint and request.endpoint.startswith('admin_') %}active{% endif %}">
         <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -307,8 +309,9 @@
         </svg>
         🏗️ Super Admin
       </a>
-      {% endif %}
-      {% endif %}
+      {% endif %}{# super_admin #}
+
+      {% endif %}{# is_authenticated #}
 
     </nav>
 
