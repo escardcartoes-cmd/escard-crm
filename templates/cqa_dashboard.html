@@ -1,0 +1,164 @@
+{% extends 'base.html' %}
+{% block title %}CQA — Krylo CRM{% endblock %}
+{% block topbar_title %}🛡️ Central de Qualidade Automática{% endblock %}
+{% block topbar_actions %}
+  <form method="post" action="{{ url_for('cqa_rodar') }}" style="display:inline">
+    <button type="submit" class="btn btn-outline btn-sm">▶ Rodar testes</button>
+  </form>
+  <form method="post" action="{{ url_for('cqa_fix_all') }}" style="display:inline;margin-left:8px">
+    <button type="submit" class="btn btn-primary btn-sm">🔧 Rodar + Auto-Fix</button>
+  </form>
+{% endblock %}
+
+{% block content %}
+
+<!-- KPI summary -->
+<div class="cards-grid" style="margin-bottom:20px">
+  <div class="card">
+    <div class="kpi">
+      <div>
+        <div class="kpi-val" style="color:#16A34A">{{ oks }}</div>
+        <div class="kpi-lbl">Checks OK</div>
+      </div>
+      <div class="kpi-icon ic-green">
+        <svg width="22" height="22" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+        </svg>
+      </div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="kpi">
+      <div>
+        <div class="kpi-val" style="color:#D97706">{{ avisos }}</div>
+        <div class="kpi-lbl">Avisos</div>
+      </div>
+      <div class="kpi-icon ic-orange">
+        <svg width="22" height="22" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+        </svg>
+      </div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="kpi">
+      <div>
+        <div class="kpi-val" style="color:#DC2626">{{ erros }}</div>
+        <div class="kpi-lbl">Erros</div>
+      </div>
+      <div class="kpi-icon" style="background:#FEE2E2">
+        <svg width="22" height="22" fill="none" stroke="#DC2626" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+        </svg>
+      </div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="kpi">
+      <div>
+        <div class="kpi-val" style="color:var(--muted)">{{ alertas|length }}</div>
+        <div class="kpi-lbl">Alertas ativos</div>
+      </div>
+      <div class="kpi-icon ic-blue">
+        <svg width="22" height="22" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
+        </svg>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Resultados dos testes -->
+<div class="card" style="margin-bottom:20px">
+  <p class="card-title">Resultados dos Checks</p>
+  {% if resultados %}
+  <div class="table-wrap">
+    <table>
+      <thead><tr>
+        <th>Check</th><th>Status</th><th>Mensagem</th><th>Auto-fix</th><th>Executado em</th>
+      </tr></thead>
+      <tbody>
+        {% for r in resultados %}
+        {% set sc = {'ok':'#D1FAE5','aviso':'#FEF3C7','erro':'#FEE2E2'} %}
+        {% set tc = {'ok':'#065F46','aviso':'#92400E','erro':'#991B1B'} %}
+        {% set ic = {'ok':'✅','aviso':'⚠️','erro':'❌'} %}
+        <tr>
+          <td style="font-weight:600;font-size:13px">{{ r.check_nome }}</td>
+          <td>
+            <span style="padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;
+              background:{{ sc.get(r.status,'#F3F4F6') }};color:{{ tc.get(r.status,'#374151') }}">
+              {{ ic.get(r.status,'?') }} {{ r.status }}
+            </span>
+          </td>
+          <td style="font-size:12px;color:var(--text);max-width:380px">{{ r.mensagem or '—' }}</td>
+          <td style="text-align:center">
+            {% if r.auto_corrigido %}
+            <span style="color:#16A34A;font-size:12px">✅ sim</span>
+            {% else %}
+            <span style="color:var(--muted);font-size:12px">—</span>
+            {% endif %}
+          </td>
+          <td style="font-size:11px;color:var(--muted)">{{ (r.executado_em or '')[:16] }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="empty-state">
+    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+        d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+    </svg>
+    <p>Nenhum resultado ainda.</p>
+    <form method="post" action="{{ url_for('cqa_rodar') }}" style="margin-top:10px">
+      <button type="submit" class="btn btn-primary btn-sm">▶ Rodar primeiro check</button>
+    </form>
+  </div>
+  {% endif %}
+</div>
+
+<!-- Alertas ativos -->
+{% if alertas %}
+<div class="card">
+  <p class="card-title">Alertas Ativos</p>
+  <div style="display:flex;flex-direction:column;gap:8px">
+    {% for a in alertas %}
+    {% set border = '#DC2626' if a.tipo == 'erro' else '#D97706' %}
+    <div style="border-left:3px solid {{ border }};padding:10px 14px;background:var(--surface);border-radius:4px">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px">
+        <div>
+          <span style="font-size:11px;font-weight:700;color:{{ border }}">{{ a.tipo|upper }}</span>
+          <span style="font-size:11px;color:var(--muted);margin-left:8px">{{ a.check_nome }}</span>
+          <div style="font-size:13px;color:var(--text);margin-top:2px">{{ a.mensagem or '' }}</div>
+        </div>
+        <div style="display:flex;gap:8px;flex-shrink:0">
+          <span style="font-size:11px;color:var(--muted)">{{ (a.criado_em or '')[:16] }}</span>
+          <button onclick="resolverAlerta({{ a.id }}, this)" class="btn btn-sm btn-outline"
+                  style="font-size:11px;padding:2px 10px">✓ Resolver</button>
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function resolverAlerta(id, btn) {
+  btn.disabled = true;
+  try {
+    await fetch('/cqa/alerta/' + id + '/resolver', {method:'POST', headers:{'X-Requested-With':'XMLHttpRequest'}});
+    btn.closest('div[style*="border-left"]').style.opacity = '.4';
+    setTimeout(() => btn.closest('div[style*="border-left"]').remove(), 500);
+  } catch(e) { btn.disabled = false; alert('Erro: ' + e.message); }
+}
+</script>
+{% endblock %}

@@ -158,12 +158,31 @@ try:
 except Exception:
     _sdr_interval = 6
 
+def _job_cqa():
+    try:
+        import sys as _sys
+        _cqa_root = os.path.dirname(os.path.abspath(__file__))
+        if _cqa_root not in _sys.path:
+            _sys.path.insert(0, _cqa_root)
+        from scripts.run_cqa import rodar_cqa_completo
+        rodar_cqa_completo(aplicar_fixes=True, verbose=False)
+    except Exception as _e:
+        print(f"[SCHEDULER CQA] Erro: {_e}")
+
+
 scheduler = BackgroundScheduler(timezone="America/Sao_Paulo")
 scheduler.add_job(
     func=_job_prospeccao_autonoma,
     trigger="interval",
     hours=max(1, _sdr_interval),
     id="prospeccao_autonoma",
+    replace_existing=True,
+)
+scheduler.add_job(
+    func=_job_cqa,
+    trigger="interval",
+    hours=24,
+    id="cqa_automatico",
     replace_existing=True,
 )
 scheduler.start()
@@ -3004,6 +3023,89 @@ def sdr_sessoes_lista():
         return jsonify(sessoes)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
+# ── CQA — Central de Qualidade Automática ────────────────────────────────────
+
+@app.route("/cqa")
+@login_required
+@require_perfil("gerente")
+def cqa_dashboard():
+    conn = database.get_connection()
+    if database._USE_PG:
+        rows = conn.execute("""
+            SELECT DISTINCT ON (check_nome)
+                check_nome, status, mensagem, auto_corrigido, executado_em
+            FROM cqa_resultados
+            ORDER BY check_nome, executado_em DESC
+        """).fetchall()
+    else:
+        rows = conn.execute("""
+            SELECT check_nome, status, mensagem, auto_corrigido, MAX(executado_em) AS executado_em
+            FROM cqa_resultados GROUP BY check_nome ORDER BY check_nome
+        """).fetchall()
+    alertas = [dict(a) for a in conn.execute(
+        "SELECT * FROM cqa_alertas WHERE resolvido=0 ORDER BY criado_em DESC LIMIT 20"
+    ).fetchall()]
+    conn.close()
+    resultados = [dict(r) for r in rows]
+    erros  = sum(1 for r in resultados if r["status"] == "erro")
+    avisos = sum(1 for r in resultados if r["status"] == "aviso")
+    oks    = sum(1 for r in resultados if r["status"] == "ok")
+    return render_template("cqa_dashboard.html",
+                           resultados=resultados, alertas=alertas,
+                           erros=erros, avisos=avisos, oks=oks)
+
+
+@app.route("/cqa/rodar", methods=["POST"])
+@login_required
+@require_perfil("gerente")
+def cqa_rodar():
+    import sys as _sys
+    import threading as _th
+    def _run():
+        try:
+            _cqa_root = os.path.dirname(os.path.abspath(__file__))
+            if _cqa_root not in _sys.path:
+                _sys.path.insert(0, _cqa_root)
+            from scripts.run_cqa import rodar_cqa_completo
+            rodar_cqa_completo(aplicar_fixes=False, verbose=False)
+        except Exception as e:
+            print(f"[CQA] Erro ao rodar: {e}")
+    _th.Thread(target=_run, daemon=True).start()
+    flash("CQA iniciado em background. Aguarde alguns segundos e atualize a página.", "success")
+    return redirect(url_for("cqa_dashboard"))
+
+
+@app.route("/cqa/alerta/<int:alerta_id>/resolver", methods=["POST"])
+@login_required
+@require_perfil("gerente")
+def cqa_alerta_resolver(alerta_id):
+    conn = database.get_connection()
+    conn.execute("UPDATE cqa_alertas SET resolvido=1 WHERE id=?", (alerta_id,))
+    conn.commit()
+    conn.close()
+    return jsonify({"ok": True})
+
+
+@app.route("/cqa/fix/all", methods=["POST"])
+@login_required
+@require_perfil("gerente")
+def cqa_fix_all():
+    import sys as _sys
+    import threading as _th
+    def _run():
+        try:
+            _cqa_root = os.path.dirname(os.path.abspath(__file__))
+            if _cqa_root not in _sys.path:
+                _sys.path.insert(0, _cqa_root)
+            from scripts.run_cqa import rodar_cqa_completo
+            rodar_cqa_completo(aplicar_fixes=True, verbose=False)
+        except Exception as e:
+            print(f"[CQA] Erro ao rodar fix: {e}")
+    _th.Thread(target=_run, daemon=True).start()
+    flash("CQA + Auto-Fix iniciado. Aguarde e atualize a página.", "success")
+    return redirect(url_for("cqa_dashboard"))
 
 
 # ── Dev ping (usado pelo hot-reload do browser) ───────────────────────────────
