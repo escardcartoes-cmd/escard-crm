@@ -515,8 +515,10 @@ def run_migrations(conn) -> None:
         f"ALTER TABLE prospeccao_automatica ADD COLUMN{_ifne} natureza_juridica TEXT DEFAULT ''",
         f"ALTER TABLE prospeccao_automatica ADD COLUMN{_ifne} porte TEXT DEFAULT ''",
         f"ALTER TABLE prospeccao_automatica ADD COLUMN{_ifne} produto_alvo TEXT DEFAULT ''",
-        # sdr_config — modo de busca
+        # sdr_config — modo de busca e seleções de localização
         f"ALTER TABLE sdr_config ADD COLUMN{_ifne} modo_busca VARCHAR(20) DEFAULT 'cnae'",
+        f"ALTER TABLE sdr_config ADD COLUMN{_ifne} estados_selecionados TEXT DEFAULT ''",
+        f"ALTER TABLE sdr_config ADD COLUMN{_ifne} cidades_selecionadas TEXT DEFAULT ''",
     ]
 
     _CREATE = [

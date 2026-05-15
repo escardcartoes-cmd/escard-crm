@@ -187,23 +187,41 @@
 
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
 
-    <!-- Localização -->
-    <div>
-      <div style="font-weight:600;font-size:13px;color:#4A3F35;margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid var(--border)">📍 Localização</div>
-      <div style="font-size:12px;color:var(--muted);margin-bottom:6px">Estados:</div>
-      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:10px" id="checkEstados">
-        {% set estados_sel = config.estados.split(',') if config.estados else ['ES','SP'] %}
+    <!-- Estados (full-width) -->
+    <div style="grid-column:1/-1">
+      <div style="font-weight:600;font-size:13px;color:#4A3F35;margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid var(--border)">
+        📍 Estados
+        <span id="estados-badge" style="font-size:11px;color:var(--muted);font-weight:400;margin-left:6px"></span>
+      </div>
+
+      <!-- Botões de seleção rápida por região -->
+      <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px">
+        <button type="button" onclick="selecionarTodosEstados()" class="btn btn-outline btn-sm" style="font-size:11px">✅ Todos</button>
+        <button type="button" onclick="limparEstados()" class="btn btn-outline btn-sm" style="font-size:11px">☐ Limpar</button>
+        <button type="button" onclick="selecionarRegiao('sul_sudeste')" class="btn btn-outline btn-sm" style="font-size:11px">🌎 Sul e Sudeste</button>
+        <button type="button" onclick="selecionarRegiao('nordeste')" class="btn btn-outline btn-sm" style="font-size:11px">🌎 Nordeste</button>
+        <button type="button" onclick="selecionarRegiao('norte')" class="btn btn-outline btn-sm" style="font-size:11px">🌎 Norte</button>
+        <button type="button" onclick="selecionarRegiao('centro_oeste')" class="btn btn-outline btn-sm" style="font-size:11px">🌎 Centro-Oeste</button>
+      </div>
+
+      <!-- Grid de checkboxes — 4 colunas -->
+      {% set estados_sel = ((config.estados_selecionados or config.estados or 'ES,SP')).split(',') %}
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:5px" id="checkEstados">
         {% for sigla, nome in estados_br %}
-        <label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:12px">
-          <input type="checkbox" value="{{ sigla }}" {% if sigla in estados_sel %}checked{% endif %}
-                 onchange="marcarAlterado()"> {{ sigla }} — {{ nome }}
+        <label id="label_estado_{{ sigla }}"
+               style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:12px;
+                      padding:5px 7px;border-radius:6px;border:1px solid transparent;
+                      transition:background .15s,border-color .15s;
+                      {% if sigla in estados_sel %}background:#FDF9F5;border-color:#C5A089{% endif %}">
+          <input type="checkbox" value="{{ sigla }}"
+                 {% if sigla in estados_sel %}checked{% endif %}
+                 onchange="onEstadoChange(this)">
+          <strong style="min-width:22px">{{ sigla }}</strong><span style="color:var(--muted)">{{ nome }}</span>
         </label>
         {% endfor %}
       </div>
-      <label class="form-label" style="font-size:12px">Cidades específicas (opcional)</label>
-      <input type="text" id="cidades" class="form-input" style="font-size:12px"
-             value="{{ config.cidades or '' }}" placeholder="Ex: Vitória, Vila Velha"
-             oninput="marcarAlterado()">
+      <input type="hidden" id="estados_selecionados"
+             value="{{ config.estados_selecionados or config.estados or 'ES,SP' }}">
     </div>
 
     <!-- Porte -->
@@ -269,6 +287,49 @@
         <option value="{{ v }}" {% if (config.produto_foco or 'todos') == v %}selected{% endif %}>{{ v | capitalize }}</option>
         {% endfor %}
       </select>
+    </div>
+
+    <!-- Cidades -->
+    {% set _todas_cidades_ativo = not (config.cidades_selecionadas or config.cidades) %}
+    <div>
+      <div style="font-weight:600;font-size:13px;color:#4A3F35;margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid var(--border)">
+        🏙️ Cidades
+        <span id="cidades-badge" style="font-size:11px;color:var(--muted);font-weight:400;margin-left:6px"></span>
+      </div>
+
+      <!-- Toggle "todas as cidades" -->
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-bottom:10px;font-size:12px">
+        <div class="toggle-wrap" onclick="toggleTodasCidades()" id="toggle_todas_cidades"
+             style="width:36px;height:20px;border-radius:10px;cursor:pointer;transition:background .2s;flex-shrink:0;
+                    background:{% if _todas_cidades_ativo %}#16A34A{% else %}#D1D5DB{% endif %};position:relative">
+          <div style="width:16px;height:16px;border-radius:50%;background:#fff;position:absolute;top:2px;
+                      transition:left .2s;left:{% if _todas_cidades_ativo %}18px{% else %}2px{% endif %}"></div>
+        </div>
+        Todas as cidades dos estados selecionados
+        <input type="hidden" id="todas_cidades" value="{% if _todas_cidades_ativo %}1{% else %}0{% endif %}">
+      </label>
+
+      <!-- Seletor específico de cidades -->
+      <div id="cidades-selector" style="{% if _todas_cidades_ativo %}display:none{% endif %}">
+        <!-- Tags de cidades selecionadas -->
+        <div id="cidades-tags" style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px;min-height:22px"></div>
+        <!-- Campo de busca -->
+        <input type="text" id="cidades-search" class="form-input" style="font-size:12px;margin-bottom:6px"
+               placeholder="🔍 Buscar cidade... (mín. 3 letras)"
+               oninput="buscarCidades(this.value)">
+        <!-- Resultados da busca (dropdown) -->
+        <div id="cidades-resultados" style="display:none;border:1px solid var(--border);border-radius:8px;
+             max-height:200px;overflow-y:auto;background:#fff">
+          <div id="cidades-resultados-lista" style="padding:6px"></div>
+        </div>
+        <button type="button" onclick="limparCidades()" class="btn btn-sm"
+                style="margin-top:6px;color:#DC2626;border-color:#DC2626;font-size:11px">
+          ✕ Limpar cidades
+        </button>
+      </div>
+
+      <input type="hidden" id="cidades_selecionadas"
+             value="{{ config.cidades_selecionadas or config.cidades or '' }}">
     </div>
 
     <!-- CNAEs -->
@@ -586,12 +647,15 @@ function selecionarModo(modo) {
 }
 
 function coletarFiltros() {
-  const estadosCks = [...document.querySelectorAll('#checkEstados input:checked')].map(c => c.value);
   const diasCks    = [...document.querySelectorAll('#checkDias input:checked')].map(c => c.value);
   const tipoRadio  = document.querySelector('input[name="tipo_empresa"]:checked');
+  const estadosVal = document.getElementById('estados_selecionados').value || '';
+  const cidadesVal = document.getElementById('cidades_selecionadas').value || '';
   return {
-    estados:                    estadosCks.join(','),
-    cidades:                    document.getElementById('cidades').value,
+    estados:                    estadosVal,
+    estados_selecionados:       estadosVal,
+    cidades:                    cidadesVal,
+    cidades_selecionadas:       cidadesVal,
     capital_social_min:         parseFloat(document.getElementById('capital_social_min').value) || 0,
     tipo_empresa:               tipoRadio ? tipoRadio.value : '',
     idade_empresa_min:          parseInt(document.getElementById('idade_empresa_min').value) || 0,
@@ -757,6 +821,8 @@ document.addEventListener('DOMContentLoaded', () => {
   atualizarPainel();
   intervalAoVivo = setInterval(atualizarPainel, 3000);
   selecionarModo(document.getElementById('modo_busca').value || 'cnae');
+  _initEstados();
+  _parseCidadesInicial();
   _parseCnaeInicial();
 });
 
@@ -894,6 +960,233 @@ function mostrarToast(msg, cor) {
   t.style.display = 'block';
   clearTimeout(t._timer);
   t._timer = setTimeout(() => t.style.display = 'none', 3000);
+}
+
+// ── Estados multi-select ──────────────────────────────────────────────────────
+const _REGIOES = {
+  sul_sudeste:  ['ES','MG','RJ','SP','PR','SC','RS'],
+  nordeste:     ['MA','PI','CE','RN','PB','PE','AL','SE','BA'],
+  norte:        ['AM','RR','AP','PA','TO','RO','AC'],
+  centro_oeste: ['MT','MS','GO','DF'],
+};
+
+function onEstadoChange(cb) {
+  const label = cb.closest('label');
+  if (cb.checked) {
+    label.style.background = '#FDF9F5';
+    label.style.borderColor = '#C5A089';
+  } else {
+    label.style.background = '';
+    label.style.borderColor = 'transparent';
+  }
+  _atualizarEstadosBadge();
+  _atualizarEstadosHidden();
+  limparCidades();
+  marcarAlterado();
+}
+
+function selecionarTodosEstados() {
+  document.querySelectorAll('#checkEstados input[type="checkbox"]').forEach(cb => {
+    cb.checked = true;
+    const label = cb.closest('label');
+    label.style.background = '#FDF9F5';
+    label.style.borderColor = '#C5A089';
+  });
+  _atualizarEstadosBadge();
+  _atualizarEstadosHidden();
+  limparCidades();
+  marcarAlterado();
+}
+
+function limparEstados() {
+  document.querySelectorAll('#checkEstados input[type="checkbox"]').forEach(cb => {
+    cb.checked = false;
+    const label = cb.closest('label');
+    label.style.background = '';
+    label.style.borderColor = 'transparent';
+  });
+  _atualizarEstadosBadge();
+  _atualizarEstadosHidden();
+  limparCidades();
+  marcarAlterado();
+}
+
+function selecionarRegiao(regiao) {
+  const estados = _REGIOES[regiao] || [];
+  document.querySelectorAll('#checkEstados input[type="checkbox"]').forEach(cb => {
+    cb.checked = false;
+    const label = cb.closest('label');
+    label.style.background = '';
+    label.style.borderColor = 'transparent';
+  });
+  estados.forEach(sigla => {
+    const cb = document.querySelector(`#checkEstados input[value="${sigla}"]`);
+    if (cb) {
+      cb.checked = true;
+      const label = cb.closest('label');
+      label.style.background = '#FDF9F5';
+      label.style.borderColor = '#C5A089';
+    }
+  });
+  _atualizarEstadosBadge();
+  _atualizarEstadosHidden();
+  limparCidades();
+  marcarAlterado();
+}
+
+function _atualizarEstadosBadge() {
+  const n = document.querySelectorAll('#checkEstados input:checked').length;
+  const badge = document.getElementById('estados-badge');
+  if (badge) badge.textContent = n > 0 ? `(${n} estado${n !== 1 ? 's' : ''} selecionado${n !== 1 ? 's' : ''})` : '';
+}
+
+function _atualizarEstadosHidden() {
+  const vals = [...document.querySelectorAll('#checkEstados input:checked')].map(c => c.value);
+  document.getElementById('estados_selecionados').value = vals.join(',');
+}
+
+function _initEstados() {
+  document.querySelectorAll('#checkEstados input[type="checkbox"]').forEach(cb => {
+    if (cb.checked) {
+      const label = cb.closest('label');
+      label.style.background = '#FDF9F5';
+      label.style.borderColor = '#C5A089';
+    }
+  });
+  _atualizarEstadosBadge();
+}
+
+// ── Cidades multi-select ──────────────────────────────────────────────────────
+let _cidadesSelected = new Set();
+let _cidadesCache = {};
+let _cidadesBuscarTimer = null;
+
+function _parseCidadesInicial() {
+  const val = document.getElementById('cidades_selecionadas').value || '';
+  val.split(',').map(s => s.trim()).filter(Boolean).forEach(c => _cidadesSelected.add(c));
+  if (_cidadesSelected.size > 0) {
+    _setTodasCidades(false);
+  }
+  _renderCidadesTags();
+}
+
+function _setTodasCidades(ativo) {
+  const toggle = document.getElementById('toggle_todas_cidades');
+  const dot = toggle.querySelector('div');
+  document.getElementById('todas_cidades').value = ativo ? '1' : '0';
+  document.getElementById('cidades-selector').style.display = ativo ? 'none' : 'block';
+  toggle.style.background = ativo ? '#16A34A' : '#D1D5DB';
+  dot.style.left = ativo ? '18px' : '2px';
+}
+
+function toggleTodasCidades() {
+  const atual = document.getElementById('todas_cidades').value === '1';
+  _setTodasCidades(!atual);
+  if (!atual) limparCidades();
+  marcarAlterado();
+}
+
+function buscarCidades(q) {
+  clearTimeout(_cidadesBuscarTimer);
+  if (q.length < 3) {
+    document.getElementById('cidades-resultados').style.display = 'none';
+    return;
+  }
+  _cidadesBuscarTimer = setTimeout(async () => {
+    const ufs = [...document.querySelectorAll('#checkEstados input:checked')].map(c => c.value);
+    if (!ufs.length) {
+      document.getElementById('cidades-resultados-lista').innerHTML =
+        '<div style="padding:8px;color:var(--muted);font-size:12px">Selecione ao menos um estado primeiro.</div>';
+      document.getElementById('cidades-resultados').style.display = 'block';
+      return;
+    }
+    const toFetch = ufs.filter(uf => !_cidadesCache[uf]);
+    if (toFetch.length) {
+      await Promise.all(toFetch.map(async uf => {
+        try {
+          const r = await fetch(`https://servicodados.ibge.gov.br/api/v1/localidades/estados/${uf}/municipios`);
+          const data = await r.json();
+          _cidadesCache[uf] = data.map(m => m.nome);
+        } catch(e) { _cidadesCache[uf] = []; }
+      }));
+    }
+    const qN = q.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+    const resultados = [];
+    ufs.forEach(uf => {
+      (_cidadesCache[uf] || []).forEach(nome => {
+        const nomeN = nome.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+        if (nomeN.includes(qN) && !_cidadesSelected.has(nome))
+          resultados.push({ nome, uf });
+      });
+    });
+    const lista = document.getElementById('cidades-resultados-lista');
+    if (!resultados.length) {
+      lista.innerHTML = '<div style="padding:8px;color:var(--muted);font-size:12px">Nenhuma cidade encontrada.</div>';
+    } else {
+      lista.innerHTML = '';
+      resultados.slice(0, 20).forEach(({ nome, uf }) => {
+        const item = document.createElement('div');
+        item.style.cssText = 'padding:5px 8px;cursor:pointer;border-radius:4px;font-size:12px;display:flex;justify-content:space-between;align-items:center';
+        item.onmouseover = () => { item.style.background = '#F5F0EB'; };
+        item.onmouseout  = () => { item.style.background = ''; };
+        item.innerHTML = `<span>${nome}</span><span style="color:var(--muted);font-size:11px">${uf}</span>`;
+        item.onclick = () => {
+          _cidadesSelected.add(nome);
+          _renderCidadesTags();
+          _atualizarCidadesHidden();
+          document.getElementById('cidades-search').value = '';
+          document.getElementById('cidades-resultados').style.display = 'none';
+          marcarAlterado();
+        };
+        lista.appendChild(item);
+      });
+    }
+    document.getElementById('cidades-resultados').style.display = 'block';
+  }, 300);
+}
+
+function _renderCidadesTags() {
+  const container = document.getElementById('cidades-tags');
+  const badge = document.getElementById('cidades-badge');
+  if (!container) return;
+  container.innerHTML = '';
+  const arr = [..._cidadesSelected].sort();
+  if (!arr.length) { if (badge) badge.textContent = ''; return; }
+  if (badge) badge.textContent = `(${arr.length} cidade${arr.length !== 1 ? 's' : ''})`;
+  const visible = arr.slice(0, 20);
+  const extra = arr.length - 20;
+  visible.forEach(nome => {
+    const tag = document.createElement('span');
+    tag.style.cssText = 'display:inline-flex;align-items:center;gap:3px;background:#EFF6FF;border:1px solid #93C5FD;color:#1D4ED8;font-size:11px;padding:3px 8px;border-radius:12px';
+    tag.appendChild(document.createTextNode(nome));
+    const x = document.createElement('span');
+    x.textContent = '×';
+    x.style.cssText = 'cursor:pointer;font-size:13px;line-height:1;color:#6B7280;margin-left:2px';
+    x.onclick = () => {
+      _cidadesSelected.delete(nome);
+      _renderCidadesTags();
+      _atualizarCidadesHidden();
+      marcarAlterado();
+    };
+    tag.appendChild(x);
+    container.appendChild(tag);
+  });
+  if (extra > 0) {
+    const m = document.createElement('span');
+    m.style.cssText = 'font-size:11px;color:var(--muted);font-style:italic;align-self:center';
+    m.textContent = `+${extra} mais`;
+    container.appendChild(m);
+  }
+}
+
+function _atualizarCidadesHidden() {
+  document.getElementById('cidades_selecionadas').value = [..._cidadesSelected].sort().join(',');
+}
+
+function limparCidades() {
+  _cidadesSelected.clear();
+  _renderCidadesTags();
+  _atualizarCidadesHidden();
 }
 
 // ── CNAE multi-select ─────────────────────────────────────────────────────────

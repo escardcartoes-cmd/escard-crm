@@ -36,6 +36,7 @@ import ai
 app = Flask(__name__)
 app.secret_key = os.getenv("SECRET_KEY", "krylo-crm-2024")
 app.permanent_session_lifetime = timedelta(hours=8)
+app.config["JSON_AS_ASCII"] = False
 
 login_manager = LoginManager(app)
 login_manager.login_view = "login"
@@ -2435,7 +2436,7 @@ def sdr_config_salvar():
             "dias_recontato", "excluir_ja_prospectados", "produto_foco", "ativo",
             "funcionarios_min", "funcionarios_max", "idade_empresa_min",
             "idade_empresa_max", "max_cadencias_por_dia", "nome_campanha",
-            "modo_busca",
+            "modo_busca", "estados_selecionados", "cidades_selecionadas",
         ]
         _agora = _dt.datetime.now().isoformat(sep=" ", timespec="seconds")
         conn = database.get_connection()
@@ -2483,6 +2484,22 @@ def sdr_execucoes_json():
     ).fetchall()]
     conn.close()
     return jsonify(rows)
+
+
+@app.route("/api/empresa/<int:empresa_id>/contato")
+@login_required
+def api_empresa_contato(empresa_id):
+    try:
+        conn = database.get_connection()
+        row = conn.execute(
+            "SELECT telefone, email FROM empresas WHERE id=?", (empresa_id,)
+        ).fetchone()
+        conn.close()
+        if row:
+            return jsonify({"telefone": row["telefone"] or "", "email": row["email"] or ""})
+        return jsonify({"telefone": "", "email": ""})
+    except Exception as e:
+        return jsonify({"telefone": "", "email": "", "error": str(e)})
 
 
 @app.route("/api/cnaes")

@@ -5,12 +5,25 @@ pitch por IA, criação automática de cadências e sessões com log ao vivo.
 import json
 import random
 import time
+import unicodedata
 import requests
 from datetime import datetime, date, timedelta
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from database import get_connection
 
 _HEADERS = {"User-Agent": "KryloCRM/1.0 SDR-autonomo"}
+
+
+def _normalizar_texto(s: str) -> str:
+    return unicodedata.normalize("NFD", s).encode("ascii", "ignore").decode("ascii").upper().strip()
+
+
+def _cidade_match(municipio: str, cidades_lista: list) -> bool:
+    """True if municipio matches any of cidades_lista (accent/case insensitive)."""
+    if not cidades_lista:
+        return True
+    mun = _normalizar_texto(municipio)
+    return any(_normalizar_texto(c) == mun for c in cidades_lista)
 
 _sessao_global = {"id": None, "ativo": False, "pausado": False}
 
@@ -44,6 +57,8 @@ _SDR_DEFAULTS = {
     "max_cadencias_por_dia":      50,
     "produto_foco":               "todos",
     "modo_busca":                 "cnae",
+    "estados_selecionados":       "",
+    "cidades_selecionadas":       "",
 }
 
 
@@ -702,7 +717,10 @@ def _tentar_cadencia(db, sessao_id, stats, empresa, cnpj, score, nome_produto,
 def _rodar_modo_cnae(db, cfg: dict, sessao_id: str, stats: dict, max_leads: int) -> str:
     """Busca empresas filtrando por CNAE de cada produto/ramo. Retorna 'pausado' ou 'concluido'."""
     regras      = carregar_produtos_do_banco(db)
-    estados_cfg = [e.strip().upper() for e in cfg.get("estados", "ES,SP").split(",") if e.strip()]
+    _estados_raw = cfg.get("estados_selecionados") or cfg.get("estados") or "ES,SP"
+    estados_cfg  = [e.strip().upper() for e in _estados_raw.split(",") if e.strip()]
+    _cidades_raw = cfg.get("cidades_selecionadas") or cfg.get("cidades") or ""
+    cidades_cfg  = [c.strip() for c in _cidades_raw.split(",") if c.strip()]
     produto_foco = cfg.get("produto_foco") or "todos"
     canal_prim   = cfg.get("canal_primario") or "whatsapp"
 
@@ -791,6 +809,13 @@ def _rodar_modo_cnae(db, cfg: dict, sessao_id: str, stats: dict, max_leads: int)
                              empresa=razao, uf=uf_emp, score=0)
                         continue
 
+                    if cidades_cfg and not _cidade_match(empresa.get("municipio") or "", cidades_cfg):
+                        stats["filtrados"] += 1
+                        _log(db, sessao_id, "filtro",
+                             f"Fora da cidade alvo: {empresa.get('municipio','')}",
+                             empresa=razao, uf=uf_emp)
+                        continue
+
                     res_score = calcular_score_avancado(empresa, cfg)
                     score     = res_score["score"]
                     stats["aprovados"] += 1
@@ -838,7 +863,10 @@ def _rodar_modo_cnae(db, cfg: dict, sessao_id: str, stats: dict, max_leads: int)
 
 def _rodar_modo_sem_cnae(db, cfg: dict, sessao_id: str, stats: dict, max_leads: int) -> str:
     """Busca empresas por filtros gerais, ignorando CNAE. Retorna 'pausado' ou 'concluido'."""
-    estados_cfg  = [e.strip().upper() for e in cfg.get("estados", "ES,SP").split(",") if e.strip()]
+    _estados_raw = cfg.get("estados_selecionados") or cfg.get("estados") or "ES,SP"
+    estados_cfg  = [e.strip().upper() for e in _estados_raw.split(",") if e.strip()]
+    _cidades_raw = cfg.get("cidades_selecionadas") or cfg.get("cidades") or ""
+    cidades_cfg  = [c.strip() for c in _cidades_raw.split(",") if c.strip()]
     produto_foco = cfg.get("produto_foco") or "todos"
     canal_prim   = cfg.get("canal_primario") or "whatsapp"
 
@@ -903,6 +931,13 @@ def _rodar_modo_sem_cnae(db, cfg: dict, sessao_id: str, stats: dict, max_leads: 
                 stats["descartados"] += 1
                 _log(db, sessao_id, "descarte",
                      f"Descartada: {motivo_filtro}",
+                     empresa=razao, uf=uf_emp)
+                continue
+
+            if cidades_cfg and not _cidade_match(empresa.get("municipio") or "", cidades_cfg):
+                stats["filtrados"] += 1
+                _log(db, sessao_id, "filtro",
+                     f"Fora da cidade alvo: {empresa.get('municipio','')}",
                      empresa=razao, uf=uf_emp)
                 continue
 
