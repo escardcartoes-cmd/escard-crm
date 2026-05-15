@@ -1,0 +1,251 @@
+{% extends 'base.html' %}
+{% block title %}Termômetro de Clientes — Krylo CRM{% endblock %}
+{% block topbar_title %}🌡️ Termômetro de Clientes{% endblock %}
+{% block topbar_actions %}
+  <span class="text-muted text-sm">Saúde da base de clientes</span>
+{% endblock %}
+
+{% block content %}
+
+<!-- KPI Cards -->
+<div class="cards-grid" style="margin-bottom:20px">
+
+  <div class="card">
+    <div class="kpi">
+      <div>
+        <div class="kpi-val" style="color:#DC2626">{{ criticos }}</div>
+        <div class="kpi-lbl">🔴 Críticos</div>
+      </div>
+      <div class="kpi-icon" style="background:#FEF2F2;color:#DC2626">
+        <svg width="22" height="22" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+        </svg>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="kpi">
+      <div>
+        <div class="kpi-val" style="color:#D97706">{{ atencao }}</div>
+        <div class="kpi-lbl">🟡 Atenção</div>
+      </div>
+      <div class="kpi-icon" style="background:#FFFBEB;color:#D97706">
+        <svg width="22" height="22" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+        </svg>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="kpi">
+      <div>
+        <div class="kpi-val" style="color:#16A34A">{{ saudaveis }}</div>
+        <div class="kpi-lbl">🟢 Saudáveis</div>
+      </div>
+      <div class="kpi-icon" style="background:#F0FDF4;color:#16A34A">
+        <svg width="22" height="22" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+        </svg>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Filter bar -->
+<div class="card" style="margin-bottom:20px;padding:14px 20px">
+  <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+    <span style="font-size:13px;font-weight:600;color:var(--text);margin-right:4px">Filtrar:</span>
+    <button class="btn btn-primary btn-sm filter-btn" data-filter="todos" onclick="filtrarClientes('todos', this)">Todos</button>
+    <button class="btn btn-outline btn-sm filter-btn" data-filter="vermelho" onclick="filtrarClientes('vermelho', this)"
+            style="color:#DC2626;border-color:#DC2626">🔴 Crítico</button>
+    <button class="btn btn-outline btn-sm filter-btn" data-filter="amarelo" onclick="filtrarClientes('amarelo', this)"
+            style="color:#D97706;border-color:#D97706">🟡 Atenção</button>
+    <button class="btn btn-outline btn-sm filter-btn" data-filter="verde" onclick="filtrarClientes('verde', this)"
+            style="color:#16A34A;border-color:#16A34A">🟢 Saudável</button>
+  </div>
+</div>
+
+<!-- Client list -->
+<div class="card" style="padding:0;overflow:hidden">
+  {% if clientes %}
+  <table class="cob-table" id="termometroTable">
+    <thead>
+      <tr>
+        <th style="width:36px"></th>
+        <th>Empresa</th>
+        <th style="min-width:140px">Score de Saúde</th>
+        <th>Produtos</th>
+        <th>Funcionários</th>
+        <th>Valor/Mês</th>
+        <th>Último Contato</th>
+        <th style="text-align:center">Ações</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for c in clientes | sort(attribute='score') %}
+      <tr class="termo-row" data-cor="{{ c.status_cor }}">
+
+        <!-- Semáforo dot -->
+        <td style="text-align:center;padding:12px 8px">
+          {% if c.status_cor == 'vermelho' %}
+            <span title="Crítico" style="display:inline-block;width:12px;height:12px;border-radius:50%;background:#DC2626;box-shadow:0 0 6px rgba(220,38,38,.5)"></span>
+          {% elif c.status_cor == 'amarelo' %}
+            <span title="Atenção" style="display:inline-block;width:12px;height:12px;border-radius:50%;background:#D97706;box-shadow:0 0 6px rgba(217,119,6,.4)"></span>
+          {% else %}
+            <span title="Saudável" style="display:inline-block;width:12px;height:12px;border-radius:50%;background:#16A34A;box-shadow:0 0 6px rgba(22,163,74,.4)"></span>
+          {% endif %}
+        </td>
+
+        <!-- Nome -->
+        <td>
+          <div style="font-weight:600;font-size:13px;color:var(--text)">{{ c.nome }}</div>
+          <div class="text-muted text-sm">{{ c.status_label }}</div>
+        </td>
+
+        <!-- Score bar -->
+        <td style="padding:12px 16px">
+          <div style="display:flex;align-items:center;gap:8px">
+            <div style="flex:1;height:7px;background:#F1F5F9;border-radius:4px;overflow:hidden">
+              <div style="height:100%;width:{{ c.score }}%;border-radius:4px;
+                background:{% if c.status_cor == 'vermelho' %}#DC2626{% elif c.status_cor == 'amarelo' %}#D97706{% else %}#16A34A{% endif %};
+                transition:width .4s ease"></div>
+            </div>
+            <span style="font-size:12px;font-weight:700;min-width:28px;text-align:right;
+              color:{% if c.status_cor == 'vermelho' %}#DC2626{% elif c.status_cor == 'amarelo' %}#D97706{% else %}#16A34A{% endif %}">
+              {{ c.score }}
+            </span>
+          </div>
+        </td>
+
+        <!-- Produtos tags -->
+        <td>
+          {% if c.prods_lista %}
+            <div style="display:flex;flex-wrap:wrap;gap:4px">
+              {% for p in c.prods_lista %}
+                <span style="font-size:11px;padding:2px 7px;border-radius:10px;background:#F1F5F9;color:var(--text);border:1px solid var(--border)">{{ p }}</span>
+              {% endfor %}
+            </div>
+          {% else %}
+            <span class="text-muted text-sm">—</span>
+          {% endif %}
+        </td>
+
+        <!-- Funcionários -->
+        <td style="text-align:center">
+          {% if c.num_funcionarios %}
+            <strong>{{ c.num_funcionarios }}</strong>
+          {% else %}
+            <span class="text-muted">—</span>
+          {% endif %}
+        </td>
+
+        <!-- Valor mensal -->
+        <td>
+          {% if c.valor_mensal %}
+            <span style="font-weight:600;color:#16A34A;font-size:13px">R$&nbsp;{{ '{:,.0f}'.format(c.valor_mensal) }}</span>
+          {% else %}
+            <span class="text-muted text-sm">—</span>
+          {% endif %}
+        </td>
+
+        <!-- Último contato -->
+        <td>
+          {% if c.ultimo_contato %}
+            <span class="text-sm" style="color:var(--text)">{{ c.ultimo_contato }}</span>
+          {% else %}
+            <span class="text-muted text-sm">Sem registro</span>
+          {% endif %}
+          {% if c.cadencias_ativas %}
+            <div style="font-size:11px;color:#1D4ED8;margin-top:2px">⚡ {{ c.cadencias_ativas }} cadência(s)</div>
+          {% endif %}
+        </td>
+
+        <!-- Ações -->
+        <td style="text-align:center;white-space:nowrap">
+          {% if c.status_cor == 'vermelho' %}
+            <button class="btn btn-sm"
+                    style="background:linear-gradient(135deg,#DC2626,#B91C1C);color:#fff"
+                    onclick="reativarCliente({{ c.id }}, '{{ c.nome | replace("'", "\\'") | e }}', '{{ c.telefone or '' }}')">
+              ♻ Reativar
+            </button>
+          {% else %}
+            <span class="text-muted text-sm">—</span>
+          {% endif %}
+        </td>
+
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="empty-state" style="padding:48px 0">
+    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width:48px;height:48px">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+        d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+    </svg>
+    <p>Nenhum cliente ativo com score calculado.</p>
+    <p class="text-muted text-sm" style="margin-top:6px">Acesse a tela de Empresas e defina clientes ativos com dados comerciais.</p>
+    <a href="{{ url_for('empresas_lista') }}" class="btn btn-primary btn-sm" style="margin-top:12px">
+      Ir para Empresas
+    </a>
+  </div>
+  {% endif %}
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+/* ── Filter ── */
+function filtrarClientes(filtro, btn) {
+  document.querySelectorAll('.filter-btn').forEach(function(b) {
+    b.classList.remove('btn-primary');
+    b.classList.add('btn-outline');
+    b.style.removeProperty('color');
+    b.style.removeProperty('border-color');
+  });
+  btn.classList.remove('btn-outline');
+  btn.classList.add('btn-primary');
+  btn.style.removeProperty('color');
+  btn.style.removeProperty('border-color');
+
+  document.querySelectorAll('.termo-row').forEach(function(row) {
+    if (filtro === 'todos') {
+      row.style.display = '';
+    } else {
+      row.style.display = row.dataset.cor === filtro ? '' : 'none';
+    }
+  });
+}
+
+/* ── Reativar Cliente via IA ── */
+function reativarCliente(id, nome, tel_param) {
+  openModal('Reativar ' + nome, true);
+  fetch('/ai/reativar/' + id, {method: 'POST'})
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (d.error) { showError(d.error); return; }
+      var tel = (tel_param || '').replace(/\D/g, '');
+      var waUrl = tel ? 'https://wa.me/55' + tel + '?text=' + encodeURIComponent(d.mensagem) : '';
+      modalBody.innerHTML =
+        '<p class="text-muted text-sm mb-3">Mensagem de reengajamento gerada pela IA.</p>' +
+        '<textarea rows="6" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:6px;font-size:13px;resize:vertical;font-family:inherit">' +
+        (d.mensagem || '') + '</textarea>' +
+        '<div style="display:flex;gap:10px;margin-top:12px">' +
+        (waUrl
+          ? '<button onclick="window.open(\'' + waUrl + '\',\'_blank\')" ' +
+            'style="background:#25D366;color:#fff;padding:10px 20px;border:none;border-radius:6px;cursor:pointer;font-size:14px">' +
+            '📱 Abrir WhatsApp</button>'
+          : '') +
+        '</div>';
+    })
+    .catch(function(e) { showError(e.message); });
+}
+</script>
+{% endblock %}

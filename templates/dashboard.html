@@ -8,6 +8,132 @@
 
 {% block content %}
 
+<!-- ── BLOCO 1: Meta 90 dias ─────────────────────────────────────────────── -->
+<div class="card" style="margin-bottom:18px;background:linear-gradient(135deg,#4A3F35 0%,#6B5244 100%);color:#fff;border:none">
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px;margin-bottom:14px">
+    <div>
+      <p style="font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:rgba(255,255,255,.6);margin:0 0 4px">🎯 Meta 90 dias</p>
+      <p style="font-size:20px;font-weight:800;margin:0">R$&nbsp;{{ '{:,.0f}'.format(faturado_90d) }} <span style="font-size:14px;font-weight:400;color:rgba(255,255,255,.7)">/ R$&nbsp;100.000</span></p>
+    </div>
+    <div style="text-align:right">
+      <p style="font-size:22px;font-weight:800;margin:0;color:{% if dias_restantes <= 14 %}#FCA5A5{% else %}#FDE68A{% endif %}">{{ dias_restantes }} dias</p>
+      <p style="font-size:11px;color:rgba(255,255,255,.6);margin:2px 0 0">restantes</p>
+    </div>
+  </div>
+  <div style="background:rgba(255,255,255,.15);border-radius:6px;height:10px;margin-bottom:10px;overflow:hidden">
+    <div style="background:{% if pct_90d >= 80 %}#4ADE80{% elif pct_90d >= 40 %}#FDE68A{% else %}#FCA5A5{% endif %};height:100%;border-radius:6px;transition:width .6s;width:{{ [pct_90d, 100]|min }}%"></div>
+  </div>
+  <div style="display:flex;gap:20px;flex-wrap:wrap">
+    <div style="font-size:12px;color:rgba(255,255,255,.7)">{{ pct_90d }}% atingido</div>
+    <div style="font-size:12px;color:rgba(255,255,255,.7)">Ritmo necessário: <strong style="color:#FDE68A">R$&nbsp;{{ '{:,.0f}'.format(ritmo_diario) }}/dia</strong></div>
+  </div>
+</div>
+
+<!-- ── BLOCO 2: Funil comercial ──────────────────────────────────────────── -->
+<div class="cards-grid" style="margin-bottom:18px">
+  <div class="card" style="cursor:pointer" onclick="location.href='{{ url_for('sdr_painel') }}'">
+    <div class="kpi">
+      <div>
+        <div class="kpi-val" style="color:#1D4ED8">{{ funil.sdr_novos or 0 }}</div>
+        <div class="kpi-lbl">Prospects no SDR</div>
+      </div>
+      <div class="kpi-icon ic-blue">
+        <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/>
+        </svg>
+      </div>
+    </div>
+  </div>
+  <div class="card" style="cursor:pointer" onclick="location.href='{{ url_for('cadencias_index') }}'">
+    <div class="kpi">
+      <div>
+        <div class="kpi-val" style="color:#D97706">{{ funil.em_cadencia or 0 }}</div>
+        <div class="kpi-lbl">Em Cadência</div>
+      </div>
+      <div class="kpi-icon ic-orange">
+        <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+        </svg>
+      </div>
+    </div>
+  </div>
+  <div class="card" style="cursor:pointer" onclick="location.href='{{ url_for('oportunidades_kanban') }}'">
+    <div class="kpi">
+      <div>
+        <div class="kpi-val" style="color:#7C3AED">{{ funil.props_abertas or 0 }}</div>
+        <div class="kpi-lbl">Propostas Abertas</div>
+      </div>
+      <div class="kpi-icon ic-purple">
+        <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+        </svg>
+      </div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="kpi">
+      <div>
+        <div class="kpi-val" style="color:#16A34A">R$&nbsp;{{ '{:,.0f}'.format(funil.fechados_mes or 0) }}</div>
+        <div class="kpi-lbl">Fechados este mês</div>
+      </div>
+      <div class="kpi-icon ic-green">
+        <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+        </svg>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── BLOCO 3: Atividade de hoje ────────────────────────────────────────── -->
+{% if cad_hoje or ops_paradas %}
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:18px">
+
+  <div class="card">
+    <p class="card-title" style="margin-bottom:12px">⚡ Cadências para hoje
+      {% if cad_hoje %}<span style="background:#D97706;color:#fff;border-radius:10px;padding:1px 7px;font-size:11px;margin-left:6px">{{ cad_hoje|length }}</span>{% endif %}
+    </p>
+    {% if cad_hoje %}
+    <div style="display:flex;flex-direction:column;gap:8px">
+      {% for c in cad_hoje %}
+      <div style="padding:8px 10px;background:var(--bg,#F9FAFB);border-radius:6px;border-left:3px solid #D97706">
+        <div style="font-weight:600;font-size:13px">{{ c.empresa_nome }}</div>
+        <div style="font-size:11px;color:var(--muted)">Etapa {{ c.etapa }} · {{ c.contato_whatsapp or c.contato_email or '' }}</div>
+      </div>
+      {% endfor %}
+    </div>
+    <a href="{{ url_for('cadencias_index') }}" class="btn btn-outline btn-sm" style="margin-top:10px;width:100%;justify-content:center">Ver todas →</a>
+    {% else %}
+    <p class="text-muted text-sm">Nenhuma cadência para hoje.</p>
+    {% endif %}
+  </div>
+
+  <div class="card">
+    <p class="card-title" style="margin-bottom:12px">⚠ Oportunidades paradas
+      {% if ops_paradas %}<span style="background:#DC2626;color:#fff;border-radius:10px;padding:1px 7px;font-size:11px;margin-left:6px">{{ ops_paradas|length }}</span>{% endif %}
+    </p>
+    {% if ops_paradas %}
+    <div style="display:flex;flex-direction:column;gap:8px">
+      {% for op in ops_paradas %}
+      <div style="padding:8px 10px;background:var(--bg,#F9FAFB);border-radius:6px;border-left:3px solid #DC2626">
+        <div style="font-weight:600;font-size:13px">
+          <a href="{{ url_for('oportunidades_detalhe', id=op.id) }}" style="color:var(--text);text-decoration:none">{{ op.titulo or op.empresa_nome }}</a>
+        </div>
+        <div style="font-size:11px;color:#DC2626">Sem contato desde {{ op.data_ultimo_contato or 'desconhecido' }}</div>
+      </div>
+      {% endfor %}
+    </div>
+    <a href="{{ url_for('oportunidades_kanban') }}" class="btn btn-outline btn-sm" style="margin-top:10px;width:100%;justify-content:center">Ver kanban →</a>
+    {% else %}
+    <p class="text-muted text-sm">Nenhuma oportunidade parada. 👍</p>
+    {% endif %}
+  </div>
+
+</div>
+{% endif %}
+
 {% if radar_alerta_count > 0 %}
 <div class="radar-alert {% if radar_alerta_count >= 3 %}radar-alert-danger{% else %}radar-alert-warning{% endif %}">
   <span>
