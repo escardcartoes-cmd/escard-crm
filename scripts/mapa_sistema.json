@@ -715,6 +715,54 @@
       ]
     },
     {
+      "path": "/admin",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "path": "/admin/tenant/novo",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "path": "/admin/tenant/<int:tenant_id>/entrar",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "path": "/admin/tenant/<int:tenant_id>/toggle",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "path": "/setup",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "path": "/setup/salvar",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "path": "/ajuda",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "path": "/ajuda/kia",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
       "path": "/cqa",
       "methods": [
         "GET"
@@ -746,6 +794,8 @@
     }
   ],
   "templates": [
+    "admin_tenants.html",
+    "ajuda.html",
     "atividades/form.html",
     "atividades/lista.html",
     "base.html",
@@ -780,6 +830,7 @@
     "relatorio_semanal.html",
     "sdr_painel.html",
     "sdr_relatorio.html",
+    "setup_wizard.html",
     "simulador.html",
     "termometro.html",
     "usuarios/form.html",
@@ -796,6 +847,7 @@
     "expansao",
     "ia_config",
     "oportunidade",
+    "planos",
     "portal",
     "prospeccao",
     "prospeccao_auto",
@@ -803,6 +855,7 @@
     "radar",
     "recebivel",
     "relatorio",
+    "tenant",
     "usuario"
   ],
   "tabelas": [
@@ -817,6 +870,7 @@
     "empresa_config",
     "empresas",
     "ia_config",
+    "kia_historico",
     "oportunidades",
     "portal_acessos",
     "produtos_krylo",
@@ -832,6 +886,8 @@
     "sdr_log_ao_vivo",
     "sdr_sessoes",
     "sqlite_sequence",
+    "tenant_config",
+    "tenants",
     "usuarios"
   ]
 }

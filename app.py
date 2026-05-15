@@ -30,6 +30,8 @@ import models.portal as portal_model
 import models.relatorio as rel_model
 import models.prospeccao_auto as pauto_model
 import models.cnaes as cnaes_model
+import models.tenant as tenant_model
+import models.planos as planos_model
 from models.usuario import require_perfil, PERFIS, PERFIL_LABELS
 import ai
 
@@ -82,6 +84,46 @@ def inject_globals():
         }
     except Exception:
         return {"empresa_nome": "Krylo", "empresa_whatsapp": "", "estados_br": estados}
+
+
+@app.context_processor
+def inject_tenant():
+    try:
+        t = tenant_model.get_tenant_atual()
+    except Exception:
+        t = None
+    if not t:
+        t = {
+            "id": 1, "slug": "escard", "nome_empresa": "Escard Cartões",
+            "nome_plataforma": "Krylo", "cor_primaria": "#C5A089",
+            "cor_secundaria": "#8B6914", "cor_fundo": "#FAF8F5",
+            "logo_url": None, "plano": "enterprise", "configurado": 1,
+        }
+    try:
+        plano_info = planos_model.get_plano(t.get("plano", "starter"))
+    except Exception:
+        plano_info = {"nome": "Enterprise"}
+    return {"tenant": t, "plano_info": plano_info}
+
+
+@app.before_request
+def check_tenant_setup():
+    _bypass = {
+        "login", "logout", "static", "setup_wizard", "setup_salvar",
+        "ajuda_index", "ajuda_kia", "dev_ping",
+    }
+    endpoint = request.endpoint or ""
+    if endpoint in _bypass or endpoint.startswith("setup") or endpoint.startswith("admin_"):
+        return None
+    if not current_user.is_authenticated:
+        return None
+    try:
+        t = tenant_model.get_tenant_atual()
+        if t and not t.get("configurado"):
+            return redirect(url_for("setup_wizard"))
+    except Exception:
+        pass
+    return None
 
 
 @login_manager.user_loader
@@ -195,15 +237,18 @@ atexit.register(lambda: scheduler.shutdown(wait=False))
 def login():
     if current_user.is_authenticated:
         return redirect(url_for("dashboard"))
+    slug = request.args.get("t") or request.form.get("t_slug", "")
+    tenant_login = tenant_model.get_tenant_by_slug(slug) if slug else None
     if request.method == "POST":
         usuario = request.form.get("usuario", "").strip()
         senha   = request.form.get("senha", "")
         u = user_model.autenticar(usuario, senha)
         if u:
             login_user(u, remember=True)
+            session["tenant_id"] = u.tenant_id
             return redirect(request.args.get("next") or url_for("dashboard"))
         flash("Usuário ou senha incorretos.", "danger")
-    return render_template("login.html")
+    return render_template("login.html", tenant_login=tenant_login)
 
 
 @app.route("/logout")
@@ -3021,6 +3066,213 @@ def sdr_sessoes_lista():
                 if hasattr(v, 'isoformat'):
                     s[k] = v.isoformat()
         return jsonify(sessoes)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+# ── Super Admin — Gestão de Tenants ──────────────────────────────────────────
+
+@app.route("/admin")
+@login_required
+@require_perfil("admin")
+def admin_tenants():
+    tenants = tenant_model.listar_tenants()
+    total_ativos = sum(1 for t in tenants if t.get("ativo"))
+    return render_template("admin_tenants.html",
+                           tenants=tenants, total_ativos=total_ativos)
+
+
+@app.route("/admin/tenant/novo", methods=["POST"])
+@login_required
+@require_perfil("admin")
+def admin_tenant_novo():
+    try:
+        dados = {
+            "nome_empresa":    request.form.get("nome_empresa", "").strip(),
+            "nome_plataforma": request.form.get("nome_plataforma", "CRM").strip(),
+            "plano":           request.form.get("plano", "starter"),
+            "admin_nome":      request.form.get("admin_nome", "Admin").strip(),
+            "admin_email":     request.form.get("admin_email", "").strip(),
+            "admin_usuario":   request.form.get("admin_usuario", "").strip(),
+            "senha_admin":     request.form.get("senha_admin", "krylo2024"),
+            "cor_primaria":    request.form.get("cor_primaria", "#4A90D9"),
+        }
+        if not dados["nome_empresa"]:
+            flash("Nome da empresa é obrigatório.", "danger")
+            return redirect(url_for("admin_tenants"))
+        tenant_id = tenant_model.criar_tenant(dados)
+        flash(f"Tenant #{tenant_id} criado. Usuário: {dados['admin_usuario']} / Senha: {dados['senha_admin']}", "success")
+    except Exception as e:
+        flash(f"Erro ao criar tenant: {e}", "danger")
+    return redirect(url_for("admin_tenants"))
+
+
+@app.route("/admin/tenant/<int:tenant_id>/entrar", methods=["POST"])
+@login_required
+@require_perfil("admin")
+def admin_tenant_entrar(tenant_id):
+    session["tenant_id"] = tenant_id
+    flash(f"Você está visualizando o ambiente do tenant #{tenant_id}.", "info")
+    return redirect(url_for("dashboard"))
+
+
+@app.route("/admin/tenant/<int:tenant_id>/toggle", methods=["POST"])
+@login_required
+@require_perfil("admin")
+def admin_tenant_toggle(tenant_id):
+    conn = database.get_connection()
+    row = conn.execute("SELECT ativo FROM tenants WHERE id=?", (tenant_id,)).fetchone()
+    if row:
+        novo = 0 if row["ativo"] else 1
+        conn.execute("UPDATE tenants SET ativo=? WHERE id=?", (novo, tenant_id))
+        conn.commit()
+    conn.close()
+    return redirect(url_for("admin_tenants"))
+
+
+# ── Setup Wizard — Onboarding Multi-tenant ────────────────────────────────────
+
+@app.route("/setup")
+@login_required
+def setup_wizard():
+    t = tenant_model.get_tenant_atual()
+    if t and t.get("configurado"):
+        return redirect(url_for("dashboard"))
+    tc = tenant_model.get_tenant_config(t["id"]) if t else {}
+    return render_template("setup_wizard.html", tenant=t, tc=tc)
+
+
+@app.route("/setup/salvar", methods=["POST"])
+@login_required
+def setup_salvar():
+    t = tenant_model.get_tenant_atual()
+    if not t:
+        return redirect(url_for("dashboard"))
+    try:
+        dados = {
+            "nome_empresa":    request.form.get("nome_empresa", "").strip(),
+            "nome_plataforma": request.form.get("nome_plataforma", "CRM").strip(),
+            "ramo_principal":  request.form.get("ramo_principal", "").strip(),
+            "produtos_texto":  request.form.get("produtos_texto", "").strip(),
+            "diferenciais":    request.form.get("diferenciais", "").strip(),
+            "tom_ia":          request.form.get("tom_ia", "profissional"),
+            "whatsapp":        request.form.get("whatsapp", "").strip(),
+            "email_contato":   request.form.get("email_contato", "").strip(),
+            "site":            request.form.get("site", "").strip(),
+            "cor_primaria":    request.form.get("cor_primaria", "#C5A089"),
+            "logo_url":        request.form.get("logo_url", "").strip() or None,
+        }
+        tenant_model.salvar_setup(t["id"], dados)
+        # Limpa cache de tenant no g para recarregar
+        from flask import g as _g
+        if hasattr(_g, "tenant"):
+            del _g.tenant
+        session["tenant_id"] = t["id"]
+        flash("Configuração salva! Bem-vindo ao seu CRM.", "success")
+    except Exception as e:
+        flash(f"Erro ao salvar configuração: {e}", "danger")
+    return redirect(url_for("dashboard"))
+
+
+# ── Ajuda e KIA ────────────────────────────────────────────────────────────────
+
+@app.route("/ajuda")
+@login_required
+def ajuda_index():
+    import json as _json
+    artigos_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "artigos_ajuda.json")
+    try:
+        with open(artigos_path, encoding="utf-8") as f:
+            artigos = _json.load(f)
+    except Exception:
+        artigos = []
+    categorias = {
+        "primeiros-passos": "Primeiros Passos",
+        "sdr":              "SDR Autônomo",
+        "cadencias":        "Cadências",
+        "empresas":         "Empresas e Leads",
+        "dashboard":        "Dashboard e Relatórios",
+        "configuracoes":    "Configurações",
+        "planos":           "Planos e Cobrança",
+    }
+    por_categoria = {c: [] for c in categorias}
+    for a in artigos:
+        cat = a.get("categoria", "")
+        if cat in por_categoria:
+            por_categoria[cat].append(a)
+    return render_template("ajuda.html",
+                           artigos=artigos,
+                           por_categoria=por_categoria,
+                           categorias=categorias)
+
+
+@app.route("/ajuda/kia", methods=["POST"])
+@login_required
+def ajuda_kia():
+    try:
+        import json as _json
+        body = request.json or {}
+        pergunta = (body.get("pergunta") or "").strip()
+        if not pergunta:
+            return jsonify({"error": "Pergunta vazia"}), 400
+
+        t = tenant_model.get_tenant_atual()
+        nome_plataforma = (t or {}).get("nome_plataforma", "Krylo")
+
+        # Carrega artigos para contexto
+        artigos_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "artigos_ajuda.json")
+        try:
+            with open(artigos_path, encoding="utf-8") as f:
+                artigos = _json.load(f)
+            base_conhecimento = "\n".join(
+                f"- {a['titulo']}: {a['conteudo']}" for a in artigos[:10]
+            )
+        except Exception:
+            base_conhecimento = ""
+
+        system = f"""Você é a KIA, assistente de suporte da plataforma {nome_plataforma}.
+Responda perguntas sobre como usar o sistema de CRM de forma direta e didática.
+
+FUNCIONALIDADES PRINCIPAIS:
+- SDR Autonomo: prospecta empresas automaticamente por CNAE
+- Cadencias: sequencia automatica de mensagens para leads
+- Empresas: gestao de prospects e clientes
+- Dashboard: metricas e funil de vendas
+- Radar de Mercado: monitora concorrentes e editais
+- Motor de Expansao: identifica oportunidades de upsell
+- Termometro: saude dos clientes
+- Simulador: gera propostas em 60 segundos
+- CQA: testa e corrige o sistema automaticamente
+
+BASE DE CONHECIMENTO:
+{base_conhecimento}
+
+Use sempre o nome "{nome_plataforma}" ao referenciar o sistema. Seja breve (máximo 4 parágrafos)."""
+
+        import anthropic as _ant
+        client = _ant.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY", ""))
+        resp = client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=600,
+            system=system,
+            messages=[{"role": "user", "content": pergunta}],
+        )
+        resposta = resp.content[0].text
+
+        # Salva histórico
+        if t:
+            try:
+                conn = database.get_connection()
+                conn.execute(
+                    "INSERT INTO kia_historico (tenant_id, pergunta, resposta) VALUES (?,?,?)",
+                    (t["id"], pergunta[:500], resposta[:2000]),
+                )
+                conn.commit()
+                conn.close()
+            except Exception:
+                pass
+
+        return jsonify({"resposta": resposta})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 

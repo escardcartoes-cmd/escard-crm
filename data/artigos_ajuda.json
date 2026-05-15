@@ -1,0 +1,100 @@
+[
+  {
+    "id": 1,
+    "categoria": "primeiros-passos",
+    "titulo": "Como começar no CRM",
+    "conteudo": "Bem-vindo! Comece cadastrando sua primeira empresa em Empresas > Nova Empresa. Em seguida, crie uma oportunidade para ela no Kanban de Oportunidades.",
+    "tags": ["inicio", "empresa", "oportunidade"]
+  },
+  {
+    "id": 2,
+    "categoria": "primeiros-passos",
+    "titulo": "Configurando o SDR Autônomo",
+    "conteudo": "O SDR Autônomo prospecta empresas automaticamente. Acesse SDR > Painel, configure os filtros (estado, CNAE, porte) e ative o toggle. O sistema buscará leads 24h após a ativação.",
+    "tags": ["sdr", "prospeccao", "leads", "automatico"]
+  },
+  {
+    "id": 3,
+    "categoria": "sdr",
+    "titulo": "O que é CNAE e como filtrar?",
+    "conteudo": "CNAE é o Código Nacional de Atividades Econômicas. Use o campo de busca de CNAEs para filtrar empresas por segmento. Ex: 4711302 = supermercados, 6202300 = TI.",
+    "tags": ["cnae", "filtro", "segmento"]
+  },
+  {
+    "id": 4,
+    "categoria": "sdr",
+    "titulo": "Por que o SDR não está encontrando leads?",
+    "conteudo": "Verifique: 1) O SDR está ativado? 2) Os filtros estão muito restritivos? 3) Você está dentro do horário configurado? Tente ampliar o estado ou reduzir o capital mínimo.",
+    "tags": ["sdr", "leads", "problema", "troubleshoot"]
+  },
+  {
+    "id": 5,
+    "categoria": "cadencias",
+    "titulo": "Como funciona uma cadência?",
+    "conteudo": "Uma cadência é uma sequência automática de contatos. Quando um lead é importado pelo SDR, uma cadência é criada com mensagens prontas para WhatsApp e Email. Acesse Atividades para ver as cadências do dia.",
+    "tags": ["cadencia", "whatsapp", "email", "sequencia"]
+  },
+  {
+    "id": 6,
+    "categoria": "cadencias",
+    "titulo": "Como concluir uma cadência?",
+    "conteudo": "Em Atividades, filtre por Cadências. Clique em WhatsApp para enviar a mensagem, depois clique em Concluir. A próxima etapa da cadência será agendada automaticamente.",
+    "tags": ["cadencia", "concluir", "whatsapp"]
+  },
+  {
+    "id": 7,
+    "categoria": "empresas",
+    "titulo": "Como importar leads em lote?",
+    "conteudo": "Acesse Sistema > Importar Leads. Faça upload de um arquivo CSV ou Excel com as colunas: nome, cnpj, telefone, email, cidade, estado.",
+    "tags": ["importar", "leads", "csv", "excel", "lote"]
+  },
+  {
+    "id": 8,
+    "categoria": "empresas",
+    "titulo": "Qual a diferença entre Prospect e Cliente?",
+    "conteudo": "Prospect é uma empresa que ainda não comprou. Cliente é uma empresa com contrato ativo. Você pode mudar o status na tela de edição da empresa.",
+    "tags": ["prospect", "cliente", "status"]
+  },
+  {
+    "id": 9,
+    "categoria": "dashboard",
+    "titulo": "O que é a Meta 90 dias?",
+    "conteudo": "A Meta 90 dias mostra o progresso em direção à meta de faturamento definida. O ritmo necessário indica quanto você precisa fechar por dia para atingir a meta no prazo.",
+    "tags": ["meta", "dashboard", "faturamento", "kpi"]
+  },
+  {
+    "id": 10,
+    "categoria": "dashboard",
+    "titulo": "Como interpretar o Funil Comercial?",
+    "conteudo": "O funil mostra: Prospects no SDR (leads novos), Em Cadência (sendo trabalhados), Propostas Abertas (negociando) e Fechados este mês (ganhos).",
+    "tags": ["funil", "pipeline", "dashboard", "metricas"]
+  },
+  {
+    "id": 11,
+    "categoria": "configuracoes",
+    "titulo": "Como configurar a IA comercial?",
+    "conteudo": "Acesse Sistema > Painel IA para configurar a personalidade, tom e estratégia da assistente de IA. Quanto mais detalhes você der sobre sua empresa, melhores serão os pitches gerados.",
+    "tags": ["ia", "config", "pitch", "personalidade"]
+  },
+  {
+    "id": 12,
+    "categoria": "configuracoes",
+    "titulo": "Como adicionar usuários?",
+    "conteudo": "Acesse Sistema > Usuários (apenas admins). Clique em Novo Usuário e defina o perfil: Admin (acesso total), Gerente, Vendedor ou Visualizador.",
+    "tags": ["usuarios", "permissoes", "perfil", "acesso"]
+  },
+  {
+    "id": 13,
+    "categoria": "planos",
+    "titulo": "Quais são os planos disponíveis?",
+    "conteudo": "Starter (R$97/mês): até 500 empresas, 2 usuários, 50 leads SDR. Profissional (R$197/mês): até 5000 empresas, 10 usuários, 500 leads, Radar. Enterprise (R$497/mês): ilimitado + White Label.",
+    "tags": ["planos", "preco", "limite", "upgrade"]
+  },
+  {
+    "id": 14,
+    "categoria": "primeiros-passos",
+    "titulo": "Como usar o Simulador de Proposta?",
+    "conteudo": "Acesse Vendas > Simulador. Informe o número de funcionários e os produtos de interesse. O sistema calculará o valor estimado e a IA gerará um pitch personalizado.",
+    "tags": ["simulador", "proposta", "pitch", "vendas"]
+  }
+]

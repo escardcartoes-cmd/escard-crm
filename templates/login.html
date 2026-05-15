@@ -3,11 +3,15 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Login — Krylo CRM</title>
+  <title>Login — {{ tenant_login.nome_plataforma if tenant_login else 'Krylo' }} CRM</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <style>
+    :root {
+      --primary: {{ tenant_login.cor_primaria if tenant_login else '#C5A089' }};
+      --primary-dark: {{ tenant_login.cor_secundaria if tenant_login else '#8B6914' }};
+    }
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     body {
       font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
@@ -27,10 +31,11 @@
       box-shadow: 0 20px 60px rgba(0,0,0,.25);
     }
     .logo-wrap { text-align: center; margin-bottom: 32px; }
+    .logo-img { max-height: 56px; max-width: 200px; object-fit: contain; margin-bottom: 8px; }
     .logo-name {
       font-size: 28px; font-weight: 800; color: #4A3F35; letter-spacing: .3px;
     }
-    .logo-name span { color: #C5A089; }
+    .logo-name span { color: var(--primary); }
     .logo-sub { font-size: 12px; color: #64748b; margin-top: 4px; }
     .login-title { font-size: 16px; font-weight: 700; color: #1e293b; margin-bottom: 24px; text-align: center; }
 
@@ -44,8 +49,8 @@
       outline: none;
     }
     input[type="text"]:focus, input[type="password"]:focus {
-      border-color: #C5A089;
-      box-shadow: 0 0 0 3px rgba(37,99,235,.12);
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(197,160,137,.15);
     }
     .btn-login {
       width: 100%; padding: 13px;
@@ -55,7 +60,7 @@
       cursor: pointer; margin-top: 8px;
       transition: background .15s;
     }
-    .btn-login:hover { background: #C5A089; }
+    .btn-login:hover { background: var(--primary); }
 
     .alert {
       background: #fef2f2; border: 1px solid #fecdd3; color: #be123c;
@@ -68,8 +73,17 @@
 <body>
   <div class="login-box">
     <div class="logo-wrap">
-      <div class="logo-name">Kry<span>lo</span></div>
-      <div class="logo-sub">CRM · Cartão de Benefícios B2B</div>
+      {% set _t = tenant_login %}
+      {% if _t and _t.logo_url %}
+        <img src="{{ _t.logo_url }}" alt="{{ _t.nome_plataforma }}" class="logo-img"><br>
+        <div class="logo-sub">{{ _t.nome_empresa }}</div>
+      {% elif _t %}
+        <div class="logo-name">{{ _t.nome_plataforma }}</div>
+        <div class="logo-sub">{{ _t.nome_empresa }}</div>
+      {% else %}
+        <div class="logo-name">Kry<span>lo</span></div>
+        <div class="logo-sub">CRM · Cartão de Benefícios B2B</div>
+      {% endif %}
     </div>
 
     <p class="login-title">Acesse sua conta</p>
@@ -81,6 +95,7 @@
     {% endwith %}
 
     <form method="post" action="{{ url_for('login') }}">
+      {% if tenant_login %}<input type="hidden" name="t_slug" value="{{ tenant_login.slug }}">{% endif %}
       <div class="form-group">
         <label for="usuario">Usuário</label>
         <input type="text" id="usuario" name="usuario" placeholder="admin"
@@ -94,7 +109,10 @@
       <button type="submit" class="btn-login">Entrar →</button>
     </form>
 
-    <div class="login-footer">Krylo CRM v2.0 — Acesso restrito</div>
+    <div class="login-footer">
+      {% if tenant_login %}{{ tenant_login.nome_plataforma }} CRM — Acesso restrito
+      {% else %}Krylo CRM v2.0 — Acesso restrito{% endif %}
+    </div>
   </div>
 </body>
 </html>

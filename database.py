@@ -392,6 +392,47 @@ _SQLITE_DDL = """
         resolvido  INTEGER DEFAULT 0,
         criado_em  TEXT    DEFAULT (datetime('now', 'localtime'))
     );
+
+    CREATE TABLE IF NOT EXISTS tenants (
+        id                   INTEGER PRIMARY KEY AUTOINCREMENT,
+        slug                 TEXT    UNIQUE NOT NULL,
+        nome_empresa         TEXT    NOT NULL,
+        nome_plataforma      TEXT    DEFAULT 'Krylo',
+        logo_url             TEXT,
+        cor_primaria         TEXT    DEFAULT '#C5A089',
+        cor_secundaria       TEXT    DEFAULT '#8B6914',
+        cor_fundo            TEXT    DEFAULT '#FAF8F5',
+        dominio_personalizado TEXT,
+        plano                TEXT    DEFAULT 'starter',
+        ativo                INTEGER DEFAULT 1,
+        trial_ate            TEXT,
+        criado_em            TEXT    DEFAULT (datetime('now', 'localtime')),
+        configurado          INTEGER DEFAULT 0
+    );
+
+    CREATE TABLE IF NOT EXISTS tenant_config (
+        id              INTEGER PRIMARY KEY AUTOINCREMENT,
+        tenant_id       INTEGER UNIQUE,
+        ramo_principal  TEXT,
+        produtos_texto  TEXT,
+        diferenciais    TEXT,
+        historico       TEXT,
+        concorrentes    TEXT,
+        tom_ia          TEXT    DEFAULT 'profissional',
+        personalidade_ia TEXT,
+        whatsapp        TEXT,
+        email_contato   TEXT,
+        site            TEXT,
+        configurado_em  TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS kia_historico (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        tenant_id  INTEGER DEFAULT 1,
+        pergunta   TEXT,
+        resposta   TEXT,
+        criado_em  TEXT DEFAULT (datetime('now', 'localtime'))
+    );
 """
 
 
@@ -540,6 +581,15 @@ def run_migrations(conn) -> None:
         f"ALTER TABLE sdr_config ADD COLUMN{_ifne} estados_selecionados TEXT DEFAULT ''",
         f"ALTER TABLE sdr_config ADD COLUMN{_ifne} cidades_selecionadas TEXT DEFAULT ''",
         f"ALTER TABLE sdr_config ADD COLUMN{_ifne} sem_restricao_horario INTEGER DEFAULT 0",
+        # Multi-tenant columns
+        f"ALTER TABLE usuarios ADD COLUMN{_ifne} tenant_id INTEGER DEFAULT 1",
+        f"ALTER TABLE empresas ADD COLUMN{_ifne} tenant_id INTEGER DEFAULT 1",
+        f"ALTER TABLE cadencias ADD COLUMN{_ifne} tenant_id INTEGER DEFAULT 1",
+        f"ALTER TABLE oportunidades ADD COLUMN{_ifne} tenant_id INTEGER DEFAULT 1",
+        f"ALTER TABLE atividades ADD COLUMN{_ifne} tenant_id INTEGER DEFAULT 1",
+        f"ALTER TABLE sdr_config ADD COLUMN{_ifne} tenant_id INTEGER DEFAULT 1",
+        f"ALTER TABLE prospeccao_automatica ADD COLUMN{_ifne} tenant_id INTEGER DEFAULT 1",
+        f"ALTER TABLE cqa_resultados ADD COLUMN{_ifne} tenant_id INTEGER DEFAULT 1",
     ]
 
     _CREATE = [
@@ -804,6 +854,48 @@ def run_migrations(conn) -> None:
             resolvido  INTEGER DEFAULT 0,
             criado_em  TEXT    DEFAULT (datetime('now', 'localtime'))
         )""",
+        """CREATE TABLE IF NOT EXISTS tenants (
+            id                    INTEGER PRIMARY KEY AUTOINCREMENT,
+            slug                  TEXT    UNIQUE NOT NULL,
+            nome_empresa          TEXT    NOT NULL,
+            nome_plataforma       TEXT    DEFAULT 'Krylo',
+            logo_url              TEXT,
+            cor_primaria          TEXT    DEFAULT '#C5A089',
+            cor_secundaria        TEXT    DEFAULT '#8B6914',
+            cor_fundo             TEXT    DEFAULT '#FAF8F5',
+            dominio_personalizado TEXT,
+            plano                 TEXT    DEFAULT 'starter',
+            ativo                 INTEGER DEFAULT 1,
+            trial_ate             TEXT,
+            criado_em             TEXT    DEFAULT (datetime('now', 'localtime')),
+            configurado           INTEGER DEFAULT 0
+        )""",
+        """CREATE TABLE IF NOT EXISTS tenant_config (
+            id               INTEGER PRIMARY KEY AUTOINCREMENT,
+            tenant_id        INTEGER UNIQUE,
+            ramo_principal   TEXT,
+            produtos_texto   TEXT,
+            diferenciais     TEXT,
+            historico        TEXT,
+            concorrentes     TEXT,
+            tom_ia           TEXT    DEFAULT 'profissional',
+            personalidade_ia TEXT,
+            whatsapp         TEXT,
+            email_contato    TEXT,
+            site             TEXT,
+            configurado_em   TEXT
+        )""",
+        """CREATE TABLE IF NOT EXISTS kia_historico (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            tenant_id  INTEGER DEFAULT 1,
+            pergunta   TEXT,
+            resposta   TEXT,
+            criado_em  TEXT DEFAULT (datetime('now', 'localtime'))
+        )""",
+        # Indexes for multi-tenant performance
+        "CREATE INDEX IF NOT EXISTS idx_empresas_tenant ON empresas(tenant_id)",
+        "CREATE INDEX IF NOT EXISTS idx_cadencias_tenant ON cadencias(tenant_id)",
+        "CREATE INDEX IF NOT EXISTS idx_oportunidades_tenant ON oportunidades(tenant_id)",
     ]
 
     for sql in _ALTER + _CREATE:
@@ -822,6 +914,9 @@ def run_migrations(conn) -> None:
         "INSERT OR IGNORE INTO ia_config (id) VALUES (1)",
         "INSERT OR IGNORE INTO empresa_config (id) VALUES (1)",
         "INSERT OR IGNORE INTO sdr_config (id) VALUES (1)",
+        # Tenant padrão Escard (id=1 garantido na primeira execução)
+        "INSERT OR IGNORE INTO tenants (slug, nome_empresa, nome_plataforma, cor_primaria, cor_secundaria, ativo, configurado) VALUES ('escard', 'Escard Cartões', 'Krylo', '#C5A089', '#8B6914', 1, 1)",
+        "INSERT OR IGNORE INTO tenant_config (tenant_id) SELECT 1 WHERE EXISTS (SELECT 1 FROM tenants WHERE slug='escard')",
     ]
     for sql in _seeds:
         try:
@@ -833,6 +928,16 @@ def run_migrations(conn) -> None:
                 conn.rollback()
             except Exception:
                 pass
+
+    # Ensure tenant_id=1 for all existing rows (idempotent)
+    for _tab_tenant in ["empresas", "cadencias", "oportunidades", "atividades",
+                         "prospeccao_automatica", "usuarios"]:
+        try:
+            conn.execute(f"UPDATE {_tab_tenant} SET tenant_id=1 WHERE tenant_id IS NULL")
+            conn.commit()
+        except Exception:
+            try: conn.rollback()
+            except Exception: pass
 
     # Repair double-encoded city names (postgres only, idempotent)
     if _USE_PG:

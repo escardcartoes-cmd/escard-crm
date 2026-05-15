@@ -195,11 +195,46 @@ def teste_dashboard():
         return _r("dashboard", "erro", f"Erro: {e}")
 
 
+def teste_multi_tenant():
+    tabelas_tenant = ["empresas", "cadencias", "oportunidades", "atividades",
+                      "sdr_config", "prospeccao_automatica"]
+    try:
+        conn = database.get_connection()
+        # Check tenants table exists and has at least 1 row
+        t_row = conn.execute("SELECT COUNT(*) AS cnt FROM tenants").fetchone()
+        n_tenants = int(t_row["cnt"] if t_row else 0)
+        if n_tenants == 0:
+            conn.close()
+            return _r("multi_tenant", "aviso", "Tabela tenants vazia — seed nao rodou?")
+
+        # Check tenant_config table
+        tc_row = conn.execute("SELECT COUNT(*) AS cnt FROM tenant_config").fetchone()
+        n_tc = int(tc_row["cnt"] if tc_row else 0)
+
+        # Check tenant_id column in each table
+        missing_col = []
+        for tab in tabelas_tenant:
+            try:
+                conn.execute(f"SELECT tenant_id FROM {tab} LIMIT 1")
+            except Exception:
+                missing_col.append(tab)
+
+        conn.close()
+
+        if missing_col:
+            return _r("multi_tenant", "erro",
+                      f"Coluna tenant_id faltando em: {missing_col}")
+        return _r("multi_tenant", "ok",
+                  f"Multi-tenant OK — {n_tenants} tenant(s), {n_tc} config(s), tenant_id em todas as tabelas")
+    except Exception as e:
+        return _r("multi_tenant", "erro", f"Erro: {e}")
+
+
 def rodar_todos_os_testes():
     testes = [
         teste_rotas_get, teste_encoding_templates, teste_banco_de_dados,
         teste_encoding_banco, teste_sdr_engine, teste_cadencias_travadas,
-        teste_javascript, teste_novos_modulos, teste_dashboard,
+        teste_javascript, teste_novos_modulos, teste_dashboard, teste_multi_tenant,
     ]
     resultados = []
     for t in testes:
