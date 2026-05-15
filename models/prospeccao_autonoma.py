@@ -144,6 +144,40 @@ def carregar_produtos_do_banco(db) -> list:
         return REGRAS_POR_PRODUTO
 
 
+def obter_cnaes_para_busca(config: dict) -> list:
+    """Retorna lista de CNAEs baseada nos ramos selecionados ou seleção manual."""
+    from models.cnaes import CNAES_POR_CATEGORIA
+
+    # Prioridade 1: ramos selecionados no painel SDR
+    ramos_raw = config.get("ramos_selecionados") or ""
+    ramos_lista = [r.strip() for r in ramos_raw.split(",") if r.strip()]
+    if ramos_lista:
+        cnaes = []
+        for ramo in ramos_lista:
+            cnaes.extend(CNAES_POR_CATEGORIA.get(ramo, []))
+        return list(dict.fromkeys(cnaes))  # dedupe preservando ordem
+
+    # Prioridade 2: CNAEs individuais salvos no config
+    cnaes_raw = config.get("cnaes") or ""
+    if cnaes_raw:
+        return [c.strip() for c in cnaes_raw.split(",") if c.strip()]
+
+    # Prioridade 3: sem filtro — busca geral
+    return []
+
+
+def _ramo_do_cnae(cnae: str) -> str:
+    """Retorna o nome do ramo ao qual um CNAE pertence, ou o próprio código."""
+    try:
+        from models.cnaes import CNAES_POR_CATEGORIA
+        for ramo, codigos in CNAES_POR_CATEGORIA.items():
+            if cnae in codigos:
+                return ramo
+    except Exception:
+        pass
+    return cnae
+
+
 def _carregar_regras_do_banco() -> list:
     try:
         conn = get_connection()
@@ -714,149 +748,143 @@ def _tentar_cadencia(db, sessao_id, stats, empresa, cnpj, score, nome_produto,
              empresa=(empresa.get("razao_social") or "")[:80])
 
 
-# ── Modo 1: busca por produto + CNAE ─────────────────────────────────────────
+# ── Modo 1: busca por ramo de atividade / CNAE ───────────────────────────────
 
 def _rodar_modo_cnae(db, cfg: dict, sessao_id: str, stats: dict, max_leads: int) -> str:
-    """Busca empresas filtrando por CNAE de cada produto/ramo. Retorna 'pausado' ou 'concluido'."""
-    regras      = carregar_produtos_do_banco(db)
+    """Busca empresas pelos ramos/CNAEs configurados. Retorna 'pausado' ou 'concluido'."""
     _estados_raw = cfg.get("estados_selecionados") or cfg.get("estados") or "ES,SP"
     estados_cfg  = [e.strip().upper() for e in _estados_raw.split(",") if e.strip()]
     _cidades_raw = cfg.get("cidades_selecionadas") or cfg.get("cidades") or ""
     cidades_cfg  = [c.strip() for c in _cidades_raw.split(",") if c.strip()]
-    produto_foco = cfg.get("produto_foco") or "todos"
     canal_prim   = cfg.get("canal_primario") or "whatsapp"
+    score_min_cad = int(cfg.get("score_minimo") or 6)
 
-    for regra in regras:
+    # CNAEs determinados pelos ramos selecionados (prioridade) ou seleção manual
+    cnaes_busca = obter_cnaes_para_busca(cfg)
+    if not cnaes_busca:
+        # Fallback: CNAEs dos produtos cadastrados
+        for r in carregar_produtos_do_banco(db):
+            cnaes_busca.extend(r.get("cnaes", []))
+        cnaes_busca = list(dict.fromkeys(cnaes_busca))
+
+    ramos_sel   = [r.strip() for r in (cfg.get("ramos_selecionados") or "").split(",") if r.strip()]
+    label_geral = ramos_sel[0] if ramos_sel else "geral"
+
+    for uf in estados_cfg[:5]:
         if stats["importados"] >= max_leads:
             break
+        if sdr_deve_parar(db, sessao_id):
+            _log(db, sessao_id, "pausa", f"SDR pausado durante busca em {uf}", uf=uf)
+            return "pausado"
 
-        nome_produto = regra["produto"]
-        if produto_foco != "todos" and nome_produto.lower() not in produto_foco.lower():
-            continue
-
-        estados_busca = estados_cfg or regra.get("ufs", ["ES", "SP"])
-        cnaes_regra   = regra.get("cnaes", [])
-
-        for uf in estados_busca[:3]:
+        for cnae in cnaes_busca[:10]:
             if stats["importados"] >= max_leads:
                 break
-
             if sdr_deve_parar(db, sessao_id):
-                _log(db, sessao_id, "pausa", f"SDR pausado durante busca em {uf}", uf=uf)
                 return "pausado"
 
-            cnaes_busca = [c.strip() for c in cfg.get("cnaes", "").split(",") if c.strip()] \
-                          or cnaes_regra
+            ramo_label = _ramo_do_cnae(cnae)
 
-            for cnae in cnaes_busca[:2]:
+            atualizar_progresso(db, sessao_id,
+                produto_atual=ramo_label, estado_atual=uf,
+                ultima_acao=f"Buscando [{ramo_label}] em {uf} (CNAE {cnae})",
+                encontrados=stats["encontrados"], aprovados=stats["aprovados"],
+                importados=stats["importados"], cadencias=stats["cadencias"],
+                descartados=stats["descartados"], filtrados=stats["filtrados"])
+
+            _log(db, sessao_id, "busca",
+                 f"Buscando empresas de [{ramo_label}] em {uf}",
+                 uf=uf, produto=ramo_label)
+
+            empresas_lista = buscar_empresas_por_cnae(cnae, uf, limit=10)
+
+            _log(db, sessao_id, "info",
+                 f"API retornou {len(empresas_lista)} empresas para CNAE {cnae} em {uf}",
+                 uf=uf, produto=ramo_label)
+
+            for item in empresas_lista:
                 if stats["importados"] >= max_leads:
                     break
+                if sdr_deve_parar(db, sessao_id):
+                    return "pausado"
+
+                cnpj = "".join(filter(str.isdigit, str(item.get("cnpj", ""))))
+                if not cnpj or len(cnpj) != 14:
+                    continue
+
+                deve, _ = empresa_deve_ser_recontato(cnpj, cfg, db)
+                if not deve:
+                    stats["filtrados"] += 1
+                    continue
+
+                empresa = buscar_por_cnpj_especifico(cnpj)
+                if not empresa:
+                    time.sleep(0.5)
+                    continue
+
+                razao   = (empresa.get("razao_social") or "")[:80]
+                capital = float(empresa.get("capital_social") or 0)
+                uf_emp  = empresa.get("uf") or uf
+                stats["encontrados"] += 1
 
                 atualizar_progresso(db, sessao_id,
-                    produto_atual=nome_produto, estado_atual=uf,
-                    ultima_acao=f"Buscando {nome_produto} em {uf} (CNAE {cnae})",
-                    encontrados=stats["encontrados"], aprovados=stats["aprovados"],
-                    importados=stats["importados"], cadencias=stats["cadencias"],
-                    descartados=stats["descartados"], filtrados=stats["filtrados"])
+                    empresa_atual=razao,
+                    ultima_acao=f"Analisando: {razao}",
+                    encontrados=stats["encontrados"])
 
-                _log(db, sessao_id, "busca",
-                     f"Buscando empresas de {nome_produto} em {uf}",
-                     uf=uf, produto=nome_produto)
+                _log(db, sessao_id, "encontrado",
+                     f"Analisando empresa: {razao}",
+                     empresa=razao, uf=uf_emp, produto=ramo_label, capital=capital)
 
-                empresas_lista = buscar_empresas_por_cnae(cnae, uf, limit=10)
+                aprovado_filtro, motivo_filtro = aplicar_filtros_config(empresa, cfg)
+                if not aprovado_filtro:
+                    stats["descartados"] += 1
+                    _log(db, sessao_id, "descarte",
+                         f"Descartada: {motivo_filtro}",
+                         empresa=razao, uf=uf_emp, score=0)
+                    continue
 
-                _log(db, sessao_id, "info",
-                     f"API retornou {len(empresas_lista)} empresas para CNAE {cnae} em {uf}",
-                     uf=uf, produto=nome_produto)
+                if cidades_cfg and not _cidade_match(empresa.get("municipio") or "", cidades_cfg):
+                    stats["filtrados"] += 1
+                    _log(db, sessao_id, "filtro",
+                         f"Fora da cidade alvo: {empresa.get('municipio','')}",
+                         empresa=razao, uf=uf_emp)
+                    continue
 
-                for item in empresas_lista:
-                    if stats["importados"] >= max_leads:
-                        break
-                    if sdr_deve_parar(db, sessao_id):
-                        return "pausado"
+                res_score = calcular_score_avancado(empresa, cfg)
+                score     = res_score["score"]
+                stats["aprovados"] += 1
 
-                    cnpj = "".join(filter(str.isdigit, str(item.get("cnpj", ""))))
-                    if not cnpj or len(cnpj) != 14:
-                        continue
+                _log(db, sessao_id, "score",
+                     f"Score {score}/10 — {', '.join(res_score['motivos'][:3])}",
+                     empresa=razao, uf=uf_emp, score=score, produto=ramo_label,
+                     status="aprovado" if res_score["aprovado"] else "baixo_score",
+                     capital=capital)
 
-                    deve, _ = empresa_deve_ser_recontato(cnpj, cfg, db)
-                    if not deve:
-                        stats["filtrados"] += 1
-                        continue
-
-                    empresa = buscar_por_cnpj_especifico(cnpj)
-                    if not empresa:
-                        time.sleep(0.5)
-                        continue
-
-                    razao   = (empresa.get("razao_social") or "")[:80]
-                    capital = float(empresa.get("capital_social") or 0)
-                    uf_emp  = empresa.get("uf") or uf
-                    stats["encontrados"] += 1
-
-                    atualizar_progresso(db, sessao_id,
-                        empresa_atual=razao,
-                        ultima_acao=f"Analisando: {razao}",
-                        encontrados=stats["encontrados"])
-
-                    _log(db, sessao_id, "encontrado",
-                         f"Analisando empresa: {razao}",
-                         empresa=razao, uf=uf_emp, produto=nome_produto, capital=capital)
-
-                    aprovado_filtro, motivo_filtro = aplicar_filtros_config(empresa, cfg)
-                    if not aprovado_filtro:
-                        stats["descartados"] += 1
-                        _log(db, sessao_id, "descarte",
-                             f"Descartada: {motivo_filtro}",
-                             empresa=razao, uf=uf_emp, score=0)
-                        continue
-
-                    if cidades_cfg and not _cidade_match(empresa.get("municipio") or "", cidades_cfg):
-                        stats["filtrados"] += 1
-                        _log(db, sessao_id, "filtro",
-                             f"Fora da cidade alvo: {empresa.get('municipio','')}",
-                             empresa=razao, uf=uf_emp)
-                        continue
-
-                    res_score = calcular_score_avancado(empresa, cfg)
-                    score     = res_score["score"]
-                    stats["aprovados"] += 1
-
-                    _log(db, sessao_id, "score",
-                         f"Score {score}/10 — {', '.join(res_score['motivos'][:3])}",
-                         empresa=razao, uf=uf_emp, score=score, produto=nome_produto,
-                         status="aprovado" if res_score["aprovado"] else "baixo_score",
-                         capital=capital)
-
-                    hoje_str = date.today().isoformat()
+                hoje_str = date.today().isoformat()
+                try:
+                    telefone, email = _salvar_empresa(
+                        db, cnpj, empresa, score, ramo_label, hoje_str)
+                    stats["importados"] += 1
+                    atualizar_progresso(db, sessao_id, importados=stats["importados"])
+                    _log(db, sessao_id, "importado",
+                         f"Salvo na base! Score {score}/10",
+                         empresa=razao, uf=uf_emp, score=score,
+                         produto=ramo_label, status="importado", capital=capital)
+                except Exception:
                     try:
-                        telefone, email = _salvar_empresa(
-                            db, cnpj, empresa, score, nome_produto, hoje_str)
-                        stats["importados"] += 1
-                        atualizar_progresso(db, sessao_id, importados=stats["importados"])
-                        _log(db, sessao_id, "importado",
-                             f"Salvo na base! Score {score}/10",
-                             empresa=razao, uf=uf_emp, score=score,
-                             produto=nome_produto, status="importado", capital=capital)
+                        db.rollback()
                     except Exception:
-                        try:
-                            db.rollback()
-                        except Exception:
-                            pass
-                        continue
+                        pass
+                    continue
 
-                    score_min_cad = regra.get("score_min_cadencia",
-                                              int(cfg.get("score_minimo") or 6))
-                    if res_score["aprovado"]:
-                        _tentar_cadencia(
-                            db, sessao_id, stats, empresa, cnpj, score,
-                            nome_produto, canal_prim, telefone, email, score_min_cad,
-                            pitch_base=regra.get("pitch", ""),
-                            beneficios=regra.get("beneficios", ""),
-                            objecoes=regra.get("objecoes", ""),
-                        )
+                if res_score["aprovado"]:
+                    _tentar_cadencia(
+                        db, sessao_id, stats, empresa, cnpj, score,
+                        ramo_label, canal_prim, telefone, email, score_min_cad,
+                    )
 
-                    time.sleep(1)
+                time.sleep(1)
 
     return "concluido"
 
@@ -869,7 +897,6 @@ def _rodar_modo_sem_cnae(db, cfg: dict, sessao_id: str, stats: dict, max_leads: 
     estados_cfg  = [e.strip().upper() for e in _estados_raw.split(",") if e.strip()]
     _cidades_raw = cfg.get("cidades_selecionadas") or cfg.get("cidades") or ""
     cidades_cfg  = [c.strip() for c in _cidades_raw.split(",") if c.strip()]
-    produto_foco = cfg.get("produto_foco") or "todos"
     canal_prim   = cfg.get("canal_primario") or "whatsapp"
 
     _log(db, sessao_id, "busca",
@@ -953,17 +980,7 @@ def _rodar_modo_sem_cnae(db, cfg: dict, sessao_id: str, stats: dict, max_leads: 
                  status="aprovado" if res_score["aprovado"] else "baixo_score",
                  capital=capital)
 
-            # Produto: usa foco configurado ou primeiro produto ativo
-            if produto_foco != "todos":
-                nome_produto = produto_foco
-            else:
-                try:
-                    p_row = db.execute(
-                        "SELECT nome FROM produtos_krylo WHERE ativo=1 LIMIT 1"
-                    ).fetchone()
-                    nome_produto = p_row["nome"] if p_row else "Geral"
-                except Exception:
-                    nome_produto = "Geral"
+            nome_produto = "Geral"
 
             hoje_str = date.today().isoformat()
             try:
