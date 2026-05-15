@@ -602,6 +602,7 @@ def run_migrations(conn) -> None:
         f"ALTER TABLE cadencias ADD COLUMN{_ifne} email_d3_at TEXT",
         f"ALTER TABLE cadencias ADD COLUMN{_ifne} email_d7_at TEXT",
         f"ALTER TABLE cadencias ADD COLUMN{_ifne} email_d14_at TEXT",
+        f"ALTER TABLE sdr_config ADD COLUMN{_ifne} ramos_selecionados TEXT DEFAULT ''",
     ]
 
     _CREATE = [

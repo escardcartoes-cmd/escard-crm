@@ -56,6 +56,7 @@ _SDR_DEFAULTS = {
     "max_leads_por_execucao":     20,
     "max_cadencias_por_dia":      50,
     "produto_foco":               "todos",
+    "ramos_selecionados":         "",
     "modo_busca":                 "cnae",
     "estados_selecionados":       "",
     "cidades_selecionadas":       "",
