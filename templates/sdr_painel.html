@@ -35,7 +35,10 @@
         <div class="text-muted text-sm">
           {% if proxima_execucao %}Próxima: {{ proxima_execucao }}{% else %}Intervalo: {{ config.intervalo_horas }}h{% endif %}
         </div>
-        <div class="text-muted text-sm">Horário: {{ config.horario_inicio }}h–{{ config.horario_fim }}h</div>
+        <div class="text-muted text-sm">
+          {% if config.sem_restricao_horario %}Horário: 24h (sem restrição)
+          {% else %}Horário: {{ config.horario_inicio or 8 }}h–{{ config.horario_fim or 18 }}h{% endif %}
+        </div>
       </div>
     </div>
   </div>
@@ -43,7 +46,7 @@
   <div class="card">
     <div class="kpi">
       <div>
-        <div class="kpi-val">{{ stats.total or 0 }}</div>
+        <div class="kpi-val" id="kpi-total">{{ stats.total or 0 }}</div>
         <div class="kpi-lbl">Total prospectado</div>
       </div>
       <div class="kpi-icon" style="background:#EFF6FF;color:#1D4ED8">
@@ -58,7 +61,7 @@
   <div class="card">
     <div class="kpi">
       <div>
-        <div class="kpi-val" style="color:#D97706">{{ stats.novos or 0 }}</div>
+        <div class="kpi-val" id="kpi-novos" style="color:#D97706">{{ stats.novos or 0 }}</div>
         <div class="kpi-lbl">Aguardando ação</div>
       </div>
       <div class="kpi-icon ic-orange">
@@ -73,7 +76,7 @@
   <div class="card">
     <div class="kpi">
       <div>
-        <div class="kpi-val" style="color:#16A34A">{{ stats.importados or 0 }}</div>
+        <div class="kpi-val" id="kpi-importados" style="color:#16A34A">{{ stats.importados or 0 }}</div>
         <div class="kpi-lbl">Importados/Convertidos</div>
       </div>
       <div class="kpi-icon" style="background:#F0FDF4;color:#16A34A">
@@ -398,21 +401,30 @@
             {% endfor %}
           </select>
         </div>
-        <div>
-          <label class="form-label" style="font-size:12px">Horário início</label>
-          <select id="horario_inicio" class="form-input" style="font-size:12px" onchange="marcarAlterado()">
-            {% for h in range(6, 13) %}
-            <option value="{{ h }}" {% if (config.horario_inicio or 8)|int == h %}selected{% endif %}>{{ h }}h</option>
-            {% endfor %}
-          </select>
-        </div>
-        <div>
-          <label class="form-label" style="font-size:12px">Horário fim</label>
-          <select id="horario_fim" class="form-input" style="font-size:12px" onchange="marcarAlterado()">
-            {% for h in range(17, 23) %}
-            <option value="{{ h }}" {% if (config.horario_fim or 18)|int == h %}selected{% endif %}>{{ h }}h</option>
-            {% endfor %}
-          </select>
+        <div style="grid-column:1/-1">
+          <label class="form-label" style="font-size:12px">⏰ Horário de funcionamento</label>
+          <div style="display:flex;align-items:center;gap:12px;margin-top:4px;flex-wrap:wrap">
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;font-weight:500">
+              <input type="checkbox" id="sem_restricao_horario"
+                {% if config.sem_restricao_horario %}checked{% endif %}
+                onchange="toggleHorario(this);marcarAlterado()">
+              24 horas (sem restrição)
+            </label>
+            <span id="horario-faixa" style="display:{% if config.sem_restricao_horario %}none{% else %}flex{% endif %};align-items:center;gap:6px;font-size:13px">
+              Das
+              <select id="horario_inicio" class="form-input" style="font-size:12px;width:auto" onchange="marcarAlterado()">
+                {% for h in range(6, 13) %}
+                <option value="{{ h }}" {% if (config.horario_inicio or 8)|int == h %}selected{% endif %}>{{ h }}h</option>
+                {% endfor %}
+              </select>
+              às
+              <select id="horario_fim" class="form-input" style="font-size:12px;width:auto" onchange="marcarAlterado()">
+                {% for h in range(17, 23) %}
+                <option value="{{ h }}" {% if (config.horario_fim or 18)|int == h %}selected{% endif %}>{{ h }}h</option>
+                {% endfor %}
+              </select>
+            </span>
+          </div>
         </div>
         <div>
           <label class="form-label" style="font-size:12px">Máx tentativas / empresa</label>
@@ -668,6 +680,7 @@ function coletarFiltros() {
     max_leads_por_execucao:     parseInt(document.getElementById('max_leads_por_execucao').value) || 20,
     canal_primario:             document.getElementById('canal_primario').value,
     intervalo_horas:            parseInt(document.getElementById('intervalo_horas').value) || 6,
+    sem_restricao_horario:      document.getElementById('sem_restricao_horario').checked ? 1 : 0,
     horario_inicio:             parseInt(document.getElementById('horario_inicio').value) || 8,
     horario_fim:                parseInt(document.getElementById('horario_fim').value) || 18,
     max_tentativas_por_empresa: parseInt(document.getElementById('max_tentativas_por_empresa').value) || 3,
@@ -693,6 +706,24 @@ async function salvarFiltros() {
   } else {
     alert('Erro: ' + (d.error || 'desconhecido'));
   }
+}
+
+function toggleHorario(cb) {
+  document.getElementById('horario-faixa').style.display = cb.checked ? 'none' : 'flex';
+}
+
+function atualizarKPIs() {
+  fetch('/sdr/stats')
+    .then(r => r.json())
+    .then(d => {
+      const t = document.getElementById('kpi-total');
+      const n = document.getElementById('kpi-novos');
+      const i = document.getElementById('kpi-importados');
+      if (t) t.textContent = d.total || 0;
+      if (n) n.textContent = d.novos || 0;
+      if (i) i.textContent = d.importados || 0;
+    })
+    .catch(() => {});
 }
 
 async function salvarERodar() {
@@ -834,6 +865,7 @@ document.addEventListener('keydown', e => {
 let intervalAoVivo = null;
 let ultimoEventoId = 0;
 let sessaoAtual = null;
+let _prevPainelStatus = null;
 
 const _coresLog = {
   inicio: '#888', busca: '#378ADD', info: '#5F5E5A', encontrado: '#BA7517',
@@ -871,7 +903,11 @@ function atualizarPainel() {
         texto.style.color       = '';
         document.getElementById('btn-rodar-painel').style.display  = 'inline-flex';
         document.getElementById('btn-pausar-painel').style.display = 'none';
+        if (data.status === 'concluido' && _prevPainelStatus !== 'concluido') {
+          atualizarKPIs();
+        }
       }
+      _prevPainelStatus = data.ativo ? 'rodando' : (data.status || 'aguardando');
 
       if (data.sessao_id) {
         sessEl.textContent = '#' + data.sessao_id;

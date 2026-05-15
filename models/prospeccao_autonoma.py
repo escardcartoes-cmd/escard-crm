@@ -59,6 +59,7 @@ _SDR_DEFAULTS = {
     "modo_busca":                 "cnae",
     "estados_selecionados":       "",
     "cidades_selecionadas":       "",
+    "sem_restricao_horario":      0,
 }
 
 
@@ -1019,7 +1020,8 @@ def rodar_prospeccao_autonoma(db=None, config_override: dict = None) -> dict:
         hora_atual = datetime.now(fuso_brasilia).hour
         h_ini = int(cfg.get("horario_inicio") or 8)
         h_fim = int(cfg.get("horario_fim") or 18)
-        if hora_atual < h_ini or hora_atual >= h_fim:
+        sem_restricao = bool(cfg.get("sem_restricao_horario"))
+        if not sem_restricao and (hora_atual < h_ini or hora_atual >= h_fim):
             motivo = f"Fora do horário ({hora_atual}h, janela {h_ini}h–{h_fim}h)"
             _log(db, sessao_id, "info", f"SDR não rodou: {motivo}")
             finalizar_sessao(db, sessao_id, _stats0)

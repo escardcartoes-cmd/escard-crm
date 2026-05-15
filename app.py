@@ -2400,9 +2400,9 @@ def sdr_painel():
     stats_row = conn.execute("""
         SELECT
             COUNT(*) AS total,
-            SUM(CASE WHEN status='novo'       THEN 1 ELSE 0 END) AS novos,
-            SUM(CASE WHEN status='importado'  THEN 1 ELSE 0 END) AS importados,
-            SUM(CASE WHEN status='descartado' THEN 1 ELSE 0 END) AS descartados
+            COALESCE(SUM(CASE WHEN status='novo'       THEN 1 ELSE 0 END), 0) AS novos,
+            COALESCE(SUM(CASE WHEN status='importado'  THEN 1 ELSE 0 END), 0) AS importados,
+            COALESCE(SUM(CASE WHEN status='descartado' THEN 1 ELSE 0 END), 0) AS descartados
         FROM prospeccao_automatica
     """).fetchone()
     conn.close()
@@ -2437,6 +2437,7 @@ def sdr_config_salvar():
             "funcionarios_min", "funcionarios_max", "idade_empresa_min",
             "idade_empresa_max", "max_cadencias_por_dia", "nome_campanha",
             "modo_busca", "estados_selecionados", "cidades_selecionadas",
+            "sem_restricao_horario",
         ]
         _agora = _dt.datetime.now().isoformat(sep=" ", timespec="seconds")
         conn = database.get_connection()
@@ -2484,6 +2485,25 @@ def sdr_execucoes_json():
     ).fetchall()]
     conn.close()
     return jsonify(rows)
+
+
+@app.route("/sdr/stats")
+@login_required
+def sdr_stats():
+    try:
+        conn = database.get_connection()
+        row = conn.execute("""
+            SELECT
+                COUNT(*) AS total,
+                COALESCE(SUM(CASE WHEN status='novo'       THEN 1 ELSE 0 END), 0) AS novos,
+                COALESCE(SUM(CASE WHEN status='importado'  THEN 1 ELSE 0 END), 0) AS importados,
+                COALESCE(SUM(CASE WHEN status='descartado' THEN 1 ELSE 0 END), 0) AS descartados
+            FROM prospeccao_automatica
+        """).fetchone()
+        conn.close()
+        return jsonify(dict(row) if row else {"total": 0, "novos": 0, "importados": 0, "descartados": 0})
+    except Exception as e:
+        return jsonify({"total": 0, "novos": 0, "importados": 0, "descartados": 0, "error": str(e)})
 
 
 @app.route("/api/empresa/<int:empresa_id>/contato")

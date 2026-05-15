@@ -301,6 +301,7 @@ _SQLITE_DDL = """
         max_leads_por_execucao     INTEGER DEFAULT 20,
         max_cadencias_por_dia      INTEGER DEFAULT 50,
         produto_foco               TEXT    DEFAULT 'todos',
+        sem_restricao_horario      INTEGER DEFAULT 0,
         atualizado_em              TIMESTAMP DEFAULT (datetime('now', 'localtime'))
     );
 
@@ -457,7 +458,8 @@ def get_connection():
         url = DATABASE_URL
         if url.startswith("postgres://"):
             url = "postgresql://" + url[len("postgres://"):]
-        return _PgConn(psycopg2.connect(url))
+        raw = psycopg2.connect(url, options="-c client_encoding=UTF8")
+        return _PgConn(raw)
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
@@ -472,7 +474,7 @@ def get_new_db_connection():
         url = DATABASE_URL
         if url.startswith("postgres://"):
             url = "postgresql://" + url[len("postgres://"):]
-        raw = psycopg2.connect(url)
+        raw = psycopg2.connect(url, options="-c client_encoding=UTF8")
         raw.autocommit = False
         return _PgConn(raw)
     conn = sqlite3.connect(DB_PATH, check_same_thread=False)
@@ -519,6 +521,7 @@ def run_migrations(conn) -> None:
         f"ALTER TABLE sdr_config ADD COLUMN{_ifne} modo_busca VARCHAR(20) DEFAULT 'cnae'",
         f"ALTER TABLE sdr_config ADD COLUMN{_ifne} estados_selecionados TEXT DEFAULT ''",
         f"ALTER TABLE sdr_config ADD COLUMN{_ifne} cidades_selecionadas TEXT DEFAULT ''",
+        f"ALTER TABLE sdr_config ADD COLUMN{_ifne} sem_restricao_horario INTEGER DEFAULT 0",
     ]
 
     _CREATE = [
@@ -699,6 +702,7 @@ def run_migrations(conn) -> None:
             max_leads_por_execucao     INTEGER DEFAULT 20,
             max_cadencias_por_dia      INTEGER DEFAULT 50,
             produto_foco               TEXT    DEFAULT 'todos',
+            sem_restricao_horario      INTEGER DEFAULT 0,
             atualizado_em              TIMESTAMP DEFAULT (datetime('now', 'localtime'))
         )""",
         """CREATE TABLE IF NOT EXISTS sdr_execucoes (
@@ -795,6 +799,25 @@ def run_migrations(conn) -> None:
                 conn.rollback()
             except Exception:
                 pass
+
+    # Repair double-encoded city names (postgres only, idempotent)
+    if _USE_PG:
+        for _repair_sql in [
+            """UPDATE prospeccao_automatica
+               SET municipio = convert_from(convert_to(municipio, 'LATIN1'), 'UTF8')
+               WHERE municipio IS NOT NULL AND municipio ~ '[ÃÂ]'""",
+            """UPDATE empresas
+               SET cidade = convert_from(convert_to(cidade, 'LATIN1'), 'UTF8')
+               WHERE cidade IS NOT NULL AND cidade ~ '[ÃÂ]'""",
+        ]:
+            try:
+                conn.execute(_repair_sql)
+                conn.commit()
+            except Exception:
+                try:
+                    conn.rollback()
+                except Exception:
+                    pass
 
     # Seed ramos_atividade only if empty
     try:
