@@ -4,6 +4,7 @@ pitch por IA, criação automática de cadências e sessões com log ao vivo.
 """
 import json
 import random
+import re
 import time
 import unicodedata
 import requests
@@ -338,33 +339,20 @@ def _gerar_cnpj_valido(base_num: int) -> str:
     return base12 + _calcular_digitos_cnpj(base12)
 
 
-def buscar_empresas_por_cnae(cnae: str, uf: str, limit: int = 10) -> list:
+def _normalizar_empresa(dados: dict) -> dict:
+    """Normaliza dados de empresa independente da fonte."""
+    fonte = dados.get("fonte", "")
+    if fonte == "brasilapi" or "descricao_situacao_cadastral" in dados or "cnae_fiscal_descricao" in dados:
+        return _normalizar_brasilapi(dados)
+    return _normalizar_cnpjws(dados)
+
+
+def _buscar_por_geracao_cnpj(cnae_alvo: str, estado: str, limite: int) -> list:
     """
-    Busca empresas por CNAE e UF usando APIs disponíveis.
-
-    Estratégia 1: BrasilAPI search em lote (quando disponível).
-    Estratégia 2: Busca sequencial por range de CNPJ com lookup individual.
-    Retorna lista de dicts com pelo menos {"cnpj": "..."}.
+    Fallback: gera CNPJs candidatos e filtra pelo prefixo CNAE (2 dígitos).
+    UF não é filtrada aqui — o engine descarta não-correspondentes via scoring.
     """
-    uf_upper = uf.upper().strip()
-
-    # Estratégia 1: BrasilAPI bulk search
-    try:
-        url = (f"https://brasilapi.com.br/api/cnpj/v1/search"
-               f"?cnae={cnae}&uf={uf}&limit={limit}")
-        r = requests.get(url, timeout=10, headers=_HEADERS)
-        if r.status_code == 200:
-            data = r.json()
-            if isinstance(data, list) and data:
-                return data
-    except Exception:
-        pass
-
-    # Estratégia 2: Geração sequencial de CNPJs + lookup individual
-    # Faixa ativa de empresas brasileiras: base ~1M-65M
-    start_base = random.randint(1_000_000, 60_000_000)
-    max_cands = min(limit * 8, 80)
-    candidatos = [_gerar_cnpj_valido(start_base + i) for i in range(max_cands)]
+    cnae_prefixo = cnae_alvo[:2]  # filtro amplo (setor principal)
 
     resultados = []
     _stop = [False]
@@ -379,17 +367,23 @@ def buscar_empresas_por_cnae(cnae: str, uf: str, limit: int = 10) -> list:
             return None
         source, data = result
         emp = _normalizar_brasilapi(data) if source == "brasilapi" else _normalizar_cnpjws(data)
-        sit = emp.get("situacao", "").upper()
-        if "ATIVA" not in sit and "ACTIVE" not in sit:
+        if "ATIVA" not in emp.get("situacao", "").upper():
             return None
-        if uf_upper and emp.get("uf", "").upper() != uf_upper:
+        if not emp.get("cnae_codigo", "").startswith(cnae_prefixo):
             return None
-        return {"cnpj": emp.get("cnpj") or cnpj}
+        return emp
 
-    with ThreadPoolExecutor(max_workers=3) as executor:
+    ranges = [(1_000_000, 15_000_000), (15_000_000, 35_000_000), (35_000_000, 65_000_000)]
+    max_cands = min(limite * 80, 500)
+    candidatos = []
+    for _ in range(max_cands):
+        r_min, r_max = random.choice(ranges)
+        candidatos.append(_gerar_cnpj_valido(random.randint(r_min, r_max)))
+
+    with ThreadPoolExecutor(max_workers=8) as executor:
         futures = [executor.submit(checar, c) for c in candidatos]
         for future in as_completed(futures):
-            if len(resultados) >= limit:
+            if len(resultados) >= limite:
                 _stop[0] = True
                 break
             r = future.result()
@@ -397,6 +391,63 @@ def buscar_empresas_por_cnae(cnae: str, uf: str, limit: int = 10) -> list:
                 resultados.append(r)
 
     return resultados
+
+
+def buscar_empresas_por_cnae(cnae: str, uf: str, limit: int = 10) -> list:
+    """
+    Busca empresas por CNAE e UF.
+    Estratégia 1: minha-receita.cnpja.com.br
+    Estratégia 2: cnpj.biz
+    Estratégia 3: geração de CNPJs com filtro por prefixo CNAE (4 dígitos)
+    """
+    uf_upper = uf.upper().strip()
+
+    # Estratégia 1: minha-receita.cnpja.com.br
+    try:
+        url = f"https://minha-receita.cnpja.com.br/company?cnae={cnae}&uf={uf_upper}&limit={limit}"
+        r = requests.get(url, timeout=12, headers=_HEADERS)
+        if r.status_code == 200:
+            data = r.json()
+            items = data if isinstance(data, list) else data.get("data") or data.get("companies") or []
+            if isinstance(items, list) and items:
+                cnpjs = []
+                for item in items[:limit]:
+                    raw = str(item.get("cnpj") or item.get("taxId") or item.get("cnpj_cpf") or "")
+                    cnpj = raw.replace(".", "").replace("/", "").replace("-", "").strip()
+                    if cnpj:
+                        cnpjs.append({"cnpj": cnpj})
+                if cnpjs:
+                    return cnpjs
+    except Exception:
+        pass
+
+    # Estratégia 2: cnpj.biz
+    try:
+        url = f"https://www.cnpj.biz/pesquisa/estabelecimentos?cnae={cnae}&uf={uf_upper}"
+        r = requests.get(url, timeout=12, headers=_HEADERS)
+        if r.status_code == 200:
+            try:
+                data = r.json()
+                items = data if isinstance(data, list) else data.get("data") or data.get("results") or []
+                if isinstance(items, list) and items:
+                    cnpjs = []
+                    for item in items[:limit]:
+                        raw = str(item.get("cnpj") or "").replace(".", "").replace("/", "").replace("-", "")
+                        if raw:
+                            cnpjs.append({"cnpj": raw})
+                    if cnpjs:
+                        return cnpjs
+            except Exception:
+                pass
+            # Fallback HTML: extrai CNPJs do texto da página
+            found = re.findall(r'\d{2}\.\d{3}\.\d{3}/\d{4}-\d{2}', r.text)
+            if found:
+                return [{"cnpj": c.replace(".", "").replace("/", "").replace("-", "")} for c in found[:limit]]
+    except Exception:
+        pass
+
+    # Estratégia 3: geração de CNPJs com filtro por prefixo CNAE
+    return _buscar_por_geracao_cnpj(cnae, uf, limit)
 
 
 # ── Scoring ───────────────────────────────────────────────────────────────────

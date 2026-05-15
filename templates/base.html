@@ -95,12 +95,20 @@
 
       {% if _is_manager %}
       <a href="{{ url_for('sdr_painel') }}"
-         class="nav-link {% if 'sdr' in (request.endpoint or '') %}active{% endif %}">
+         class="nav-link {% if request.endpoint in ('sdr_painel', 'sdr_config_salvar', 'sdr_config_toggle') %}active{% endif %}">
         <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
             d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
         </svg>
         🤖 SDR Autônomo
+      </a>
+      <a href="{{ url_for('sdr_fila_aprovacao') }}"
+         class="nav-link {% if request.endpoint == 'sdr_fila_aprovacao' %}active{% endif %}"
+         style="padding-left:2rem">
+        💬 Fila WhatsApp
+        {% if wa_pendentes %}
+        <span class="badge bg-warning text-dark ms-1" style="font-size:10px">{{ wa_pendentes }}</span>
+        {% endif %}
       </a>
       {% endif %}
 
