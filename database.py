@@ -367,6 +367,12 @@ _SQLITE_DDL = """
         capital    REAL    DEFAULT 0,
         criado_em  TEXT    DEFAULT (datetime('now', 'localtime'))
     );
+
+    CREATE TABLE IF NOT EXISTS cnae_cache (
+        id            INTEGER PRIMARY KEY,
+        dados         TEXT,
+        atualizado_em TEXT    DEFAULT (datetime('now', 'localtime'))
+    );
 """
 
 
@@ -752,6 +758,11 @@ def run_migrations(conn) -> None:
             status     TEXT    DEFAULT '',
             capital    REAL    DEFAULT 0,
             criado_em  TEXT    DEFAULT (datetime('now', 'localtime'))
+        )""",
+        """CREATE TABLE IF NOT EXISTS cnae_cache (
+            id            INTEGER PRIMARY KEY,
+            dados         TEXT,
+            atualizado_em TEXT    DEFAULT (datetime('now', 'localtime'))
         )""",
     ]
 

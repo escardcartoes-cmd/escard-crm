@@ -29,6 +29,7 @@ import models.radar as radar_model
 import models.portal as portal_model
 import models.relatorio as rel_model
 import models.prospeccao_auto as pauto_model
+import models.cnaes as cnaes_model
 from models.usuario import require_perfil, PERFIS, PERFIL_LABELS
 import ai
 
@@ -2482,6 +2483,29 @@ def sdr_execucoes_json():
     ).fetchall()]
     conn.close()
     return jsonify(rows)
+
+
+@app.route("/api/cnaes")
+@login_required
+def api_cnaes():
+    try:
+        todos = cnaes_model.carregar_todos_cnaes()
+        return jsonify(todos)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/cnaes/busca")
+@login_required
+def api_cnaes_busca():
+    q = request.args.get("q", "").strip()
+    if len(q) < 2:
+        return jsonify([])
+    try:
+        resultado = cnaes_model.buscar_cnaes(q)
+        return jsonify(resultado)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 @app.route("/sdr/pipeline")
