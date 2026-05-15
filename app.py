@@ -2712,6 +2712,7 @@ def configuracoes_empresa_salvar():
 @require_perfil("gerente")
 def sdr_painel():
     from models.prospeccao_autonoma import get_sdr_config
+    from models.cnaes import CNAES_POR_CATEGORIA
     conn = database.get_connection()
     config = get_sdr_config(conn)
     pipeline = [dict(r) for r in conn.execute(
@@ -2741,6 +2742,7 @@ def sdr_painel():
         execucoes=execucoes,
         stats=dict(stats_row) if stats_row else {"total": 0, "novos": 0, "importados": 0, "descartados": 0},
         proxima_execucao=proxima,
+        cnaes_por_categoria=CNAES_POR_CATEGORIA,
     )
 
 
@@ -2756,7 +2758,7 @@ def sdr_config_salvar():
             "tem_telefone", "tem_email", "score_minimo", "max_leads_por_execucao",
             "canal_primario", "canal_secundario", "horario_inicio", "horario_fim",
             "dias_semana", "intervalo_horas", "max_tentativas_por_empresa",
-            "dias_recontato", "excluir_ja_prospectados", "produto_foco", "ativo",
+            "dias_recontato", "excluir_ja_prospectados", "produto_foco", "ramos_selecionados", "ativo",
             "funcionarios_min", "funcionarios_max", "idade_empresa_min",
             "idade_empresa_max", "max_cadencias_por_dia", "nome_campanha",
             "modo_busca", "estados_selecionados", "cidades_selecionadas",

@@ -281,15 +281,71 @@
       {% endfor %}
     </div>
 
-    <!-- Produto foco -->
-    <div>
-      <div style="font-weight:600;font-size:13px;color:#4A3F35;margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid var(--border)">🎁 Produto Foco</div>
-      <label class="form-label" style="font-size:12px">Produto prioritário</label>
-      <select id="produto_foco" class="form-input" style="font-size:12px" onchange="marcarAlterado()">
-        {% for v in ['todos','VR','VA','Combustível','Premiação','Welhub','Vidalink','Private Label','Cobrança'] %}
-        <option value="{{ v }}" {% if (config.produto_foco or 'todos') == v %}selected{% endif %}>{{ v | capitalize }}</option>
+    <!-- Ramo de Atividade -->
+    <div style="grid-column:1/-1">
+      <div style="font-weight:600;font-size:13px;color:#4A3F35;margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid var(--border)">
+        🏭 Ramo de Atividade
+      </div>
+      <p style="color:#888;font-size:13px;margin:0 0 12px">
+        Selecione os setores que o SDR vai prospectar
+      </p>
+      <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center">
+        <button type="button" onclick="selecionarTodosRamos()"
+                style="padding:6px 12px;border:1px solid #C5A089;background:#FDF9F5;border-radius:6px;cursor:pointer;font-size:12px">
+          ✅ Todos os ramos
+        </button>
+        <button type="button" onclick="limparRamos()"
+                style="padding:6px 12px;border:1px solid #ddd;background:white;border-radius:6px;cursor:pointer;font-size:12px">
+          ☐ Limpar
+        </button>
+        <span id="badge-ramos" style="padding:6px 12px;background:#f0f0f0;border-radius:6px;font-size:13px;color:#666">
+          0 ramos selecionados
+        </span>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;max-height:350px;overflow-y:auto">
+        {% set _ramos_lista = [
+          ("Indústria e Manufatura", 23),
+          ("Construção Civil", 18),
+          ("Comércio Varejista", 13),
+          ("Comércio Atacadista", 10),
+          ("Alimentação e Bebidas", 12),
+          ("Transporte e Logística", 14),
+          ("Saúde e Medicina", 16),
+          ("Educação", 13),
+          ("Tecnologia e TI", 9),
+          ("Serviços Financeiros", 10),
+          ("Seguros e Previdência", 8),
+          ("Imobiliário", 7),
+          ("Agronegócio", 15),
+          ("Mineração e Energia", 16),
+          ("Governo e Administração Pública", 9),
+          ("Serviços Empresariais", 22),
+          ("Recursos Humanos e RH", 3),
+          ("Hotelaria e Turismo", 9),
+          ("Entretenimento e Cultura", 20),
+          ("Telecomunicações", 11),
+          ("Varejo de Combustível", 2),
+          ("Cooperativas", 5),
+        ] %}
+        {% for ramo, qtd in _ramos_lista %}
+        {% set _checked = ramo in (config.ramos_selecionados or '') %}
+        <label class="ramo-label" style="display:flex;align-items:center;gap:8px;padding:10px;border:1px solid {% if _checked %}#C5A089{% else %}#eee{% endif %};border-radius:8px;cursor:pointer;background:{% if _checked %}#FDF9F5{% else %}white{% endif %};transition:all 0.2s">
+          <input type="checkbox"
+                 class="ramo-check"
+                 value="{{ ramo }}"
+                 {% if _checked %}checked{% endif %}
+                 onchange="atualizarRamos(this)"
+                 style="width:16px;height:16px;accent-color:#C5A089;flex-shrink:0">
+          <span style="font-size:13px">
+            <strong>{{ ramo }}</strong><br>
+            <small style="color:#888">{{ qtd }} CNAEs</small>
+          </span>
+        </label>
         {% endfor %}
-      </select>
+      </div>
+      <input type="hidden" id="ramos_selecionados" name="ramos_selecionados"
+             value="{{ config.ramos_selecionados or '' }}">
+      <input type="hidden" id="cnaes" value="{{ config.cnaes or '' }}">
     </div>
 
     <!-- Cidades -->
@@ -335,39 +391,6 @@
              value="{{ config.cidades_selecionadas or config.cidades or '' }}">
     </div>
 
-    <!-- CNAEs -->
-    <div style="grid-column:1/-1">
-      <div style="font-weight:600;font-size:13px;color:#4A3F35;margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid var(--border)">
-        🏭 Setores Alvo (CNAE)
-        <span id="cnae-count-badge" style="font-size:11px;color:var(--muted);font-weight:400;margin-left:6px"></span>
-      </div>
-
-      <div id="cnae-tags" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;min-height:26px"></div>
-
-      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-        <input type="text" id="cnae-search" class="form-input"
-               style="font-size:12px;max-width:280px"
-               placeholder="Buscar setor ou código CNAE…"
-               oninput="filtrarCnaes(this.value)">
-        <button type="button" onclick="toggleCnaePainel()" class="btn btn-outline btn-sm" id="btn-toggle-cnae">
-          ▼ Ver todos os setores
-        </button>
-        <button type="button" onclick="limparCnaes()" class="btn btn-sm"
-                style="color:#DC2626;border-color:#DC2626;font-size:12px">
-          ✕ Limpar seleção
-        </button>
-      </div>
-
-      <div id="cnae-painel" style="display:none;border:1px solid var(--border);border-radius:8px;
-           max-height:380px;overflow-y:auto;background:#fff;margin-top:10px">
-        <div id="cnae-loading" style="padding:20px;text-align:center;color:var(--muted);font-size:13px">
-          Carregando setores IBGE…
-        </div>
-        <div id="cnae-grupos" style="padding:8px"></div>
-      </div>
-
-      <input type="hidden" id="cnaes" value="{{ config.cnaes or '' }}">
-    </div>
 
     <!-- Cadência -->
     <div style="grid-column:1/-1">
@@ -658,6 +681,56 @@ function selecionarModo(modo) {
   marcarAlterado();
 }
 
+// ── Ramos de Atividade ────────────────────────────────────────────────────────
+const CNAES_POR_CATEGORIA = {{ cnaes_por_categoria | tojson }};
+
+function atualizarRamos(checkbox) {
+  const label = checkbox.closest('label');
+  if (checkbox.checked) {
+    label.style.borderColor = '#C5A089';
+    label.style.background = '#FDF9F5';
+  } else {
+    label.style.borderColor = '#eee';
+    label.style.background = 'white';
+  }
+  _sincronizarRamos();
+  marcarAlterado();
+}
+
+function _sincronizarRamos() {
+  const selecionados = Array.from(
+    document.querySelectorAll('.ramo-check:checked')
+  ).map(cb => cb.value);
+  document.getElementById('ramos_selecionados').value = selecionados.join(',');
+  document.getElementById('badge-ramos').textContent =
+    selecionados.length + ' ramos selecionados';
+  const cnaesSet = new Set();
+  selecionados.forEach(r => (CNAES_POR_CATEGORIA[r] || []).forEach(c => cnaesSet.add(c)));
+  document.getElementById('cnaes').value = [...cnaesSet].sort().join(',');
+}
+
+function selecionarTodosRamos() {
+  document.querySelectorAll('.ramo-check').forEach(cb => {
+    cb.checked = true;
+    const label = cb.closest('label');
+    label.style.borderColor = '#C5A089';
+    label.style.background = '#FDF9F5';
+  });
+  _sincronizarRamos();
+  marcarAlterado();
+}
+
+function limparRamos() {
+  document.querySelectorAll('.ramo-check').forEach(cb => {
+    cb.checked = false;
+    const label = cb.closest('label');
+    label.style.borderColor = '#eee';
+    label.style.background = 'white';
+  });
+  _sincronizarRamos();
+  marcarAlterado();
+}
+
 function coletarFiltros() {
   const diasCks    = [...document.querySelectorAll('#checkDias input:checked')].map(c => c.value);
   const tipoRadio  = document.querySelector('input[name="tipo_empresa"]:checked');
@@ -675,7 +748,7 @@ function coletarFiltros() {
     tem_telefone:               parseInt(document.getElementById('tem_telefone').value) || 0,
     tem_email:                  parseInt(document.getElementById('tem_email').value) || 0,
     excluir_ja_prospectados:    parseInt(document.getElementById('excluir_ja_prospectados').value) || 0,
-    produto_foco:               document.getElementById('produto_foco').value,
+    ramos_selecionados:         document.getElementById('ramos_selecionados')?.value || '',
     score_minimo:               parseInt(document.getElementById('score_minimo').value) || 6,
     max_leads_por_execucao:     parseInt(document.getElementById('max_leads_por_execucao').value) || 20,
     canal_primario:             document.getElementById('canal_primario').value,
@@ -854,7 +927,12 @@ document.addEventListener('DOMContentLoaded', () => {
   selecionarModo(document.getElementById('modo_busca').value || 'cnae');
   _initEstados();
   _parseCidadesInicial();
-  _parseCnaeInicial();
+  // Inicializa estado visual dos ramos e cnaes derivados
+  document.querySelectorAll('.ramo-check:checked').forEach(cb => {
+    const label = cb.closest('label');
+    if (label) { label.style.borderColor = '#C5A089'; label.style.background = '#FDF9F5'; }
+  });
+  _sincronizarRamos();
 });
 
 document.addEventListener('keydown', e => {
