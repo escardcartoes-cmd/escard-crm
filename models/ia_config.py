@@ -120,6 +120,47 @@ def _fallback_prompt(contexto_adicional: str = "") -> str:
     return prompt
 
 
+def get_system_prompt_tenant(db, tenant_id: int, contexto_adicional: str = "") -> str:
+    """System prompt adaptado ao contexto do tenant específico."""
+    try:
+        tc = db.execute(
+            "SELECT * FROM tenant_config WHERE tenant_id = ?", (tenant_id,)
+        ).fetchone()
+        t = db.execute("SELECT * FROM tenants WHERE id = ?", (tenant_id,)).fetchone()
+    except Exception:
+        return get_system_prompt(db, contexto_adicional)
+
+    if not tc and not t:
+        return get_system_prompt(db, contexto_adicional)
+
+    tc = dict(tc) if tc else {}
+    t = dict(t) if t else {}
+
+    nome_plataforma = t.get("nome_plataforma") or "CRM"
+    nome_empresa = t.get("nome_empresa") or "sua empresa"
+
+    prompt = f"""Você é a assistente comercial de IA da {nome_empresa} ({nome_plataforma}).
+
+SOBRE A EMPRESA:
+{tc.get('historico') or f'Empresa de {tc.get("ramo_principal") or "serviços"}'}
+
+PRODUTOS/SERVIÇOS:
+{tc.get('produtos_texto') or 'Consulte a equipe para detalhes dos produtos'}
+
+DIFERENCIAIS:
+{tc.get('diferenciais') or 'Atendimento personalizado e consultivo'}
+
+TOM DE VOZ: {tc.get('tom_ia') or 'profissional e consultivo'}
+"""
+    if tc.get("personalidade_ia"):
+        prompt += f"\nPERSONALIDADE: {tc['personalidade_ia']}\n"
+
+    if contexto_adicional:
+        prompt += f"\nCONTEXTO ADICIONAL:\n{contexto_adicional}"
+
+    return prompt
+
+
 def chat_com_ia(db, mensagem: str, historico: list = None, contexto: str = "") -> str:
     """Envia mensagem para Claude com o system prompt configurado. Retorna texto da resposta."""
     client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY", ""))

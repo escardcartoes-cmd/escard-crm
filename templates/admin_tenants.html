@@ -1,0 +1,217 @@
+{% extends "base.html" %}
+{% block title %}Super Admin — Tenants{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4 py-3">
+
+  <!-- Header -->
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+      <h4 class="mb-0 fw-bold">Super Admin — Tenants</h4>
+      <small class="text-muted">Gerencie todos os clientes da plataforma</small>
+    </div>
+    <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#modalNovoTenant">
+      + Novo Tenant
+    </button>
+  </div>
+
+  <!-- KPI Cards -->
+  <div class="row g-3 mb-4">
+    <div class="col-md-3">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-body text-center py-3">
+          <div class="fs-2 fw-bold text-primary">{{ tenants|length }}</div>
+          <div class="text-muted small">Total de Tenants</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-body text-center py-3">
+          <div class="fs-2 fw-bold text-success">{{ tenants|selectattr('ativo', 'equalto', 1)|list|length }}</div>
+          <div class="text-muted small">Ativos</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-body text-center py-3">
+          <div class="fs-2 fw-bold text-warning">{{ tenants|selectattr('configurado', 'equalto', 0)|list|length }}</div>
+          <div class="text-muted small">Aguardando Setup</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-body text-center py-3">
+          <div class="fs-2 fw-bold text-info">
+            {{ tenants|selectattr('plano', 'equalto', 'profissional')|list|length +
+               tenants|selectattr('plano', 'equalto', 'enterprise')|list|length }}
+          </div>
+          <div class="text-muted small">Planos Pagos</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tenants Table -->
+  <div class="card border-0 shadow-sm">
+    <div class="card-header bg-white border-0 pt-3 pb-2">
+      <h6 class="mb-0 fw-bold">Todos os Tenants</h6>
+    </div>
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-hover mb-0 align-middle">
+          <thead class="table-light">
+            <tr>
+              <th style="width:40px">#</th>
+              <th>Empresa / Slug</th>
+              <th>Plataforma</th>
+              <th>Plano</th>
+              <th>Usuários</th>
+              <th>Empresas</th>
+              <th>Status</th>
+              <th>Criado em</th>
+              <th>Ações</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for t in tenants %}
+            <tr>
+              <td class="text-muted small">{{ t.id }}</td>
+              <td>
+                <div class="fw-semibold">{{ t.nome_empresa }}</div>
+                <small class="text-muted font-monospace">{{ t.slug }}</small>
+              </td>
+              <td>
+                {% if t.logo_url %}
+                  <img src="{{ t.logo_url }}" alt="{{ t.nome_plataforma }}" height="24" style="object-fit:contain">
+                {% else %}
+                  <span class="fw-semibold" style="color:{{ t.cor_primaria or '#C5A089' }}">{{ t.nome_plataforma }}</span>
+                {% endif %}
+              </td>
+              <td>
+                {% set plano_colors = {'starter': 'secondary', 'profissional': 'primary', 'enterprise': 'warning'} %}
+                <span class="badge bg-{{ plano_colors.get(t.plano, 'secondary') }}">
+                  {{ (t.plano or 'starter')|title }}
+                </span>
+              </td>
+              <td class="text-center">{{ t.num_usuarios or 0 }}</td>
+              <td class="text-center">{{ t.num_empresas or 0 }}</td>
+              <td>
+                {% if t.ativo %}
+                  <span class="badge bg-success-subtle text-success">Ativo</span>
+                {% else %}
+                  <span class="badge bg-danger-subtle text-danger">Inativo</span>
+                {% endif %}
+                {% if not t.configurado %}
+                  <span class="badge bg-warning-subtle text-warning ms-1">Setup pendente</span>
+                {% endif %}
+              </td>
+              <td class="text-muted small">{{ (t.criado_em or '')[:10] }}</td>
+              <td>
+                <div class="d-flex gap-1">
+                  {% if t.id != 1 %}
+                  <form method="post" action="{{ url_for('admin_tenant_entrar', tid=t.id) }}" class="d-inline">
+                    <button type="submit" class="btn btn-xs btn-outline-primary" title="Entrar como este tenant">
+                      Entrar
+                    </button>
+                  </form>
+                  <form method="post" action="{{ url_for('admin_tenant_toggle', tid=t.id) }}" class="d-inline">
+                    <button type="submit" class="btn btn-xs btn-outline-{{ 'danger' if t.ativo else 'success' }}"
+                            title="{{ 'Desativar' if t.ativo else 'Ativar' }}">
+                      {{ 'Desativar' if t.ativo else 'Ativar' }}
+                    </button>
+                  </form>
+                  {% else %}
+                  <span class="text-muted small">Tenant padrão</span>
+                  {% endif %}
+                </div>
+              </td>
+            </tr>
+            {% else %}
+            <tr><td colspan="9" class="text-center text-muted py-4">Nenhum tenant cadastrado.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Session info -->
+  {% if session.get('impersonating') %}
+  <div class="alert alert-warning mt-3 d-flex align-items-center gap-3">
+    <strong>Modo impersonação ativo:</strong>
+    Você está vendo o sistema como o tenant <strong>{{ tenant.nome_empresa }}</strong>.
+    <a href="{{ url_for('admin_tenants') }}" class="btn btn-sm btn-warning ms-auto">Voltar ao Super Admin</a>
+  </div>
+  {% endif %}
+
+</div>
+
+<!-- Modal Novo Tenant -->
+<div class="modal fade" id="modalNovoTenant" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title fw-bold">Novo Tenant</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="post" action="{{ url_for('admin_tenant_novo') }}">
+        <div class="modal-body">
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">Nome da Empresa *</label>
+              <input type="text" name="nome_empresa" class="form-control" required placeholder="Ex: Acme Corp">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">Nome da Plataforma *</label>
+              <input type="text" name="nome_plataforma" class="form-control" required placeholder="Ex: Acme CRM">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">Email do Admin *</label>
+              <input type="email" name="email_admin" class="form-control" required placeholder="admin@empresa.com">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">Senha do Admin *</label>
+              <input type="password" name="senha_admin" class="form-control" required placeholder="Mínimo 6 caracteres">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label fw-semibold">Plano</label>
+              <select name="plano" class="form-select">
+                <option value="starter">Starter — R$97/mês</option>
+                <option value="profissional">Profissional — R$197/mês</option>
+                <option value="enterprise">Enterprise — R$497/mês</option>
+              </select>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label fw-semibold">Cor Primária</label>
+              <input type="color" name="cor_primaria" class="form-control form-control-color w-100" value="#C5A089">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label fw-semibold">Cor Secundária</label>
+              <input type="color" name="cor_secundaria" class="form-control form-control-color w-100" value="#8B6914">
+            </div>
+            <div class="col-12">
+              <label class="form-label fw-semibold">URL do Logo (opcional)</label>
+              <input type="url" name="logo_url" class="form-control" placeholder="https://...">
+            </div>
+            <div class="col-12">
+              <label class="form-label fw-semibold">Domínio Personalizado (opcional)</label>
+              <input type="text" name="dominio_personalizado" class="form-control" placeholder="crm.minhaempresa.com">
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-primary">Criar Tenant</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<style>
+.btn-xs { padding: 2px 8px; font-size: 11px; border-radius: 4px; }
+</style>
+{% endblock %}

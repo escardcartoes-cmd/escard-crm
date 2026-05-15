@@ -4,9 +4,10 @@ from flask import flash, redirect, url_for, request, jsonify
 from flask_login import UserMixin, current_user
 from database import get_connection
 
-PERFIS = ['admin', 'gerente', 'vendedor', 'visualizador']
-NIVEL  = {'admin': 4, 'gerente': 3, 'vendedor': 2, 'visualizador': 1}
+PERFIS = ['super_admin', 'admin', 'gerente', 'vendedor', 'visualizador']
+NIVEL  = {'super_admin': 5, 'admin': 4, 'gerente': 3, 'vendedor': 2, 'visualizador': 1}
 PERFIL_LABELS = {
+    'super_admin':  'Super Admin',
     'admin':        'Admin',
     'gerente':      'Gerente',
     'vendedor':     'Vendedor',
@@ -24,6 +25,7 @@ class Usuario(UserMixin):
         self.usuario   = row["usuario"]
         self.ativo     = bool(row["ativo"])
         self.perfil    = row.get("perfil") or "admin"
+        self.tenant_id = int(row.get("tenant_id") or 1)
         self.criado_em = row.get("criado_em") or ""
 
     def get_id(self):
@@ -152,13 +154,13 @@ def criar_admin_se_necessario():
     ).fetchone()
     if not existe:
         conn.execute(
-            "INSERT INTO usuarios (nome, email, usuario, senha_hash, perfil) "
-            "VALUES (?, ?, ?, ?, ?)",
-            ("Administrador", "admin@krylo.com.br", "admin", _hash("escard2024"), "admin"),
+            "INSERT INTO usuarios (nome, email, usuario, senha_hash, perfil, tenant_id) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            ("Administrador", "admin@krylo.com.br", "admin", _hash("escard2024"), "super_admin", 1),
         )
     else:
         conn.execute(
-            "UPDATE usuarios SET perfil = 'admin' WHERE usuario = 'admin'"
+            "UPDATE usuarios SET perfil = 'super_admin', tenant_id = 1 WHERE usuario = 'admin'"
         )
     conn.commit()
     conn.close()
