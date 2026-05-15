@@ -62,6 +62,7 @@ _SDR_DEFAULTS = {
     "estados_selecionados":       "",
     "cidades_selecionadas":       "",
     "sem_restricao_horario":      0,
+    "fonte_leads":                "busca",
 }
 
 
@@ -518,6 +519,77 @@ def _buscar_api_externa(cnae: str, estado: str, limite: int) -> list:
         encontradas.extend(extras)
 
     return encontradas
+
+
+def obter_leads_para_prospectar(config: dict, estado: str, limite: int) -> list:
+    """
+    Retorna lista de leads normalizada para o SDR consumir.
+    fonte='importados': só da tabela empresas (já importados pelo usuário)
+    fonte='busca': busca automática via CNAE (comportamento original)
+    fonte='ambos': importados primeiro, depois completa com busca automática
+    """
+    fonte = (config.get("fonte_leads") or "busca").strip()
+    leads = []
+    tenant_id = config.get("tenant_id", 1)
+
+    if fonte in ("importados", "ambos"):
+        db = get_new_db_connection()
+        try:
+            rows = db.execute("""
+                SELECT id, nome, cnpj, cidade, estado,
+                       telefone, email, cnae_fiscal,
+                       cnae_fiscal_descricao, capital_social,
+                       data_abertura
+                FROM empresas
+                WHERE tenant_id = %s
+                AND status IN ('prospect', 'importado')
+                AND id NOT IN (
+                    SELECT empresa_id FROM cadencias
+                    WHERE empresa_id IS NOT NULL
+                )
+                AND (estado = %s OR %s = 'TODOS')
+                ORDER BY score DESC, criado_em ASC
+                LIMIT %s
+            """, (tenant_id, estado, estado, limite)).fetchall()
+            for r in rows:
+                r = dict(r)
+                leads.append({
+                    "cnpj":                  r.get("cnpj") or "",
+                    "razao_social":          r.get("nome") or "",
+                    "municipio":             r.get("cidade") or "",
+                    "uf":                    r.get("estado") or "",
+                    "cnae_codigo":           (r.get("cnae_fiscal") or "").replace(".", "").replace("-", ""),
+                    "cnae_descricao":        r.get("cnae_fiscal_descricao") or "",
+                    "telefone":              r.get("telefone") or None,
+                    "email":                 r.get("email") or None,
+                    "capital_social":        float(r.get("capital_social") or 0),
+                    "situacao":              "ATIVA",
+                    "is_matriz":             True,
+                    "data_inicio_atividade": str(r.get("data_abertura") or ""),
+                    "natureza_juridica":     "",
+                    "porte":                 "",
+                    "fonte":                 "importado",
+                    "_empresa_id":           r.get("id"),
+                })
+        except Exception as e:
+            print(f"[FONTE] Erro ao buscar importados: {e}")
+        finally:
+            try:
+                db.close()
+            except Exception:
+                pass
+        print(f"[FONTE] {len(leads)} leads importados encontrados")
+
+    if fonte == "busca" or (fonte == "ambos" and len(leads) < limite):
+        faltam = limite - len(leads)
+        cnaes = obter_cnaes_para_busca(config)
+        if cnaes:
+            cnae = random.choice(cnaes)
+            novos = buscar_empresas_por_cnae(cnae, estado, faltam)
+            leads.extend(novos)
+            print(f"[FONTE] +{len(novos)} leads da busca automática")
+
+    return leads
 
 
 def buscar_empresas_por_cnae(cnae: str, uf: str, limit: int = 10) -> list:
@@ -1186,6 +1258,114 @@ def _rodar_modo_sem_cnae(db, cfg: dict, sessao_id: str, stats: dict, max_leads: 
     return "concluido"
 
 
+# ── Modo 3: leads importados pelo usuário ─────────────────────────────────────
+
+def _rodar_modo_importados(db, cfg: dict, sessao_id: str, stats: dict, max_leads: int) -> str:
+    """Processa leads da tabela empresas (já importados pelo usuário). Retorna 'pausado' ou 'concluido'."""
+    _estados_raw = cfg.get("estados_selecionados") or cfg.get("estados") or "ES,SP"
+    estados_cfg  = [e.strip().upper() for e in _estados_raw.split(",") if e.strip()]
+    _cidades_raw = cfg.get("cidades_selecionadas") or cfg.get("cidades") or ""
+    cidades_cfg  = [c.strip() for c in _cidades_raw.split(",") if c.strip()]
+    canal_prim   = cfg.get("canal_primario") or "whatsapp"
+    score_min_cad = int(cfg.get("score_minimo") or 6)
+
+    _log(db, sessao_id, "busca", "Modo importados — processando leads da sua base")
+
+    for uf in estados_cfg:
+        if stats["importados"] >= max_leads:
+            break
+        if sdr_deve_parar(db, sessao_id):
+            _log(db, sessao_id, "pausa", f"SDR pausado durante importados em {uf}", uf=uf)
+            return "pausado"
+
+        faltam = max_leads - stats["importados"]
+        empresas_lista = obter_leads_para_prospectar(cfg, uf, faltam)
+
+        _log(db, sessao_id, "info",
+             f"Importados: {len(empresas_lista)} leads pendentes em {uf}", uf=uf)
+
+        for item in empresas_lista:
+            if stats["importados"] >= max_leads:
+                break
+            if sdr_deve_parar(db, sessao_id):
+                return "pausado"
+
+            cnpj = "".join(filter(str.isdigit, str(item.get("cnpj", ""))))
+            if not cnpj or len(cnpj) != 14:
+                continue
+
+            deve, _ = empresa_deve_ser_recontato(cnpj, cfg, db)
+            if not deve:
+                stats["filtrados"] += 1
+                continue
+
+            empresa = item
+            razao   = (empresa.get("razao_social") or "")[:80]
+            capital = float(empresa.get("capital_social") or 0)
+            uf_emp  = empresa.get("uf") or uf
+            stats["encontrados"] += 1
+
+            atualizar_progresso(db, sessao_id,
+                empresa_atual=razao,
+                ultima_acao=f"Processando importado: {razao}",
+                encontrados=stats["encontrados"])
+
+            _log(db, sessao_id, "encontrado",
+                 f"Lead importado: {razao}", empresa=razao, uf=uf_emp, capital=capital)
+
+            aprovado_filtro, motivo_filtro = aplicar_filtros_config(empresa, cfg)
+            if not aprovado_filtro:
+                stats["descartados"] += 1
+                _log(db, sessao_id, "descarte",
+                     f"Descartado: {motivo_filtro}", empresa=razao, uf=uf_emp)
+                continue
+
+            if cidades_cfg and not _cidade_match(empresa.get("municipio") or "", cidades_cfg):
+                stats["filtrados"] += 1
+                _log(db, sessao_id, "filtro",
+                     f"Fora da cidade alvo: {empresa.get('municipio', '')}",
+                     empresa=razao, uf=uf_emp)
+                continue
+
+            res_score = calcular_score_avancado(empresa, cfg)
+            score     = res_score["score"]
+            stats["aprovados"] += 1
+
+            _log(db, sessao_id, "score",
+                 f"Score {score}/10 — {', '.join(res_score['motivos'][:3])}",
+                 empresa=razao, uf=uf_emp, score=score,
+                 status="aprovado" if res_score["aprovado"] else "baixo_score",
+                 capital=capital)
+
+            nome_produto = cfg.get("produto_foco") or "geral"
+            hoje_str = date.today().isoformat()
+            try:
+                telefone, email = _salvar_empresa(
+                    db, cnpj, empresa, score, nome_produto, hoje_str)
+                stats["importados"] += 1
+                atualizar_progresso(db, sessao_id, importados=stats["importados"])
+                _log(db, sessao_id, "importado",
+                     f"Salvo! Score {score}/10 | Importado da base",
+                     empresa=razao, uf=uf_emp, score=score,
+                     produto=nome_produto, status="importado", capital=capital)
+            except Exception:
+                try:
+                    db.rollback()
+                except Exception:
+                    pass
+                continue
+
+            if res_score["aprovado"]:
+                _tentar_cadencia(
+                    db, sessao_id, stats, empresa, cnpj, score,
+                    nome_produto, canal_prim, telefone, email, score_min_cad,
+                )
+
+            time.sleep(0.3)
+
+    return "concluido"
+
+
 # ── Engine principal com log ao vivo ─────────────────────────────────────────
 
 def rodar_prospeccao_autonoma(db=None, config_override: dict = None) -> dict:
@@ -1225,19 +1405,33 @@ def rodar_prospeccao_autonoma(db=None, config_override: dict = None) -> dict:
         stats = {"encontrados": 0, "aprovados": 0, "importados": 0,
                  "cadencias": 0, "descartados": 0, "filtrados": 0}
 
-        modo = (cfg.get("modo_busca") or "cnae").strip()
+        fonte = (cfg.get("fonte_leads") or "busca").strip()
+        modo  = (cfg.get("modo_busca")  or "cnae").strip()
 
-        if modo == "sem_cnae":
-            status_modo = _rodar_modo_sem_cnae(db, cfg, sessao_id, stats, max_leads)
-        elif modo == "ambos":
-            meta_cnae = max(1, max_leads // 2)
-            status_modo = _rodar_modo_cnae(db, cfg, sessao_id, stats, meta_cnae)
+        def _rodar_busca(max_l):
+            """Executa busca automática respeitando modo_busca."""
+            if modo == "sem_cnae":
+                return _rodar_modo_sem_cnae(db, cfg, sessao_id, stats, max_l)
+            if modo == "ambos":
+                meta = max(1, max_l // 2)
+                s = _rodar_modo_cnae(db, cfg, sessao_id, stats, meta)
+                if s != "pausado" and stats["importados"] < max_l:
+                    _log(db, sessao_id, "info",
+                         f"Modo combinado: {stats['importados']} via CNAE, complementando sem CNAE")
+                    return _rodar_modo_sem_cnae(db, cfg, sessao_id, stats, max_l)
+                return s
+            return _rodar_modo_cnae(db, cfg, sessao_id, stats, max_l)
+
+        if fonte == "importados":
+            status_modo = _rodar_modo_importados(db, cfg, sessao_id, stats, max_leads)
+        elif fonte == "ambos":
+            status_modo = _rodar_modo_importados(db, cfg, sessao_id, stats, max_leads)
             if status_modo != "pausado" and stats["importados"] < max_leads:
                 _log(db, sessao_id, "info",
-                     f"Modo combinado: {stats['importados']} via CNAE, complementando sem CNAE")
-                status_modo = _rodar_modo_sem_cnae(db, cfg, sessao_id, stats, max_leads)
-        else:  # "cnae" ou padrão
-            status_modo = _rodar_modo_cnae(db, cfg, sessao_id, stats, max_leads)
+                     f"Fonte ambos: {stats['importados']} via importados, complementando com busca automática")
+                status_modo = _rodar_busca(max_leads)
+        else:  # 'busca' ou padrão
+            status_modo = _rodar_busca(max_leads)
 
         if status_modo == "pausado":
             finalizar_sessao(db, sessao_id, stats)
