@@ -1022,29 +1022,34 @@ def leads_importar_preview():
 @login_required
 @require_perfil('gerente')
 def leads_importar_confirmar():
-    arquivo = request.files.get("arquivo")
-    if not arquivo:
-        flash("Arquivo não encontrado.", "danger")
-        return redirect(url_for("leads_importar_form"))
-    mapa = {
-        "nome":     request.form.get("map_nome", ""),
-        "empresa":  request.form.get("map_empresa", ""),
-        "cargo":    request.form.get("map_cargo", ""),
-        "telefone": request.form.get("map_telefone", ""),
-        "email":    request.form.get("map_email", ""),
-        "cidade":   request.form.get("map_cidade", ""),
-    }
     try:
+        arquivo = request.files.get("arquivo")
+        if not arquivo or not arquivo.filename:
+            return jsonify({"erro": "Arquivo não encontrado."}), 400
+        mapa = {
+            "nome":     request.form.get("map_nome", ""),
+            "empresa":  request.form.get("map_empresa", ""),
+            "cargo":    request.form.get("map_cargo", ""),
+            "telefone": request.form.get("map_telefone", ""),
+            "email":    request.form.get("map_email", ""),
+            "cidade":   request.form.get("map_cidade", ""),
+        }
         raw = arquivo.stream.read()
         _, linhas = _ler_arquivo(raw, arquivo.filename)
         importados, ignorados = _processar_linhas(linhas, mapa)
-        msg = f"{importados} lead(s) importado(s) com sucesso."
-        if ignorados:
-            msg += f" {ignorados} linha(s) ignorada(s) (sem nome ou empresa)."
-        flash(msg, "success")
+        return jsonify({
+            "ok": True,
+            "importados": importados,
+            "ignorados": ignorados,
+            "mensagem": (
+                f"{importados} lead(s) importado(s) com sucesso."
+                + (f" {ignorados} linha(s) ignorada(s) (sem nome ou empresa)." if ignorados else "")
+            ),
+        })
     except Exception as e:
-        flash(f"Erro na importação: {e}", "danger")
-    return redirect(url_for("prospeccao_lista"))
+        import traceback
+        traceback.print_exc()
+        return jsonify({"erro": str(e)}), 500
 
 
 # ── Prospecção ────────────────────────────────────────────────────────────────
