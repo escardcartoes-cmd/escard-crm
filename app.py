@@ -2766,6 +2766,20 @@ def sdr_painel():
             COALESCE(SUM(CASE WHEN status='descartado' THEN 1 ELSE 0 END), 0) AS descartados
         FROM prospeccao_automatica
     """).fetchone()
+    try:
+        tenant_id = session.get("tenant_id", 1)
+        leads_imp_row = conn.execute("""
+            SELECT COUNT(*) AS cnt FROM empresas
+            WHERE tenant_id = ?
+            AND status IN ('prospect', 'importado')
+            AND id NOT IN (
+                SELECT empresa_id FROM cadencias
+                WHERE empresa_id IS NOT NULL
+            )
+        """, (tenant_id,)).fetchone()
+        leads_importados_pendentes = int(leads_imp_row["cnt"]) if leads_imp_row else 0
+    except Exception:
+        leads_importados_pendentes = 0
     conn.close()
     try:
         job = scheduler.get_job("prospeccao_autonoma")
@@ -2780,6 +2794,7 @@ def sdr_painel():
         stats=dict(stats_row) if stats_row else {"total": 0, "novos": 0, "importados": 0, "descartados": 0},
         proxima_execucao=proxima,
         cnaes_por_categoria=CNAES_POR_CATEGORIA,
+        leads_importados_pendentes=leads_importados_pendentes,
     )
 
 
@@ -2799,7 +2814,7 @@ def sdr_config_salvar():
             "funcionarios_min", "funcionarios_max", "idade_empresa_min",
             "idade_empresa_max", "max_cadencias_por_dia", "nome_campanha",
             "modo_busca", "estados_selecionados", "cidades_selecionadas",
-            "sem_restricao_horario",
+            "sem_restricao_horario", "fonte_leads",
         ]
         _agora = _dt.datetime.now().isoformat(sep=" ", timespec="seconds")
         conn = database.get_connection()

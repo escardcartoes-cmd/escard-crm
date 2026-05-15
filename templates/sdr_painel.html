@@ -161,6 +161,39 @@
     </div>
   </div>
 
+  <!-- Fonte dos Leads -->
+  <div style="margin-bottom:20px">
+    <div style="font-weight:600;font-size:13px;color:#4A3F35;margin-bottom:10px;padding-bottom:4px;border-bottom:1px solid var(--border)">📋 Fonte dos Leads</div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px" id="fonteCards">
+
+      <div class="fonte-card" data-fonte="importados" onclick="selecionarFonte('importados')"
+           style="padding:12px;border-radius:8px;cursor:pointer;transition:all 0.2s;border:1px solid var(--border);background:#fff">
+        <div style="font-size:18px;margin-bottom:6px">📁</div>
+        <div style="font-weight:600;font-size:13px;color:#4A3F35">Minha Base Importada</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:4px;line-height:1.4">SDR trabalha apenas os leads que você importou via CSV</div>
+        <span style="display:inline-block;margin-top:6px;background:#EFF6FF;color:#1D4ED8;font-size:10px;padding:2px 7px;border-radius:10px;font-weight:600">
+          {{ leads_importados_pendentes }} leads aguardando
+        </span>
+      </div>
+
+      <div class="fonte-card" data-fonte="busca" onclick="selecionarFonte('busca')"
+           style="padding:12px;border-radius:8px;cursor:pointer;transition:all 0.2s;border:1px solid var(--border);background:#fff">
+        <div style="font-size:18px;margin-bottom:6px">🔍</div>
+        <div style="font-weight:600;font-size:13px;color:#4A3F35">Busca Automática</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:4px;line-height:1.4">SDR busca novas empresas automaticamente por CNAE e estado</div>
+      </div>
+
+      <div class="fonte-card" data-fonte="ambos" onclick="selecionarFonte('ambos')"
+           style="padding:12px;border-radius:8px;cursor:pointer;transition:all 0.2s;border:1px solid var(--border);background:#fff">
+        <div style="font-size:18px;margin-bottom:6px">🔄</div>
+        <div style="font-weight:600;font-size:13px;color:#4A3F35">Minha Base + Busca</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:4px;line-height:1.4">Trabalha sua base primeiro, depois busca novas empresas</div>
+      </div>
+
+    </div>
+    <input type="hidden" id="fonte_leads" value="{{ config.fonte_leads or 'busca' }}">
+  </div>
+
   <!-- Modo de Busca -->
   <div style="margin-bottom:20px">
     <div style="font-weight:600;font-size:13px;color:#4A3F35;margin-bottom:10px;padding-bottom:4px;border-bottom:1px solid var(--border)">⚙ Modo de Busca</div>
@@ -671,6 +704,16 @@ function toggleSwitch(campo) {
   marcarAlterado();
 }
 
+function selecionarFonte(fonte) {
+  document.getElementById('fonte_leads').value = fonte;
+  document.querySelectorAll('.fonte-card').forEach(c => {
+    const sel = c.dataset.fonte === fonte;
+    c.style.border     = sel ? '2px solid #C5A089' : '1px solid var(--border)';
+    c.style.background = sel ? '#FDF9F5' : '#fff';
+  });
+  marcarAlterado();
+}
+
 function selecionarModo(modo) {
   document.getElementById('modo_busca').value = modo;
   document.querySelectorAll('.modo-card').forEach(c => {
@@ -761,6 +804,7 @@ function coletarFiltros() {
     dias_semana:                diasCks.join(','),
     modo_busca:                 document.getElementById('modo_busca').value || 'cnae',
     cnaes:                      document.getElementById('cnaes').value || '',
+    fonte_leads:                document.getElementById('fonte_leads').value || 'busca',
   };
 }
 
@@ -924,6 +968,7 @@ document.addEventListener('DOMContentLoaded', () => {
   carregarInteligencia();
   atualizarPainel();
   intervalAoVivo = setInterval(atualizarPainel, 3000);
+  selecionarFonte(document.getElementById('fonte_leads').value || 'busca');
   selecionarModo(document.getElementById('modo_busca').value || 'cnae');
   _initEstados();
   _parseCidadesInicial();
