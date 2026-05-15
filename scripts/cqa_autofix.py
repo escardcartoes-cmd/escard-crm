@@ -89,6 +89,71 @@ def fix_cadencias_travadas():
         return _r("fix_cadencias_travadas", False, f"Erro: {e}")
 
 
+def fix_cidades_encoding():
+    """Remove trailing dashes/em-dashes and fix latin1→utf8 double-encoding in city columns."""
+    cols = [
+        ("prospeccao_automatica", "municipio"),
+        ("empresas", "cidade"),
+    ]
+    corrigidos = 0
+    try:
+        conn = database.get_connection()
+        if database._USE_PG:
+            for tabela, col in cols:
+                try:
+                    # Strip trailing dashes/en-dashes/em-dashes and whitespace
+                    conn.execute(
+                        f"UPDATE {tabela} SET {col} = REGEXP_REPLACE(TRIM({col}), '[-\\u2013\\u2014]+$', '') "
+                        f"WHERE {col} IS NOT NULL AND {col} ~ '[-\\u2013\\u2014]+$'"
+                    )
+                    conn.commit()
+                    # Fix latin1→utf8 double-encoding artifacts
+                    conn.execute(
+                        f"UPDATE {tabela} SET {col} = "
+                        f"convert_from(convert_to({col}, 'LATIN1'), 'UTF8') "
+                        f"WHERE {col} IS NOT NULL AND {col} ~ '[ÃÂ]'"
+                    )
+                    conn.commit()
+                    corrigidos += 1
+                except Exception:
+                    try: conn.rollback()
+                    except Exception: pass
+        else:
+            # SQLite: fix in Python row-by-row
+            bad_trail = re.compile(r'[-–—]+\s*$')
+            bad_enc = re.compile(r'[ÃÂ][\x80-\xBF]')
+            for tabela, col in cols:
+                try:
+                    rows = conn.execute(
+                        f"SELECT rowid, {col} FROM {tabela} WHERE {col} IS NOT NULL"
+                    ).fetchall()
+                    for row in rows:
+                        val = row[col]
+                        if not val:
+                            continue
+                        new_val = bad_trail.sub('', val).rstrip()
+                        # Attempt latin1→utf8 re-decode if encoding artifacts present
+                        if bad_enc.search(new_val):
+                            try:
+                                new_val = new_val.encode('latin1').decode('utf-8')
+                            except Exception:
+                                pass
+                        if new_val != val:
+                            conn.execute(
+                                f"UPDATE {tabela} SET {col}=? WHERE rowid=?",
+                                (new_val, row['rowid'])
+                            )
+                    conn.commit()
+                    corrigidos += 1
+                except Exception:
+                    try: conn.rollback()
+                    except Exception: pass
+        conn.close()
+        return _r("fix_cidades_encoding", True, f"Cidades corrigidas em {corrigidos} colunas")
+    except Exception as e:
+        return _r("fix_cidades_encoding", False, f"Erro: {e}")
+
+
 def fix_migrations():
     try:
         conn = database.get_connection()
@@ -100,7 +165,7 @@ def fix_migrations():
 
 
 def rodar_todos_os_fixes():
-    fixes = [fix_encoding_templates, fix_encoding_banco, fix_cadencias_travadas, fix_migrations]
+    fixes = [fix_encoding_templates, fix_encoding_banco, fix_cidades_encoding, fix_cadencias_travadas, fix_migrations]
     resultados = []
     for fix in fixes:
         try:
