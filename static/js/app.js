@@ -187,39 +187,71 @@ function escHtml(s) {
 }
 
 /* ── SDR: Iniciar Cadência ───────────────────────────────────────────────────── */
-function iniciarCadencia(empresaId, empresaNome, whatsapp, email) {
-  openModal('Iniciar Cadência — ' + empresaNome, false);
+// Store empresa context in module-level vars to avoid onclick HTML-escaping bugs
+let _cadEmpresaId   = null;
+let _cadEmpresaNome = '';
+
+function _renderModalCadencia(nome, wa, email) {
   modalBody.innerHTML = `
     <p class="text-muted text-sm" style="margin-bottom:14px">
-      A IA gerará 4 mensagens personalizadas (D0, D+3, D+7, D+14) para ${escHtml(empresaNome)}.
+      A IA gerará 4 mensagens personalizadas (D0, D+3, D+7, D+14) para <strong>${escHtml(nome)}</strong>.
     </p>
     <div style="margin-bottom:12px">
       <label class="label-mini">WhatsApp (com DDD)</label>
-      <input id="cadWa" type="text" value="${escHtml(whatsapp)}" placeholder="11999999999"
+      <input id="cadWa" type="text" value="${escHtml(wa)}" placeholder="11999999999"
+        autocomplete="off"
         style="width:100%;padding:8px 11px;border:1px solid var(--border);border-radius:var(--r-sm);font-size:13px;font-family:inherit;color:var(--text)">
     </div>
     <div style="margin-bottom:16px">
       <label class="label-mini">E-mail</label>
       <input id="cadEmail" type="email" value="${escHtml(email)}" placeholder="contato@empresa.com"
+        autocomplete="off"
         style="width:100%;padding:8px 11px;border:1px solid var(--border);border-radius:var(--r-sm);font-size:13px;font-family:inherit;color:var(--text)">
     </div>
-    <button onclick="_confirmarCadencia(${JSON.stringify(empresaId)}, ${JSON.stringify(empresaNome)})"
-      class="btn btn-primary" style="width:100%;justify-content:center;font-size:14px">
+    <button id="btnGerarCadencia" class="btn btn-primary"
+      style="width:100%;justify-content:center;font-size:14px">
       ⚡ Gerar cadência com IA
     </button>`;
+  document.getElementById('btnGerarCadencia').addEventListener('click', _confirmarCadencia);
+}
+
+async function iniciarCadencia(empresaId, empresaNome, whatsapp, email) {
+  _cadEmpresaId   = empresaId || null;
+  _cadEmpresaNome = empresaNome || '';
+
+  openModal('Iniciar Cadência — ' + empresaNome, true);
+
+  // Fetch fresh contact data from DB when we have an empresa ID
+  let wa  = whatsapp || '';
+  let eml = email    || '';
+  if (empresaId) {
+    try {
+      const r = await fetch('/api/empresa/' + empresaId + '/contato');
+      if (r.ok) {
+        const data = await r.json();
+        wa  = data.telefone || wa;
+        eml = data.email    || eml;
+      }
+    } catch(e) {
+      console.warn('Não foi possível buscar contato da empresa:', e);
+    }
+  }
+
+  _renderModalCadencia(_cadEmpresaNome, wa, eml);
 }
 
 function iniciarCadenciaFromRow(leadId) {
   const row = document.getElementById('row-' + leadId);
   if (!row) return;
-  const empresaId   = row.dataset.empresaId   || null;
-  const empresaNome = row.dataset.empresaNome  || '';
-  const whatsapp    = row.dataset.telefone     || '';
-  const email       = row.dataset.email        || '';
+  const empresaId   = row.dataset.empresaId  || null;
+  const empresaNome = row.dataset.empresaNome || '';
+  const whatsapp    = row.dataset.telefone    || '';
+  const email       = row.dataset.email       || '';
   iniciarCadencia(empresaId ? parseInt(empresaId) : null, empresaNome, whatsapp, email);
 }
 
-async function _confirmarCadencia(empresaId, empresaNome) {
+async function _confirmarCadencia() {
+  console.log('[cadencia] _confirmarCadencia chamado — empresa:', _cadEmpresaNome, 'id:', _cadEmpresaId);
   const wa    = (document.getElementById('cadWa')?.value    || '').trim();
   const email = (document.getElementById('cadEmail')?.value || '').trim();
 
@@ -232,11 +264,18 @@ async function _confirmarCadencia(empresaId, empresaNome) {
     </div>`;
 
   try {
-    const d = await fetch('/cadencia/iniciar', {
+    const resp = await fetch('/cadencia/iniciar', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ empresa_id: empresaId, empresa_nome: empresaNome, whatsapp: wa, email }),
-    }).then(r => r.json());
+      headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+      body: JSON.stringify({
+        empresa_id:   _cadEmpresaId,
+        empresa_nome: _cadEmpresaNome,
+        whatsapp:     wa,
+        email:        email,
+      }),
+    });
+    const d = await resp.json();
+    console.log('[cadencia] resposta:', d);
 
     if (d.error) { showError(d.error); return; }
 
@@ -245,17 +284,19 @@ async function _confirmarCadencia(empresaId, empresaNome) {
         <div style="font-size:42px;margin-bottom:14px">✅</div>
         <p style="font-size:16px;font-weight:700;margin-bottom:8px">Cadência criada!</p>
         <p class="text-muted text-sm" style="margin-bottom:20px">
-          ${d.total} etapas geradas para <strong>${escHtml(empresaNome)}</strong>
+          ${d.total} etapas geradas para <strong>${escHtml(_cadEmpresaNome)}</strong>
         </p>
         <a href="/cadencias" class="btn btn-primary" style="font-size:14px" onclick="closeModal()">
           Ver ações do dia →
         </a>
       </div>`;
 
-    // Update menu badge
     const mb = document.querySelector('.menu-badge');
     if (mb) mb.textContent = parseInt(mb.textContent || '0') + 1;
-  } catch(e) { showError('Erro ao gerar cadência: ' + e.message); }
+  } catch(e) {
+    console.error('[cadencia] erro:', e);
+    showError('Erro ao gerar cadência: ' + e.message);
+  }
 }
 
 /* ── Auto-dismiss alerts ─────────────────────────────────────────────────────── */
