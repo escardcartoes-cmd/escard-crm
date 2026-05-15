@@ -73,7 +73,9 @@ def fix_cadencias_travadas():
         if database._USE_PG:
             conn.execute(
                 "UPDATE cadencias SET status='cancelado' "
-                "WHERE status='pendente' AND data_acao < NOW() - INTERVAL '30 days'"
+                "WHERE status='pendente' "
+                "AND data_acao > '' "
+                "AND data_acao::date < NOW() - INTERVAL '30 days'"
             )
         else:
             conn.execute(

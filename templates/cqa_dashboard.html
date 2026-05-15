@@ -154,11 +154,31 @@
 <script>
 async function resolverAlerta(id, btn) {
   btn.disabled = true;
+  btn.textContent = '…';
   try {
-    await fetch('/cqa/alerta/' + id + '/resolver', {method:'POST', headers:{'X-Requested-With':'XMLHttpRequest'}});
-    btn.closest('div[style*="border-left"]').style.opacity = '.4';
-    setTimeout(() => btn.closest('div[style*="border-left"]').remove(), 500);
-  } catch(e) { btn.disabled = false; alert('Erro: ' + e.message); }
+    const res = await fetch('/cqa/alerta/' + id + '/resolver', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: {'X-Requested-With': 'XMLHttpRequest'}
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error((err.error || err.erro || 'Erro ' + res.status));
+    }
+    const data = await res.json();
+    if (data.ok) {
+      const card = btn.closest('div[style*="border-left"]');
+      if (card) { card.style.opacity = '.3'; setTimeout(() => card.remove(), 400); }
+    } else {
+      btn.disabled = false;
+      btn.textContent = '✓ Resolver';
+      alert('Erro: ' + (data.erro || 'desconhecido'));
+    }
+  } catch(e) {
+    btn.disabled = false;
+    btn.textContent = '✓ Resolver';
+    alert('Erro: ' + e.message);
+  }
 }
 </script>
 {% endblock %}
