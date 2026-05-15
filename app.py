@@ -3108,10 +3108,14 @@ def sdr_sessoes_lista():
 @login_required
 @require_perfil("admin")
 def admin_tenants():
-    tenants = tenant_model.listar_tenants()
-    total_ativos = sum(1 for t in tenants if t.get("ativo"))
-    return render_template("admin_tenants.html",
-                           tenants=tenants, total_ativos=total_ativos)
+    try:
+        tenants = tenant_model.listar_tenants()
+        total_ativos = sum(1 for t in tenants if t.get("ativo"))
+        return render_template("admin_tenants.html",
+                               tenants=tenants, total_ativos=total_ativos)
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        return f"Erro admin: {e}", 500
 
 
 @app.route("/admin/tenant/novo", methods=["POST"])
