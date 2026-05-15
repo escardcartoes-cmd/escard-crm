@@ -1,4 +1,5 @@
 import os
+import re
 import csv
 import io
 import json
@@ -51,13 +52,29 @@ def _inject_cadencias_badge():
         radar_nao_lidos = radar_model.contar_nao_lidos()
     except Exception:
         radar_nao_lidos = {"editais": 0, "concorrentes": 0, "total": 0}
+    wa_pendentes = 0
+    try:
+        conn = database.get_connection()
+        tid = session.get("tenant_id", 1)
+        row = conn.execute(
+            """SELECT COUNT(*) AS cnt FROM cadencias
+               WHERE tenant_id = ? AND canal_whatsapp = 1
+                 AND (whatsapp_status IS NULL OR whatsapp_status = 'pendente')
+                 AND mensagem_whatsapp IS NOT NULL AND mensagem_whatsapp != ''""",
+            (tid,)
+        ).fetchone()
+        wa_pendentes = int(row["cnt"] if row else 0)
+        conn.close()
+    except Exception:
+        pass
     try:
         return {
             "cadencias_hoje_count": cad_model.contar_hoje(),
             "radar_nao_lidos": radar_nao_lidos,
+            "wa_pendentes": wa_pendentes,
         }
     except Exception:
-        return {"cadencias_hoje_count": 0, "radar_nao_lidos": radar_nao_lidos}
+        return {"cadencias_hoje_count": 0, "radar_nao_lidos": radar_nao_lidos, "wa_pendentes": wa_pendentes}
 
 
 @app.context_processor
@@ -3100,6 +3117,82 @@ def sdr_sessoes_lista():
         return jsonify(sessoes)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
+# ── SDR — Fila de aprovação WhatsApp ─────────────────────────────────────────
+
+@app.route("/sdr/fila-aprovacao")
+@login_required
+@require_perfil("gerente")
+def sdr_fila_aprovacao():
+    try:
+        conn = database.get_connection()
+        tid = session.get("tenant_id", 1)
+        itens = [dict(r) for r in conn.execute(
+            """SELECT * FROM cadencias
+               WHERE tenant_id = ?
+                 AND canal_whatsapp = 1
+                 AND (whatsapp_status IS NULL OR whatsapp_status = 'pendente')
+                 AND mensagem_whatsapp IS NOT NULL AND mensagem_whatsapp != ''
+               ORDER BY data_acao ASC LIMIT 100""",
+            (tid,)
+        ).fetchall()]
+        conn.close()
+        for item in itens:
+            fone = (item.get("contato_whatsapp") or "").replace(" ", "").replace("-", "").replace("(", "").replace(")", "")
+            fone = re.sub(r'\D', '', fone)
+            from urllib.parse import quote as _q
+            item["wa_url"] = f"https://wa.me/55{fone}?text={_q(item.get('mensagem_whatsapp') or '')}" if fone else ""
+        return render_template("sdr_fila_aprovacao.html", itens=itens)
+    except Exception as e:
+        flash(f"Erro ao carregar fila: {e}", "danger")
+        return redirect(url_for("sdr_painel"))
+
+
+@app.route("/sdr/aprovar/<int:cad_id>", methods=["POST"])
+@login_required
+@require_perfil("gerente")
+def sdr_aprovar_whatsapp(cad_id):
+    try:
+        conn = database.get_connection()
+        tid = session.get("tenant_id", 1)
+        row = conn.execute(
+            "SELECT contato_whatsapp, mensagem_whatsapp FROM cadencias WHERE id = ? AND tenant_id = ?",
+            (cad_id, tid)
+        ).fetchone()
+        if not row:
+            conn.close()
+            return jsonify({"ok": False, "erro": "Cadência não encontrada"}), 404
+        conn.execute(
+            "UPDATE cadencias SET whatsapp_status = 'aprovado', whatsapp_aprovado_em = ? WHERE id = ? AND tenant_id = ?",
+            (datetime.utcnow().isoformat(), cad_id, tid)
+        )
+        conn.commit()
+        fone = re.sub(r'\D', '', str(row["contato_whatsapp"] or ""))
+        from urllib.parse import quote as _q
+        wa_url = f"https://wa.me/55{fone}?text={_q(row['mensagem_whatsapp'] or '')}" if fone else ""
+        conn.close()
+        return jsonify({"ok": True, "wa_url": wa_url})
+    except Exception as e:
+        return jsonify({"ok": False, "erro": str(e)}), 500
+
+
+@app.route("/sdr/rejeitar/<int:cad_id>", methods=["POST"])
+@login_required
+@require_perfil("gerente")
+def sdr_rejeitar_whatsapp(cad_id):
+    try:
+        conn = database.get_connection()
+        tid = session.get("tenant_id", 1)
+        conn.execute(
+            "UPDATE cadencias SET whatsapp_status = 'rejeitado' WHERE id = ? AND tenant_id = ?",
+            (cad_id, tid)
+        )
+        conn.commit()
+        conn.close()
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"ok": False, "erro": str(e)}), 500
 
 
 # ── Super Admin — Gestão de Tenants ──────────────────────────────────────────

@@ -1,0 +1,108 @@
+{% extends 'base.html' %}
+{% block title %}Fila de Aprovação WhatsApp — Krylo CRM{% endblock %}
+{% block topbar_title %}Fila de Aprovação WhatsApp{% endblock %}
+
+{% block topbar_actions %}
+  <a href="{{ url_for('sdr_painel') }}" class="btn btn-sm btn-outline-secondary">← Voltar ao SDR</a>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4 py-3">
+
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+      <h5 class="mb-0 fw-bold">Mensagens pendentes de aprovação</h5>
+      <small class="text-muted">Revise e aprove antes de enviar via WhatsApp</small>
+    </div>
+    <span class="badge bg-warning text-dark fs-6">{{ itens|length }} pendente{{ 's' if itens|length != 1 else '' }}</span>
+  </div>
+
+  {% if not itens %}
+  <div class="card border-0 shadow-sm">
+    <div class="card-body text-center py-5 text-muted">
+      <div style="font-size:2.5rem">✅</div>
+      <div class="mt-2 fw-semibold">Fila vazia — nenhuma mensagem aguardando aprovação.</div>
+    </div>
+  </div>
+  {% else %}
+  <div class="d-flex flex-column gap-3" id="filaContainer">
+    {% for item in itens %}
+    <div class="card border-0 shadow-sm" id="card-{{ item.id }}">
+      <div class="card-body">
+        <div class="row align-items-start g-3">
+          <div class="col-md-7">
+            <div class="fw-bold mb-1">{{ item.empresa_nome }}</div>
+            <div class="text-muted small mb-2">
+              📞 {{ item.contato_whatsapp or '—' }}
+              &nbsp;·&nbsp; Etapa {{ item.etapa }}
+              &nbsp;·&nbsp; Ação em {{ (item.data_acao or '')[:10] }}
+            </div>
+            <div class="bg-light rounded p-3" style="font-size:13px;white-space:pre-wrap;max-height:160px;overflow:auto">{{ item.mensagem_whatsapp }}</div>
+          </div>
+          <div class="col-md-5 d-flex flex-column gap-2 justify-content-start pt-2">
+            {% if item.wa_url %}
+            <a href="{{ item.wa_url }}" target="_blank" class="btn btn-success btn-sm"
+               onclick="aprovar({{ item.id }}, this)">
+              ✅ Aprovar e abrir WhatsApp
+            </a>
+            {% else %}
+            <button class="btn btn-success btn-sm" onclick="aprovar({{ item.id }}, this)">
+              ✅ Aprovar
+            </button>
+            {% endif %}
+            <button class="btn btn-outline-danger btn-sm" onclick="rejeitar({{ item.id }}, this)">
+              ✗ Rejeitar
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+</div>
+
+<script>
+async function aprovar(id, btn) {
+  btn.disabled = true;
+  btn.textContent = 'Aprovando…';
+  try {
+    const res = await fetch(`/sdr/aprovar/${id}`, { method: 'POST' });
+    const data = await res.json();
+    if (data.ok) {
+      document.getElementById(`card-${id}`).remove();
+      if (data.wa_url) window.open(data.wa_url, '_blank');
+    } else {
+      alert('Erro: ' + (data.erro || 'desconhecido'));
+      btn.disabled = false;
+      btn.textContent = '✅ Aprovar';
+    }
+  } catch (e) {
+    alert('Erro de rede');
+    btn.disabled = false;
+    btn.textContent = '✅ Aprovar';
+  }
+}
+
+async function rejeitar(id, btn) {
+  btn.disabled = true;
+  btn.textContent = 'Rejeitando…';
+  try {
+    const res = await fetch(`/sdr/rejeitar/${id}`, { method: 'POST' });
+    const data = await res.json();
+    if (data.ok) {
+      document.getElementById(`card-${id}`).remove();
+    } else {
+      alert('Erro: ' + (data.erro || 'desconhecido'));
+      btn.disabled = false;
+      btn.textContent = '✗ Rejeitar';
+    }
+  } catch (e) {
+    alert('Erro de rede');
+    btn.disabled = false;
+    btn.textContent = '✗ Rejeitar';
+  }
+}
+</script>
+{% endblock %}
