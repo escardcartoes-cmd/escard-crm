@@ -606,6 +606,11 @@ def run_migrations(conn) -> None:
         # cadencias — WhatsApp approval queue
         f"ALTER TABLE cadencias ADD COLUMN{_ifne} whatsapp_status TEXT DEFAULT 'pendente'",
         f"ALTER TABLE cadencias ADD COLUMN{_ifne} whatsapp_aprovado_em TEXT",
+        # empresas — temperatura de engajamento
+        f"ALTER TABLE empresas ADD COLUMN{_ifne} temperatura TEXT DEFAULT 'frio'",
+        f"ALTER TABLE empresas ADD COLUMN{_ifne} score INTEGER DEFAULT 0",
+        # prospeccao_automatica — temperatura
+        f"ALTER TABLE prospeccao_automatica ADD COLUMN{_ifne} temperatura TEXT DEFAULT 'frio'",
     ]
 
     _CREATE = [
@@ -755,6 +760,20 @@ def run_migrations(conn) -> None:
             analise              TEXT,
             num_itens_analisados INTEGER,
             criado_em            TIMESTAMP DEFAULT (datetime('now', 'localtime'))
+        )""",
+        """CREATE TABLE IF NOT EXISTS email_fila (
+            id                INTEGER PRIMARY KEY AUTOINCREMENT,
+            tenant_id         INTEGER DEFAULT 1,
+            destinatario      TEXT,
+            nome_destinatario TEXT,
+            assunto           TEXT,
+            html              TEXT,
+            texto             TEXT,
+            status            TEXT DEFAULT 'pendente',
+            tentativas        INTEGER DEFAULT 0,
+            criado_em         TEXT DEFAULT (datetime('now','localtime')),
+            enviado_em        TEXT,
+            erro              TEXT
         )""",
         """CREATE TABLE IF NOT EXISTS sdr_config (
             id                         INTEGER PRIMARY KEY AUTOINCREMENT,
