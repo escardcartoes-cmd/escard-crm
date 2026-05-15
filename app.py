@@ -3309,6 +3309,77 @@ def admin_tenant_toggle(tenant_id):
     return redirect(url_for("admin_tenants"))
 
 
+@app.route("/admin/importar-rf", methods=["GET", "POST"])
+@login_required
+@require_perfil("admin")
+def admin_importar_rf():
+    """Importa base da Receita Federal para o banco local."""
+    try:
+        if request.method == "POST":
+            uf     = request.form.get("uf", "ES").strip().upper()
+            limite = max(100, min(int(request.form.get("limite", 10000)), 500000))
+
+            def _importar():
+                try:
+                    from scripts.importar_receita_federal import (
+                        importar_estabelecimentos,
+                        baixar_tabela_municipios,
+                        baixar_tabela_cnaes,
+                    )
+                    municipios = baixar_tabela_municipios()
+                    cnaes_desc = baixar_tabela_cnaes()
+                    importar_estabelecimentos(
+                        uf_filtro=uf,
+                        limite=limite,
+                        municipios=municipios,
+                        cnaes_desc=cnaes_desc,
+                    )
+                except Exception as e:
+                    print(f"[RF] Erro na importação: {e}")
+
+            t = threading.Thread(target=_importar, daemon=True)
+            t.start()
+            return jsonify({
+                "ok": True,
+                "mensagem": (
+                    f"Importação de {uf} iniciada em background "
+                    f"({limite:,} empresas). Pode levar 20-30 minutos."
+                ),
+            })
+
+        db = database.get_new_db_connection()
+        row = db.execute("SELECT COUNT(*) AS cnt FROM rf_empresas").fetchone()
+        total_rf = int(row["cnt"] if row else 0)
+        por_uf = db.execute("""
+            SELECT uf, COUNT(*) AS total
+            FROM rf_empresas
+            GROUP BY uf
+            ORDER BY total DESC
+        """).fetchall()
+        db.close()
+
+        return render_template("admin_importar_rf.html",
+                               total_rf=total_rf,
+                               por_uf=por_uf)
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        return f"Erro: {e}", 500
+
+
+@app.route("/admin/importar-rf/status")
+@login_required
+@require_perfil("admin")
+def admin_importar_rf_status():
+    try:
+        db = database.get_new_db_connection()
+        row = db.execute("SELECT COUNT(*) AS cnt FROM rf_empresas").fetchone()
+        total = int(row["cnt"] if row else 0)
+        db.close()
+        return jsonify({"total": total})
+    except Exception:
+        return jsonify({"total": 0})
+
+
 # ── Setup Wizard — Onboarding Multi-tenant ────────────────────────────────────
 
 @app.route("/setup")

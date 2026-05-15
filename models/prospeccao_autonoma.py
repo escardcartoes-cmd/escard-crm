@@ -10,7 +10,7 @@ import unicodedata
 import requests
 from datetime import datetime, date, timedelta
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from database import get_connection
+from database import get_connection, get_new_db_connection
 
 _HEADERS = {"User-Agent": "KryloCRM/1.0 SDR-autonomo"}
 
@@ -448,20 +448,33 @@ def _buscar_por_geracao_cnpj(cnae_alvo: str, estado: str, limite: int) -> list:
     return resultados
 
 
-def buscar_empresas_por_cnae(cnae: str, uf: str, limit: int = 10) -> list:
-    """
-    Busca empresas por CNAE e UF com cache de 1h.
-    Tenta faixas por estado (UF-biased) + filtro CNAE 4 dígitos;
-    se insuficiente, usa fallback amplo (2 dígitos, sem UF).
-    """
-    uf_upper = uf.upper().strip()
+def _row_to_empresa(row) -> dict:
+    """Converte linha de rf_empresas para dict padrão de empresa."""
+    r = dict(row)
+    return {
+        'cnpj':                  r.get('cnpj', ''),
+        'razao_social':          r.get('razao_social') or r.get('nome_fantasia') or 'Empresa',
+        'nome_fantasia':         r.get('nome_fantasia', ''),
+        'cnae_codigo':           r.get('cnae_principal', ''),
+        'cnae_descricao':        r.get('cnae_descricao', ''),
+        'uf':                    r.get('uf', ''),
+        'municipio':             r.get('municipio', ''),
+        'telefone':              r.get('telefone') or None,
+        'email':                 r.get('email') or None,
+        'situacao':              r.get('situacao', 'ATIVA'),
+        'capital_social':        float(r.get('capital_social') or 0),
+        'tipo':                  r.get('tipo', 'MATRIZ'),
+        'is_matriz':             (r.get('tipo', 'MATRIZ') == 'MATRIZ'),
+        'data_inicio_atividade': str(r.get('data_abertura') or ''),
+        'natureza_juridica':     '',
+        'porte':                 r.get('porte', '') or '',
+        'fonte':                 'base_local',
+    }
 
-    # Verifica cache
-    cached = _cache_get(cnae, uf_upper)
-    if cached is not None:
-        print(f"[CACHE] {cnae}/{uf_upper}: {len(cached)} empresas")
-        return cached[:limit]
 
+def _buscar_api_externa(cnae: str, estado: str, limite: int) -> list:
+    """Fallback: geração de CNPJs biased por estado + busca via API."""
+    uf_upper = estado.upper().strip()
     encontradas = []
     faixas = FAIXAS_CNPJ_POR_UF.get(uf_upper, ['11', '21', '31', '41', '51'])
     cnae_prefixo4 = cnae[:4] if len(cnae) >= 4 else cnae
@@ -486,29 +499,79 @@ def buscar_empresas_por_cnae(cnae: str, uf: str, limit: int = 10) -> list:
         except Exception:
             return None
 
-    # Gera candidatos com faixas do estado (15x o limite, máx 50)
-    max_cands = min(limit * 15, 50)
+    max_cands = min(limite * 15, 50)
     candidatos = [
         _gerar_cnpj_valido(int(random.choice(faixas)) * 1_000_000 + random.randint(0, 999_999))
         for _ in range(max_cands)
     ]
-
     with ThreadPoolExecutor(max_workers=5) as executor:
         futures = {executor.submit(verificar_cnpj, c): c for c in candidatos}
         for future in as_completed(futures):
-            if len(encontradas) >= limit:
+            if len(encontradas) >= limite:
                 break
             resultado = future.result()
             if resultado:
                 encontradas.append(resultado)
 
-    # Se não achou o suficiente, usa fallback amplo (2 dígitos, sem UF)
-    if len(encontradas) < limit:
-        extras = _buscar_por_geracao_cnpj(cnae, uf_upper, limit - len(encontradas))
+    if len(encontradas) < limite:
+        extras = _buscar_por_geracao_cnpj(cnae, uf_upper, limite - len(encontradas))
         encontradas.extend(extras)
 
-    _cache_set(cnae, uf_upper, encontradas)
-    return encontradas[:limit]
+    return encontradas
+
+
+def buscar_empresas_por_cnae(cnae: str, uf: str, limit: int = 10) -> list:
+    """
+    Busca empresas na base local primeiro (milissegundos).
+    Fallback para API externa se base local vazia.
+    """
+    uf_upper = uf.upper().strip()
+
+    cached = _cache_get(cnae, uf_upper)
+    if cached is not None:
+        print(f"[CACHE] {cnae}/{uf_upper}: {len(cached)} empresas")
+        return cached[:limit]
+
+    db = get_new_db_connection()
+
+    # ESTRATÉGIA 1: Base local (milissegundos)
+    try:
+        resultado = db.execute("""
+            SELECT cnpj, razao_social, nome_fantasia,
+                   cnae_principal, cnae_descricao,
+                   uf, municipio, telefone, email,
+                   situacao, capital_social, tipo
+            FROM rf_empresas
+            WHERE uf = %s
+            AND cnae_principal LIKE %s
+            AND situacao = 'ATIVA'
+            AND cnpj NOT IN (
+                SELECT cnpj FROM empresas
+                WHERE cnpj IS NOT NULL
+            )
+            ORDER BY RANDOM()
+            LIMIT %s
+        """, (uf_upper, cnae[:4] + '%', limit)).fetchall()
+        db.close()
+
+        if resultado:
+            print(f'[BASE LOCAL] {len(resultado)} empresas para {cnae}/{uf_upper}')
+            empresas = [_row_to_empresa(r) for r in resultado]
+            _cache_set(cnae, uf_upper, empresas)
+            return empresas
+
+    except Exception as e:
+        print(f'[BASE LOCAL] Erro: {e}')
+        try:
+            db.close()
+        except Exception:
+            pass
+
+    # ESTRATÉGIA 2: Fallback para API externa
+    print(f'[API EXTERNA] Base local vazia para {cnae}/{uf_upper}')
+    empresas = _buscar_api_externa(cnae, uf_upper, limit)
+    _cache_set(cnae, uf_upper, empresas)
+    return empresas
 
 
 # ── Scoring ───────────────────────────────────────────────────────────────────

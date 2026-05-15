@@ -310,12 +310,17 @@
 
       {% if _p == 'super_admin' %}
       <a href="{{ url_for('admin_tenants') }}"
-         class="nav-link {% if request.endpoint and request.endpoint.startswith('admin_') %}active{% endif %}">
+         class="nav-link {% if request.endpoint == 'admin_tenants' %}active{% endif %}">
         <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
             d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/>
         </svg>
         🏗️ Super Admin
+      </a>
+      <a href="{{ url_for('admin_importar_rf') }}"
+         class="nav-link nav-sub {% if request.endpoint == 'admin_importar_rf' %}active{% endif %}"
+         style="padding-left:2rem">
+        📥 Base RF
       </a>
       {% endif %}{# super_admin #}
 
