@@ -3328,14 +3328,21 @@ def admin_importar_rf():
                     )
                     municipios = baixar_tabela_municipios()
                     cnaes_desc = baixar_tabela_cnaes()
-                    importar_estabelecimentos(
+                    resultado = importar_estabelecimentos(
                         uf_filtro=uf,
                         limite=limite,
                         municipios=municipios,
                         cnaes_desc=cnaes_desc,
                     )
+                    if resultado == 0:
+                        raise Exception("RF retornou 0 empresas — servidores indisponíveis")
                 except Exception as e:
-                    print(f"[RF] Erro na importação: {e}")
+                    print(f"[RF] Fallback BrasilAPI: {e}")
+                    try:
+                        from scripts.importar_receita_federal import importar_via_brasilapi
+                        importar_via_brasilapi(uf_filtro=uf, limite=limite)
+                    except Exception as e2:
+                        print(f"[RF] Erro no fallback BrasilAPI: {e2}")
 
             t = threading.Thread(target=_importar, daemon=True)
             t.start()
@@ -3593,11 +3600,14 @@ def cqa_rodar():
 @login_required
 @require_perfil("gerente")
 def cqa_alerta_resolver(alerta_id):
-    conn = database.get_connection()
-    conn.execute("UPDATE cqa_alertas SET resolvido=1 WHERE id=?", (alerta_id,))
-    conn.commit()
-    conn.close()
-    return jsonify({"ok": True})
+    try:
+        conn = database.get_connection()
+        conn.execute("UPDATE cqa_alertas SET resolvido=1 WHERE id=?", (alerta_id,))
+        conn.commit()
+        conn.close()
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"ok": False, "erro": str(e)}), 500
 
 
 @app.route("/cqa/fix/all", methods=["POST"])
