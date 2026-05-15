@@ -130,7 +130,7 @@ def teste_cadencias_travadas():
         if database._USE_PG:
             row = conn.execute(
                 "SELECT COUNT(*) AS cnt FROM cadencias "
-                "WHERE status='pendente' AND data_acao < (NOW() - INTERVAL '7 days')::TEXT"
+                "WHERE status='pendente' AND data_acao < NOW() - INTERVAL '7 days'"
             ).fetchone()
         else:
             row = conn.execute(
