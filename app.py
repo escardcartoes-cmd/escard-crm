@@ -227,6 +227,44 @@ def dashboard():
         pauto_resumo = pauto_model.resumo_dashboard()
     except Exception:
         pauto_resumo = {"novos_hoje": 0, "prontos": 0}
+    # Meta 90 dias
+    from datetime import date as _d2, timedelta as _td2
+    _meta_inicio = _d2(2026, 5, 15)
+    _meta_fim    = _meta_inicio + _td2(days=90)
+    _hoje_d      = _d2.today()
+    dias_restantes = max(0, (_meta_fim - _hoje_d).days)
+    conn_m = database.get_connection()
+    _row90 = conn_m.execute(
+        "SELECT COALESCE(SUM(valor_estimado),0) AS total FROM oportunidades"
+        " WHERE estagio='fechado_ganho' AND criado_em >= ?",
+        (_meta_inicio.isoformat(),)
+    ).fetchone()
+    faturado_90d = float(_row90["total"] if _row90 else 0)
+    pct_90d = round(min(faturado_90d / 100_000 * 100, 100), 1)
+    ritmo_diario = round((100_000 - faturado_90d) / max(dias_restantes, 1), 2)
+    # Funil comercial
+    _f = conn_m.execute("""
+        SELECT
+          (SELECT COALESCE(COUNT(*),0) FROM prospeccao_automatica WHERE status='novo') AS sdr_novos,
+          (SELECT COALESCE(COUNT(*),0) FROM cadencias WHERE status='pendente') AS em_cadencia,
+          (SELECT COALESCE(COUNT(*),0) FROM oportunidades
+           WHERE estagio NOT IN ('fechado_ganho','fechado_perdido')) AS props_abertas,
+          (SELECT COALESCE(SUM(valor_estimado),0) FROM oportunidades
+           WHERE estagio='fechado_ganho' AND criado_em LIKE ?) AS fechados_mes
+    """, (mes_atual + "%",)).fetchone()
+    funil = dict(_f) if _f else {"sdr_novos":0,"em_cadencia":0,"props_abertas":0,"fechados_mes":0}
+    # Atividade de hoje
+    limite_7d  = (_hoje_d - _td2(days=7)).isoformat()
+    limite_14d = (_hoje_d - _td2(days=14)).isoformat()
+    cad_hoje = cad_model.listar_hoje()[:5]
+    ops_paradas = [dict(r) for r in conn_m.execute("""
+        SELECT id, titulo, empresa_nome, estagio, data_ultimo_contato
+        FROM oportunidades
+        WHERE estagio NOT IN ('fechado_ganho','fechado_perdido')
+          AND (data_ultimo_contato IS NULL OR data_ultimo_contato < ?)
+        ORDER BY data_ultimo_contato LIMIT 5
+    """, (limite_14d,)).fetchall()]
+    conn_m.close()
     return render_template(
         "dashboard.html",
         status_counts=status_counts,
@@ -251,6 +289,13 @@ def dashboard():
         cadencias_ativas_count=dash_extra["cadencias_ativas_count"],
         top_acao=top_acao,
         pauto_resumo=pauto_resumo,
+        dias_restantes=dias_restantes,
+        faturado_90d=faturado_90d,
+        pct_90d=pct_90d,
+        ritmo_diario=ritmo_diario,
+        funil=funil,
+        cad_hoje=cad_hoje,
+        ops_paradas=ops_paradas,
     )
 
 
@@ -571,8 +616,20 @@ def _form_oportunidade(f):
 @app.route("/atividades")
 @login_required
 def atividades_lista():
+    tipo_filtro = request.args.get("tipo", "todos")
+    atividades = atv_model.listar(limit=100)
+    cadencias_hoje = cad_model.listar_hoje()
+    conn = database.get_connection()
+    radar_items = [dict(r) for r in conn.execute(
+        "SELECT * FROM radar_mercado WHERE lido=0 ORDER BY criado_em DESC LIMIT 20"
+    ).fetchall()]
+    conn.close()
     return render_template("atividades/lista.html",
-                           atividades=atv_model.listar(limit=50))
+        atividades=atividades,
+        cadencias_hoje=cadencias_hoje,
+        radar_items=radar_items,
+        tipo_filtro=tipo_filtro,
+    )
 
 
 @app.route("/atividades/nova", methods=["GET", "POST"])
@@ -1691,6 +1748,178 @@ def recebiveis_gerar():
 def recebiveis_pagar(id):
     rec_model.marcar_pago(id)
     return jsonify({"ok": True})
+
+
+# ── Financeiro (Cobrança + Recebíveis fundidos) ──────────────────────────────
+
+@app.route("/financeiro")
+@login_required
+@require_perfil('gerente')
+def financeiro_index():
+    aba = request.args.get("aba", "cobranca")
+    mes = request.args.get("mes", str(date.today())[:7])
+    cob_resumo = cob_model.resumo()
+    rec_resumo = rec_model.resumo_mes(mes)
+    conn = database.get_connection()
+    clientes_cob = [dict(r) for r in conn.execute(
+        "SELECT * FROM clientes_cobranca ORDER BY nome"
+    ).fetchall()]
+    recebiveis = [dict(r) for r in conn.execute("""
+        SELECT r.*, e.nome AS empresa_nome
+        FROM recebiveis_krylo r
+        LEFT JOIN empresas e ON e.id = r.empresa_id
+        ORDER BY r.vencimento DESC LIMIT 100
+    """).fetchall()]
+    conn.close()
+    return render_template("financeiro.html",
+        aba=aba, mes=mes,
+        clientes_cob=clientes_cob, recebiveis=recebiveis,
+        cob_resumo=cob_resumo, rec_resumo=rec_resumo,
+    )
+
+
+# ── Termômetro de Clientes ────────────────────────────────────────────────────
+
+@app.route("/termometro")
+@login_required
+@require_perfil('gerente')
+def termometro_index():
+    conn = database.get_connection()
+    hoje_str = date.today().isoformat()
+    limite_30 = (date.today() - timedelta(days=30)).isoformat()
+    rows = conn.execute("""
+        SELECT e.id, e.nome, e.produtos_ativos, e.num_funcionarios,
+               e.valor_mensal, e.telefone,
+               (SELECT MAX(a2.data) FROM atividades a2 WHERE a2.empresa_id=e.id) AS ultimo_contato,
+               (SELECT COUNT(*) FROM cadencias c WHERE c.empresa_id=e.id AND c.status='pendente') AS cadencias_ativas,
+               (SELECT COUNT(*) FROM recebiveis_krylo rv WHERE rv.empresa_id=e.id
+                AND rv.status='pendente' AND rv.vencimento < :hoje) AS rec_atrasados,
+               (SELECT MAX(pa.ultimo_acesso) FROM portal_acessos pa
+                WHERE pa.empresa_id=e.id AND pa.ativo=1) AS portal_acesso
+        FROM empresas e
+        WHERE e.cliente_ativo=1 OR e.status='cliente'
+        GROUP BY e.id ORDER BY e.nome
+    """, {"hoje": hoje_str}).fetchall()
+    conn.close()
+    clientes = []
+    for r in rows:
+        c = dict(r)
+        s = 0
+        if c.get("ultimo_contato") and c["ultimo_contato"] >= limite_30:
+            s += 30
+        prods = [p.strip() for p in (c.get("produtos_ativos") or "").split(",") if p.strip()]
+        if len(prods) >= 2:
+            s += 20
+        if int(c.get("cadencias_ativas") or 0) > 0:
+            s += 20
+        if int(c.get("rec_atrasados") or 0) == 0:
+            s += 20
+        if c.get("portal_acesso") and c["portal_acesso"] >= limite_30:
+            s += 10
+        c["score"] = s
+        c["prods_lista"] = prods
+        c["status_cor"]   = "verde" if s >= 70 else ("amarelo" if s >= 40 else "vermelho")
+        c["status_label"] = "Saudável" if s >= 70 else ("Atenção" if s >= 40 else "Crítico")
+        clientes.append(c)
+    clientes.sort(key=lambda x: x["score"])
+    return render_template("termometro.html",
+        clientes=clientes,
+        criticos=sum(1 for c in clientes if c["status_cor"] == "vermelho"),
+        atencao=sum(1 for c in clientes if c["status_cor"] == "amarelo"),
+        saudaveis=sum(1 for c in clientes if c["status_cor"] == "verde"),
+    )
+
+
+@app.route("/ai/reativar/<int:empresa_id>", methods=["POST"])
+@login_required
+def ai_reativar(empresa_id):
+    import re as _re
+    try:
+        conn = database.get_connection()
+        emp = conn.execute("SELECT * FROM empresas WHERE id=?", (empresa_id,)).fetchone()
+        conn.close()
+        if not emp:
+            return jsonify({"error": "Empresa não encontrada"}), 404
+        emp = dict(emp)
+        prompt = f"""Crie uma mensagem curta de reengajamento para WhatsApp (máximo 4 linhas) para reativar contato com:
+Empresa: {emp['nome']}
+Segmento: {emp.get('segmento') or 'não informado'}
+
+A mensagem deve ser natural, cordial, sem pressão de vendas.
+Retorne SOMENTE JSON: {{"mensagem": "<texto>"}}"""
+        import anthropic as _ant
+        client = _ant.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+        resp = client.messages.create(
+            model="claude-haiku-4-5-20251001", max_tokens=400,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        raw = resp.content[0].text.strip()
+        raw = _re.sub(r"^```(?:json)?\s*", "", raw, flags=_re.MULTILINE)
+        raw = _re.sub(r"```\s*$", "", raw, flags=_re.MULTILINE)
+        result = json.loads(raw.strip())
+        return jsonify({"ok": True, "mensagem": result.get("mensagem", "")})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+# ── Simulador de Proposta ─────────────────────────────────────────────────────
+
+_TICKET_MEDIO = {
+    "VA": 550, "VR": 600, "Combustível": 200,
+    "Wellhub": 50, "Vidalink": 20, "Premiação": 100,
+}
+
+@app.route("/simulador")
+@login_required
+def simulador_index():
+    conn = database.get_connection()
+    prods_db = [r["nome"] for r in conn.execute(
+        "SELECT nome FROM produtos_krylo WHERE ativo=1 ORDER BY nome"
+    ).fetchall()]
+    conn.close()
+    produtos = prods_db if prods_db else list(_TICKET_MEDIO.keys())
+    return render_template("simulador.html",
+        produtos=produtos, ticket_medio=_TICKET_MEDIO)
+
+
+@app.route("/simulador/gerar", methods=["POST"])
+@login_required
+def simulador_gerar():
+    import re as _re
+    try:
+        dados = request.json or {}
+        empresa  = (dados.get("empresa") or "").strip()
+        num_func = int(dados.get("num_funcionarios") or 0)
+        produtos = dados.get("produtos") or []
+        tipo     = dados.get("tipo", "privado")
+        if not empresa or not num_func or not produtos:
+            return jsonify({"error": "Preencha empresa, funcionários e pelo menos 1 produto."}), 400
+        valores = {p: _TICKET_MEDIO.get(p, 100) * num_func for p in produtos}
+        total   = sum(valores.values())
+        prompt = f"""Você é consultor da Krylo Cartão de Benefícios B2B.
+Gere uma proposta comercial executiva (3 parágrafos) para:
+Empresa: {empresa} | Tipo: {tipo} | Funcionários: {num_func}
+Produtos: {', '.join(produtos)} | Valor estimado: R$ {total:,.2f}/mês
+Retorne SOMENTE JSON válido: {{"proposta": "<texto>"}}
+Tom consultivo. Inclua benefícios dos produtos, impacto nos funcionários, chamada para reunião."""
+        import anthropic as _ant, models.ia_config as ia_mod
+        _c = database.get_connection()
+        _sys = ia_mod.get_system_prompt(_c)
+        _c.close()
+        client = _ant.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+        resp = client.messages.create(
+            model="claude-haiku-4-5-20251001", max_tokens=1000,
+            system=_sys,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        raw = resp.content[0].text.strip()
+        raw = _re.sub(r"^```(?:json)?\s*", "", raw, flags=_re.MULTILINE)
+        raw = _re.sub(r"```\s*$", "", raw, flags=_re.MULTILINE)
+        result = json.loads(raw.strip())
+        return jsonify({"ok": True, "proposta": result.get("proposta", ""),
+                        "valores": valores, "total_mensal": total})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 # ── Relatório Executivo Semanal ───────────────────────────────────────────────

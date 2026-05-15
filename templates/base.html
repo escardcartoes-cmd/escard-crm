@@ -8,6 +8,15 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <style>
+    .nav-section-label {
+      font-size: 10px; font-weight: 700; letter-spacing: .08em;
+      text-transform: uppercase; color: rgba(255,255,255,.35);
+      padding: 14px 16px 4px; margin: 0;
+    }
+    .nav-section-label:first-child { padding-top: 6px; }
+    .nav-sep { height: 1px; background: rgba(255,255,255,.08); margin: 6px 12px; }
+  </style>
 </head>
 <body>
 
@@ -19,7 +28,8 @@
     </div>
 
     <nav class="sidebar-nav">
-      {# ── Dashboard: todos os perfis ── #}
+
+      {# ── Dashboard ── #}
       <a href="{{ url_for('dashboard') }}"
          class="nav-link {% if request.endpoint == 'dashboard' %}active{% endif %}">
         <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -29,92 +39,19 @@
         Dashboard
       </a>
 
-      {# ── Empresas: apenas gerente e admin ── #}
+      {# ══ PROSPECÇÃO ══ #}
       {% if current_user.is_authenticated and current_user.perfil in ['admin','gerente'] %}
-      <a href="{{ url_for('empresas_lista') }}"
-         class="nav-link {% if 'empresa' in (request.endpoint or '') %}active{% endif %}">
-        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-            d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-2 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/>
-        </svg>
-        Empresas
-      </a>
-      {% endif %}
-
-      {# ── Contatos: todos ── #}
-      <a href="{{ url_for('contatos_lista') }}"
-         class="nav-link {% if 'contato' in (request.endpoint or '') %}active{% endif %}">
-        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-            d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/>
-        </svg>
-        Contatos
-      </a>
-
-      {# ── Oportunidades: todos ── #}
-      <a href="{{ url_for('oportunidades_kanban') }}"
-         class="nav-link {% if 'oportunidade' in (request.endpoint or '') %}active{% endif %}">
-        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-            d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2"/>
-        </svg>
-        Oportunidades
-      </a>
-
-      {# ── Atividades: todos ── #}
-      <a href="{{ url_for('atividades_lista') }}"
-         class="nav-link {% if 'atividade' in (request.endpoint or '') %}active{% endif %}">
-        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-            d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/>
-        </svg>
-        Atividades
-      </a>
-
-      {# ── Central de IA: todos ── #}
-      <a href="{{ url_for('central_ia') }}"
-         class="nav-link {% if 'central_ia' in (request.endpoint or '') %}active{% endif %}">
-        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-            d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
-        </svg>
-        Central de IA
-      </a>
-
-      {# ── Importar Leads: apenas gerente e admin ── #}
-      {% if current_user.is_authenticated and current_user.perfil in ['admin','gerente'] %}
-      <a href="{{ url_for('leads_importar_form') }}"
-         class="nav-link {% if 'leads_importar' in (request.endpoint or '') %}active{% endif %}">
-        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-            d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/>
-        </svg>
-        Importar Leads
-      </a>
-      {% endif %}
-
-      {# ── SDR Autônomo: gerente+ ── #}
-      {% if current_user.is_authenticated and current_user.perfil in ['admin','gerente'] %}
+      <p class="nav-section-label">Prospecção</p>
       <a href="{{ url_for('sdr_painel') }}"
          class="nav-link {% if 'sdr' in (request.endpoint or '') %}active{% endif %}">
         <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
             d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
         </svg>
-        SDR Autônomo
+        🤖 SDR Autônomo
       </a>
       {% endif %}
-      {# ── Prospecção (leads): todos ── #}
-      <a href="{{ url_for('prospeccao_lista') }}"
-         class="nav-link {% if request.endpoint in ['prospeccao_lista','prospeccao_status','prospeccao_excluir'] %}active{% endif %}">
-        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-            d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
-        </svg>
-        Prospecção
-      </a>
 
-      {# ── Cadências SDR: vendedor+ ── #}
       {% if current_user.is_authenticated %}
       <a href="{{ url_for('cadencias_index') }}"
          class="nav-link {% if 'cadencias' in (request.endpoint or '') %}active{% endif %}">
@@ -122,15 +59,12 @@
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
             d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
         </svg>
-        Cadências SDR
+        📊 Cadências SDR
         {% if cadencias_hoje_count > 0 %}
         <span class="menu-badge">{{ cadencias_hoje_count }}</span>
         {% endif %}
       </a>
-      {% endif %}
 
-      {# ── Radar de Mercado: vendedor+ ── #}
-      {% if current_user.is_authenticated %}
       <a href="{{ url_for('radar_index') }}"
          class="nav-link {% if 'radar' in (request.endpoint or '') %}active{% endif %}">
         <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -138,50 +72,138 @@
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
             d="M6.343 6.343a8 8 0 000 11.314m11.314 0a8 8 0 000-11.314M4.222 4.222a12 12 0 000 15.556m15.556 0a12 12 0 000-15.556"/>
         </svg>
-        Radar de Mercado
+        📡 Radar de Mercado
         {% if radar_nao_lidos and radar_nao_lidos.total > 0 %}
         <span class="menu-badge">{{ radar_nao_lidos.total }}</span>
         {% endif %}
       </a>
       {% endif %}
 
-      {# ── Motor de Expansão: gerente+ ── #}
+      {# ══ VENDAS ══ #}
+      <div class="nav-sep"></div>
+      <p class="nav-section-label">Vendas</p>
+
       {% if current_user.is_authenticated and current_user.perfil in ['admin','gerente'] %}
+      <a href="{{ url_for('empresas_lista') }}"
+         class="nav-link {% if 'empresa' in (request.endpoint or '') %}active{% endif %}">
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-2 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/>
+        </svg>
+        🏢 Empresas
+      </a>
+      {% endif %}
+
+      <a href="{{ url_for('contatos_lista') }}"
+         class="nav-link {% if 'contato' in (request.endpoint or '') %}active{% endif %}">
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/>
+        </svg>
+        👤 Contatos
+      </a>
+
+      <a href="{{ url_for('oportunidades_kanban') }}"
+         class="nav-link {% if 'oportunidade' in (request.endpoint or '') %}active{% endif %}">
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2"/>
+        </svg>
+        🎯 Oportunidades
+      </a>
+
+      <a href="{{ url_for('simulador_index') }}"
+         class="nav-link {% if request.endpoint == 'simulador_index' or request.endpoint == 'simulador_gerar' %}active{% endif %}">
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"/>
+        </svg>
+        📋 Simulador
+      </a>
+
+      <a href="{{ url_for('atividades_lista') }}"
+         class="nav-link {% if 'atividade' in (request.endpoint or '') %}active{% endif %}">
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/>
+        </svg>
+        ✅ Atividades
+        {% if cadencias_hoje_count > 0 %}
+        <span class="menu-badge" style="background:#D97706">{{ cadencias_hoje_count }}</span>
+        {% endif %}
+      </a>
+
+      {# ══ CLIENTES ══ #}
+      {% if current_user.is_authenticated and current_user.perfil in ['admin','gerente'] %}
+      <div class="nav-sep"></div>
+      <p class="nav-section-label">Clientes</p>
+
+      <a href="{{ url_for('termometro_index') }}"
+         class="nav-link {% if request.endpoint == 'termometro_index' %}active{% endif %}">
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"/>
+        </svg>
+        🌡️ Termômetro
+      </a>
+
       <a href="{{ url_for('expansao_index') }}"
          class="nav-link {% if 'expansao' in (request.endpoint or '') %}active{% endif %}">
         <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
             d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/>
         </svg>
-        Motor de Expansão
+        📈 Motor de Expansão
       </a>
-      {% endif %}
 
-      {# ── Cobrança: gerente+ ── #}
-      {% if current_user.is_authenticated and current_user.perfil in ['admin','gerente'] %}
-      <a href="{{ url_for('cobranca_index') }}"
-         class="nav-link {% if 'cobranca' in (request.endpoint or '') %}active{% endif %}">
+      <a href="{{ url_for('portal_gerar', empresa_id=0) if false else '#' }}"
+         onclick="location.href='{{ url_for('empresas_lista') }}?filter=cliente'; return false;"
+         class="nav-link {% if 'portal' in (request.endpoint or '') %}active{% endif %}">
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"/>
+        </svg>
+        🚀 Portal do Cliente
+      </a>
+
+      {# ══ FINANCEIRO ══ #}
+      <div class="nav-sep"></div>
+      <p class="nav-section-label">Financeiro</p>
+
+      <a href="{{ url_for('financeiro_index') }}"
+         class="nav-link {% if request.endpoint in ['financeiro_index','cobranca_index','recebiveis_index'] or 'cobranca' in (request.endpoint or '') or 'recebivel' in (request.endpoint or '') %}active{% endif %}">
         <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
             d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
         </svg>
-        Cobrança
+        💰 Financeiro
       </a>
       {% endif %}
 
-      {# ── Recebíveis: gerente+ ── #}
-      {% if current_user.is_authenticated and current_user.perfil in ['admin','gerente'] %}
-      <a href="{{ url_for('recebiveis_index') }}"
-         class="nav-link {% if 'recebiveis' in (request.endpoint or '') %}active{% endif %}">
+      {# ══ SISTEMA ══ #}
+      <div class="nav-sep"></div>
+      <p class="nav-section-label">Sistema</p>
+
+      <a href="{{ url_for('central_ia') }}"
+         class="nav-link {% if 'central_ia' in (request.endpoint or '') %}active{% endif %}">
         <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-            d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5l7 7v12a2 2 0 01-2 2z"/>
+            d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
         </svg>
-        Recebíveis
+        🧠 Central de IA
+      </a>
+
+      {% if current_user.is_authenticated and current_user.perfil in ['admin','gerente'] %}
+      <a href="{{ url_for('leads_importar_form') }}"
+         class="nav-link {% if 'leads_importar' in (request.endpoint or '') %}active{% endif %}">
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/>
+        </svg>
+        📥 Importar Leads
       </a>
       {% endif %}
 
-      {# ── Usuários: apenas admin ── #}
       {% if current_user.is_authenticated and current_user.perfil == 'admin' %}
       <a href="{{ url_for('usuarios_lista') }}"
          class="nav-link {% if 'usuarios' in (request.endpoint or '') %}active{% endif %}">
@@ -193,7 +215,6 @@
       </a>
       {% endif %}
 
-      {# ── Painel de IA: gerente+ ── #}
       {% if current_user.is_authenticated and current_user.perfil in ['admin','gerente'] %}
       <a href="{{ url_for('ia_config_painel') }}"
          class="nav-link {% if request.endpoint and request.endpoint.startswith('ia_') %}active{% endif %}">
@@ -203,28 +224,17 @@
         </svg>
         🤖 Painel IA
       </a>
-      {% endif %}
 
-      {# ── Configurações: gerente+ ── #}
-      {% if current_user.is_authenticated and current_user.perfil in ['admin','gerente'] %}
-      <a href="{{ url_for('configuracoes_ramos') }}"
-         class="nav-link {% if request.endpoint == 'configuracoes_ramos' %}active{% endif %}">
-        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-            d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
-        </svg>
-        ⚙ Ramos de Atividade
-      </a>
       <a href="{{ url_for('configuracoes_empresa') }}"
-         class="nav-link {% if request.endpoint == 'configuracoes_empresa' or request.endpoint == 'configuracoes_empresa_salvar' %}active{% endif %}">
+         class="nav-link {% if request.endpoint in ['configuracoes_empresa','configuracoes_empresa_salvar'] %}active{% endif %}">
         <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
             d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-2 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/>
         </svg>
-        🏢 Minha Empresa
+        🏠 Minha Empresa
       </a>
       {% endif %}
+
     </nav>
 
     <div class="sidebar-footer">
@@ -283,9 +293,7 @@
   {% block scripts %}{% endblock %}
 
   {% if config.DEBUG %}
-  {# livereload.js — recarrega o browser quando templates/CSS/JS mudam #}
   <script src="http://localhost:35729/livereload.js?snipver=1" async></script>
-  {# Polling — detecta reinício do servidor (mudança em .py) e recarrega #}
   <script>
   (function () {
     var _t = null;

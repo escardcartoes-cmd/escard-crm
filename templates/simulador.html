@@ -1,0 +1,363 @@
+{% extends 'base.html' %}
+{% block title %}Simulador de Proposta — Krylo CRM{% endblock %}
+{% block topbar_title %}📋 Simulador de Proposta{% endblock %}
+{% block topbar_actions %}
+  <span class="text-muted text-sm">Gere propostas comerciais em segundos</span>
+{% endblock %}
+
+{% block content %}
+
+<!-- Intro card -->
+<div class="card" style="margin-bottom:20px;padding:14px 20px;background:linear-gradient(135deg,#4A3F35,#C5A089);border:none">
+  <div style="display:flex;align-items:center;gap:14px">
+    <span style="font-size:32px;line-height:1">📋</span>
+    <div>
+      <div style="font-size:15px;font-weight:700;color:#fff;margin-bottom:3px">Gere uma proposta comercial em 60 segundos</div>
+      <div style="font-size:12px;color:rgba(255,255,255,.75)">
+        Preencha os dados da empresa, selecione os produtos e clique em <strong>Gerar Proposta</strong>.
+        A IA Krylo monta o texto personalizado para você.
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Two-column layout: form + result -->
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start">
+
+  <!-- LEFT: Form -->
+  <div class="card">
+    <p class="card-title" style="margin-bottom:18px">Dados da Proposta</p>
+
+    <!-- Empresa -->
+    <div style="margin-bottom:16px">
+      <label style="display:block;font-size:12px;font-weight:600;color:var(--text);margin-bottom:6px">
+        Empresa <span style="color:#DC2626">*</span>
+      </label>
+      <input type="text" id="sim_empresa" placeholder="Nome da empresa"
+             style="width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:6px;
+                    font-size:13px;font-family:inherit;color:var(--text);background:var(--card-bg)"
+             oninput="calcularEstimativa()">
+    </div>
+
+    <!-- Funcionários (range + number) -->
+    <div style="margin-bottom:16px">
+      <label style="display:block;font-size:12px;font-weight:600;color:var(--text);margin-bottom:6px">
+        Número de Funcionários
+      </label>
+      <div style="display:flex;align-items:center;gap:12px">
+        <input type="range" id="sim_func_range" min="1" max="20000" value="100"
+               style="flex:1;accent-color:#C5A089;cursor:pointer"
+               oninput="sincFuncRange(this.value)">
+        <input type="number" id="sim_func_num" min="1" max="20000" value="100"
+               style="width:80px;padding:7px 10px;border:1px solid var(--border);border-radius:6px;
+                      font-size:13px;font-family:inherit;text-align:center;color:var(--text);background:var(--card-bg)"
+               oninput="sincFuncNum(this.value)">
+      </div>
+      <div style="display:flex;justify-content:space-between;margin-top:3px">
+        <span class="text-muted text-sm">1</span>
+        <span class="text-muted text-sm">20.000</span>
+      </div>
+    </div>
+
+    <!-- Produtos -->
+    <div style="margin-bottom:16px">
+      <label style="display:block;font-size:12px;font-weight:600;color:var(--text);margin-bottom:8px">
+        Produtos
+      </label>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        {% for prod in produtos %}
+        <label style="display:flex;align-items:center;gap:10px;cursor:pointer;
+                       padding:8px 10px;border:1px solid var(--border);border-radius:6px;
+                       transition:background .15s,border-color .15s"
+               onmouseover="this.style.background='#FDF6F0';this.style.borderColor='#C5A089'"
+               onmouseout="this.style.background='';this.style.borderColor='var(--border)'">
+          <input type="checkbox" name="produtos" value="{{ prod }}"
+                 onchange="calcularEstimativa()"
+                 style="width:15px;height:15px;accent-color:#C5A089;cursor:pointer;flex-shrink:0">
+          <span style="font-size:13px;font-weight:500;color:var(--text);flex:1">{{ prod }}</span>
+          {% if ticket_medio.get(prod) %}
+          <span class="text-muted text-sm" style="flex-shrink:0">
+            R$&nbsp;{{ ticket_medio[prod] }}/func/mês
+          </span>
+          {% endif %}
+        </label>
+        {% endfor %}
+      </div>
+    </div>
+
+    <!-- Tipo -->
+    <div style="margin-bottom:20px">
+      <label style="display:block;font-size:12px;font-weight:600;color:var(--text);margin-bottom:8px">
+        Tipo de Empresa
+      </label>
+      <div style="display:flex;gap:12px">
+        <label style="display:flex;align-items:center;gap:7px;cursor:pointer;
+                       padding:8px 14px;border:1px solid var(--border);border-radius:6px;
+                       font-size:13px;transition:border-color .15s,background .15s"
+               onmouseover="this.style.background='#FDF6F0';this.style.borderColor='#C5A089'"
+               onmouseout="this.style.background='';this.style.borderColor='var(--border)'">
+          <input type="radio" name="sim_tipo" value="Privado" checked style="accent-color:#C5A089">
+          <span>Privado</span>
+        </label>
+        <label style="display:flex;align-items:center;gap:7px;cursor:pointer;
+                       padding:8px 14px;border:1px solid var(--border);border-radius:6px;
+                       font-size:13px;transition:border-color .15s,background .15s"
+               onmouseover="this.style.background='#FDF6F0';this.style.borderColor='#C5A089'"
+               onmouseout="this.style.background='';this.style.borderColor='var(--border)'">
+          <input type="radio" name="sim_tipo" value="Público" style="accent-color:#C5A089">
+          <span>Público</span>
+        </label>
+      </div>
+    </div>
+
+    <!-- Real-time estimate -->
+    <div id="sim_estimativa" style="display:none;margin-bottom:18px;padding:12px 16px;
+         background:#F0FDF4;border:1px solid #BBF7D0;border-radius:8px">
+      <div style="font-size:12px;font-weight:600;color:#16A34A;margin-bottom:2px">Valor estimado</div>
+      <div id="sim_estimativa_val" style="font-size:20px;font-weight:800;color:#16A34A"></div>
+      <div style="font-size:11px;color:#15803D;margin-top:2px">por mês</div>
+    </div>
+
+    <!-- Submit -->
+    <button class="btn btn-primary" style="width:100%;padding:11px;font-size:14px;font-weight:700"
+            onclick="gerarProposta()">
+      ⚡ Gerar Proposta
+    </button>
+  </div>
+
+  <!-- RIGHT: Result panel (hidden until generated) -->
+  <div id="sim_resultado" style="display:none">
+    <div class="card" style="margin-bottom:16px">
+
+      <!-- Loading state -->
+      <div id="sim_loading" style="display:none;text-align:center;padding:32px 20px">
+        <div class="spinner" style="margin:0 auto 12px"></div>
+        <p class="text-muted text-sm">Gerando proposta com IA Krylo…</p>
+      </div>
+
+      <!-- Result content -->
+      <div id="sim_content" style="display:none">
+
+        <p class="card-title" style="margin-bottom:16px">📊 Breakdown da Proposta</p>
+
+        <!-- Produto breakdown table -->
+        <div class="table-wrap" style="margin-bottom:18px">
+          <table style="width:100%;border-collapse:collapse;font-size:13px">
+            <thead>
+              <tr style="border-bottom:2px solid var(--border)">
+                <th style="text-align:left;padding:6px 10px;color:var(--muted);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.04em">Produto</th>
+                <th style="text-align:right;padding:6px 10px;color:var(--muted);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.04em">Ticket</th>
+                <th style="text-align:right;padding:6px 10px;color:var(--muted);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.04em">Func.</th>
+                <th style="text-align:right;padding:6px 10px;color:var(--muted);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.04em">Total/Mês</th>
+              </tr>
+            </thead>
+            <tbody id="sim_table_body"></tbody>
+          </table>
+        </div>
+
+        <!-- Grand total -->
+        <div style="display:flex;justify-content:flex-end;margin-bottom:18px">
+          <div style="padding:10px 18px;background:#F0FDF4;border:1px solid #BBF7D0;border-radius:8px;text-align:right">
+            <div style="font-size:11px;font-weight:600;color:#15803D;margin-bottom:2px">TOTAL ESTIMADO</div>
+            <div id="sim_total_val" style="font-size:22px;font-weight:800;color:#16A34A"></div>
+            <div style="font-size:11px;color:#15803D">por mês</div>
+          </div>
+        </div>
+
+        <!-- IA proposal text -->
+        <p class="card-title" style="margin-bottom:10px">✨ Proposta Gerada pela IA</p>
+        <div id="sim_proposta_texto"
+             style="padding:14px;background:#FAFAF9;border:1px solid var(--border);border-radius:8px;
+                    font-size:13px;line-height:1.65;white-space:pre-wrap;color:var(--text);
+                    max-height:320px;overflow-y:auto;margin-bottom:16px">
+        </div>
+
+        <!-- Action buttons -->
+        <div style="display:flex;gap:10px;flex-wrap:wrap">
+          <button class="btn btn-outline btn-sm" onclick="copiarProposta()"
+                  style="flex:1;min-width:140px">
+            📧 Copiar proposta
+          </button>
+          <button class="btn btn-sm" id="sim_wa_btn"
+                  style="flex:1;min-width:140px;background:#25D366;color:#fff;border:none">
+            💬 Enviar WhatsApp
+          </button>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+/* ── Ticket médio embedded from Flask ── */
+var TICKET_MEDIO = {{ ticket_medio | tojson }};
+
+/* ── Bidirectional slider/number sync ── */
+function sincFuncRange(val) {
+  document.getElementById('sim_func_num').value = val;
+  calcularEstimativa();
+}
+
+function sincFuncNum(val) {
+  var v = Math.min(Math.max(parseInt(val) || 1, 1), 20000);
+  document.getElementById('sim_func_range').value = v;
+  calcularEstimativa();
+}
+
+/* ── Real-time estimate ── */
+function calcularEstimativa() {
+  var numFunc = parseInt(document.getElementById('sim_func_num').value) || 0;
+  var checkboxes = document.querySelectorAll('input[name="produtos"]:checked');
+  var total = 0;
+  checkboxes.forEach(function(cb) {
+    var ticket = TICKET_MEDIO[cb.value] || 0;
+    total += ticket * numFunc;
+  });
+
+  var estimativaDiv = document.getElementById('sim_estimativa');
+  var estimativaVal = document.getElementById('sim_estimativa_val');
+
+  if (total > 0 && checkboxes.length > 0) {
+    estimativaDiv.style.display = 'block';
+    estimativaVal.textContent = 'R$ ' + total.toLocaleString('pt-BR', {minimumFractionDigits: 0, maximumFractionDigits: 0});
+  } else {
+    estimativaDiv.style.display = 'none';
+  }
+}
+
+/* ── Gerar proposta via backend ── */
+async function gerarProposta() {
+  var empresa = document.getElementById('sim_empresa').value.trim();
+  if (!empresa) {
+    alert('Por favor, informe o nome da empresa.');
+    document.getElementById('sim_empresa').focus();
+    return;
+  }
+
+  var numFunc = parseInt(document.getElementById('sim_func_num').value) || 1;
+  var produtosSel = [];
+  document.querySelectorAll('input[name="produtos"]:checked').forEach(function(cb) {
+    produtosSel.push(cb.value);
+  });
+  if (produtosSel.length === 0) {
+    alert('Selecione ao menos um produto.');
+    return;
+  }
+
+  var tipo = document.querySelector('input[name="sim_tipo"]:checked').value;
+
+  /* Show result panel with loading state */
+  var resultDiv = document.getElementById('sim_resultado');
+  var loadingDiv = document.getElementById('sim_loading');
+  var contentDiv = document.getElementById('sim_content');
+  resultDiv.style.display = 'block';
+  loadingDiv.style.display = 'block';
+  contentDiv.style.display = 'none';
+
+  /* Scroll result into view */
+  resultDiv.scrollIntoView({behavior: 'smooth', block: 'start'});
+
+  try {
+    var resp = await fetch('/simulador/gerar', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        empresa: empresa,
+        num_funcionarios: numFunc,
+        produtos: produtosSel,
+        tipo: tipo
+      })
+    });
+
+    if (!resp.ok) {
+      throw new Error('Erro HTTP ' + resp.status);
+    }
+
+    var data = await resp.json();
+
+    if (data.error) {
+      alert('Erro ao gerar proposta: ' + data.error);
+      loadingDiv.style.display = 'none';
+      return;
+    }
+
+    /* Build breakdown table */
+    var tbody = document.getElementById('sim_table_body');
+    tbody.innerHTML = '';
+    var grandTotal = 0;
+
+    produtosSel.forEach(function(prod) {
+      var ticket = TICKET_MEDIO[prod] || 0;
+      var total = ticket * numFunc;
+      grandTotal += total;
+      var tr = document.createElement('tr');
+      tr.style.borderBottom = '1px solid var(--border)';
+      tr.innerHTML =
+        '<td style="padding:8px 10px;font-weight:500">' + escHtml(prod) + '</td>' +
+        '<td style="padding:8px 10px;text-align:right;color:var(--muted)">R$&nbsp;' + ticket.toLocaleString('pt-BR') + '</td>' +
+        '<td style="padding:8px 10px;text-align:right;color:var(--muted)">' + numFunc.toLocaleString('pt-BR') + '</td>' +
+        '<td style="padding:8px 10px;text-align:right;font-weight:700;color:#16A34A">R$&nbsp;' + total.toLocaleString('pt-BR', {minimumFractionDigits: 0}) + '</td>';
+      tbody.appendChild(tr);
+    });
+
+    /* Grand total */
+    document.getElementById('sim_total_val').textContent =
+      'R$ ' + grandTotal.toLocaleString('pt-BR', {minimumFractionDigits: 0, maximumFractionDigits: 0}) + '/mês';
+
+    /* Proposal text */
+    var texto = data.proposta || data.texto || data.mensagem || '';
+    document.getElementById('sim_proposta_texto').textContent = texto;
+
+    /* WhatsApp button (blank number — user pastes/types) */
+    var waTxt = texto;
+    document.getElementById('sim_wa_btn').onclick = function() {
+      var waUrl = 'https://wa.me/?text=' + encodeURIComponent(waTxt);
+      window.open(waUrl, '_blank');
+    };
+
+    loadingDiv.style.display = 'none';
+    contentDiv.style.display = 'block';
+
+  } catch(e) {
+    alert('Erro ao gerar proposta: ' + e.message);
+    loadingDiv.style.display = 'none';
+  }
+}
+
+/* ── Copy proposal text ── */
+function copiarProposta() {
+  var texto = document.getElementById('sim_proposta_texto').textContent || '';
+  var btn = document.querySelector('[onclick="copiarProposta()"]');
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(texto).then(function() {
+      var orig = btn.innerHTML;
+      btn.innerHTML = '✅ Copiado!';
+      btn.style.background = '#16A34A';
+      btn.style.color = '#fff';
+      btn.style.borderColor = '#16A34A';
+      setTimeout(function() {
+        btn.innerHTML = orig;
+        btn.style.background = '';
+        btn.style.color = '';
+        btn.style.borderColor = '';
+      }, 2200);
+    }).catch(function() {
+      var ta = document.createElement('textarea');
+      ta.value = texto;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+    });
+  }
+}
+
+/* ── Init ── */
+document.addEventListener('DOMContentLoaded', calcularEstimativa);
+</script>
+{% endblock %}
