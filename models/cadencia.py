@@ -1,3 +1,4 @@
+import json
 import os
 import requests as _req
 from datetime import date, timedelta
@@ -10,9 +11,7 @@ ETAPA_LABELS = {
     4: "Último Contato (D+14)",
 }
 DIAS_POR_ETAPA = {1: 0, 2: 3, 3: 7, 4: 14}
-
-# Etapas em que o e-mail é enviado automaticamente pelo Brevo
-ETAPAS_EMAIL_AUTO = {2, 4}
+_ETAPA_KEY = {1: "d0", 2: "d3", 3: "d7", 4: "d14"}
 
 
 def enviar_email_brevo(
@@ -20,11 +19,10 @@ def enviar_email_brevo(
     destinatario_nome: str,
     assunto: str,
     corpo: str,
+    nome_remetente: str = "Krylo CRM",
+    email_remetente: str = "contato@krylo.com.br",
 ) -> dict:
-    """
-    Envia e-mail transacional via Brevo usando requests.
-    Retorna {"status": "enviado"|"sem_chave"|"erro", "id": message_id_ou_None}.
-    """
+    """Envia e-mail transacional via Brevo (requests). Retorna status e message_id."""
     api_key = os.getenv("BREVO_API_KEY", "")
     if not api_key:
         return {"status": "sem_chave", "id": None}
@@ -35,7 +33,7 @@ def enviar_email_brevo(
             "https://api.brevo.com/v3/smtp/email",
             headers={"api-key": api_key, "Content-Type": "application/json"},
             json={
-                "sender": {"name": "Krylo CRM", "email": "contato@krylo.com.br"},
+                "sender": {"name": nome_remetente, "email": email_remetente},
                 "to": [{"email": destinatario_email, "name": destinatario_nome or destinatario_email}],
                 "subject": assunto,
                 "htmlContent": html or f"<p>{corpo}</p>",
@@ -49,8 +47,228 @@ def enviar_email_brevo(
         return {"status": "erro", "id": None}
 
 
+def gerar_email_cadencia(
+    empresa_nome: str,
+    cnae: str,
+    produto: str,
+    etapa: str,
+    tenant_id: int,
+    pitch_whatsapp: str = None,
+) -> dict:
+    """
+    Gera email profissional para cada etapa da cadência via Claude.
+    etapa: 'D0', 'D3', 'D7', 'D14'
+    Retorna {"assunto": str, "corpo_html": str, "corpo_texto": str}
+    """
+    from models.ia_config import get_system_prompt_tenant
+
+    etapas_contexto = {
+        "D0": {
+            "objetivo": "Apresentação inicial — despertar curiosidade, não vender ainda",
+            "tom": "cordial e profissional",
+            "tamanho": "curto (3-4 parágrafos)",
+            "cta": "Solicitar 15 minutos para uma conversa",
+        },
+        "D3": {
+            "objetivo": "Follow-up — reforçar valor, fazer pergunta de dor",
+            "tom": "consultivo",
+            "tamanho": "muito curto (2-3 parágrafos)",
+            "cta": "Responder com disponibilidade de horário",
+        },
+        "D7": {
+            "objetivo": "Proposta de valor — case ou dado concreto",
+            "tom": "direto e orientado a resultado",
+            "tamanho": "médio (4-5 parágrafos)",
+            "cta": "Agendar demonstração",
+        },
+        "D14": {
+            "objetivo": "Última tentativa — criar senso de urgência",
+            "tom": "respeitoso mas urgente",
+            "tamanho": "curto (2-3 parágrafos)",
+            "cta": "Responder sim ou não",
+        },
+    }
+
+    ctx = etapas_contexto.get(etapa, etapas_contexto["D0"])
+
+    config = ""
+    try:
+        conn = get_connection()
+        config = get_system_prompt_tenant(conn, tenant_id)
+        conn.close()
+    except Exception:
+        pass
+
+    pitch_linha = f"\nMENSAGEM WHATSAPP JÁ ENVIADA: {pitch_whatsapp}" if pitch_whatsapp else ""
+
+    prompt = f"""Gere um email comercial profissional para a etapa {etapa} da cadência.
+
+EMPRESA PROSPECTADA: {empresa_nome}
+SEGMENTO: {cnae or 'não informado'}
+PRODUTO/SERVIÇO: {produto or 'benefícios corporativos'}
+ETAPA: {etapa} — {ctx['objetivo']}
+TOM: {ctx['tom']}
+TAMANHO: {ctx['tamanho']}
+CTA DESEJADO: {ctx['cta']}
+
+CONTEXTO DA EMPRESA VENDEDORA:
+{config}
+{pitch_linha}
+
+Retorne APENAS um JSON válido, sem markdown, sem explicações:
+{{
+  "assunto": "Assunto do email (max 60 chars, sem palavras spam)",
+  "corpo_html": "<p>HTML completo do email</p>",
+  "corpo_texto": "Versão texto puro sem HTML"
+}}
+
+O HTML deve ter saudação com nome da empresa, parágrafos com <p>, pontos em <strong>, assinatura profissional."""
+
+    try:
+        import anthropic
+        client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY", ""))
+        response = client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=2000,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        texto = response.content[0].text.strip()
+        texto = texto.replace("```json", "").replace("```", "").strip()
+        return json.loads(texto)
+    except Exception as e:
+        print(f"[EMAIL CADENCIA] Erro IA: {e}")
+        return {
+            "assunto": f"Proposta para {empresa_nome}",
+            "corpo_html": f"<p>Olá,</p><p>Gostaríamos de apresentar nossa solução para <strong>{empresa_nome}</strong>.</p>",
+            "corpo_texto": f"Olá, gostaríamos de apresentar nossa solução para {empresa_nome}.",
+        }
+
+
+def enviar_email_cadencia(cadencia_id: int, etapa_num: int, tenant_id: int) -> bool:
+    """
+    Gera e envia email da etapa via Brevo. Marca email_d{N}_enviado após sucesso.
+    etapa_num: 1=D0, 2=D3, 3=D7, 4=D14
+    """
+    etapa_str = {1: "D0", 2: "D3", 3: "D7", 4: "D14"}.get(etapa_num, "D0")
+    campo_env = f"email_{etapa_str.lower()}_enviado"
+    campo_at  = f"email_{etapa_str.lower()}_at"
+
+    conn = get_connection()
+    try:
+        cad = conn.execute(
+            """SELECT c.*, e.email AS email_empresa_db,
+                      e.cnae_fiscal_descricao AS cnae
+               FROM cadencias c
+               LEFT JOIN empresas e ON e.id = c.empresa_id
+               WHERE c.id = ?""",
+            (cadencia_id,),
+        ).fetchone()
+        if not cad:
+            conn.close()
+            return False
+
+        cad = dict(cad)
+
+        if cad.get(campo_env):
+            print(f"[EMAIL CADENCIA] {etapa_str} já enviado para cadencia {cadencia_id}")
+            conn.close()
+            return False
+
+        # Prioridade: email_empresa (campo novo) → contato_email → email da empresa no cadastro
+        email_destino = (
+            (cad.get("email_empresa") or "").strip()
+            or (cad.get("contato_email") or "").strip()
+            or (cad.get("email_empresa_db") or "").strip()
+        )
+        if not email_destino:
+            print(f"[EMAIL CADENCIA] Sem email para cadência {cadencia_id}")
+            conn.close()
+            return False
+
+        t = conn.execute(
+            "SELECT nome_plataforma FROM tenants WHERE id = ?", (tenant_id,)
+        ).fetchone()
+        nome_plataforma = (dict(t).get("nome_plataforma") or "Krylo") if t else "Krylo"
+        conn.close()
+
+    except Exception as e:
+        print(f"[EMAIL CADENCIA] Erro ao buscar cadência: {e}")
+        try:
+            conn.close()
+        except Exception:
+            pass
+        return False
+
+    email_remetente = os.environ.get("EMAIL_ONBOARDING", "contato@krylo.com.br")
+
+    email_data = gerar_email_cadencia(
+        empresa_nome=cad.get("empresa_nome") or "",
+        cnae=cad.get("cnae") or "",
+        produto="",
+        etapa=etapa_str,
+        tenant_id=tenant_id,
+        pitch_whatsapp=cad.get("mensagem_whatsapp"),
+    )
+
+    resultado = enviar_email_brevo(
+        destinatario_email=email_destino,
+        destinatario_nome=cad.get("empresa_nome") or email_destino,
+        assunto=email_data["assunto"],
+        corpo=email_data["corpo_html"],
+        nome_remetente=nome_plataforma,
+        email_remetente=email_remetente,
+    )
+
+    print(f"[EMAIL CADENCIA] {etapa_str} → {email_destino}: {resultado['status']}")
+
+    agora = str(date.today())
+    try:
+        conn2 = get_connection()
+        conn2.execute(
+            f"UPDATE cadencias SET {campo_env}=1, {campo_at}=?, email_status=? WHERE id=?",
+            (agora, resultado["status"], cadencia_id),
+        )
+        conn2.commit()
+        conn2.close()
+    except Exception as e:
+        print(f"[EMAIL CADENCIA] Erro ao atualizar status: {e}")
+
+    return resultado["status"] == "enviado"
+
+
+def buscar_email_empresa(cnpj: str, nome_empresa: str = "") -> str | None:
+    """Busca email da empresa no banco local e, como fallback, na API CNPJ.ws."""
+    try:
+        conn = get_connection()
+        row = conn.execute(
+            "SELECT email FROM empresas WHERE cnpj = ? AND email IS NOT NULL AND email != ''",
+            (cnpj,),
+        ).fetchone()
+        conn.close()
+        if row and row["email"]:
+            return row["email"].strip()
+    except Exception:
+        pass
+
+    try:
+        cnpj_limpo = "".join(c for c in str(cnpj or "") if c.isdigit())
+        if len(cnpj_limpo) == 14:
+            r = _req.get(
+                f"https://publica.cnpj.ws/cnpj/{cnpj_limpo}",
+                timeout=5,
+            )
+            if r.status_code == 200:
+                email = r.json().get("estabelecimento", {}).get("email")
+                if email:
+                    return email.lower().strip()
+    except Exception:
+        pass
+
+    return None
+
+
 def criar_etapa(dados: dict) -> int:
-    # Para etapa 1, tenta usar pitch do produto cadastrado se não houver mensagem
+    # Tenta usar pitch do produto cadastrado para etapa 1 sem mensagem
     if dados.get("etapa") == 1 and not (dados.get("mensagem_whatsapp") or "").strip():
         produto_nome = dados.get("produto_alvo") or ""
         if produto_nome:
@@ -58,7 +276,7 @@ def criar_etapa(dados: dict) -> int:
                 _c = get_connection()
                 _p = _c.execute(
                     "SELECT pitch_whatsapp FROM produtos_krylo WHERE nome=? AND ativo=1",
-                    (produto_nome,)
+                    (produto_nome,),
                 ).fetchone()
                 _c.close()
                 if _p and (_p["pitch_whatsapp"] or "").strip():
@@ -68,35 +286,43 @@ def criar_etapa(dados: dict) -> int:
             except Exception:
                 pass
 
+    email_empresa = (dados.get("email_empresa") or dados.get("contato_email") or "").strip()
+    canal_email   = 1 if dados.get("canal_email", True) else 0
+    canal_whatsapp = 1 if dados.get("canal_whatsapp", True) else 0
+    tenant_id     = dados.get("tenant_id", 1)
+
     conn = get_connection()
     cur = conn.execute(
         """INSERT INTO cadencias
                (empresa_id, empresa_nome, contato_whatsapp, contato_email,
                 oportunidade_id, etapa, data_acao, mensagem_whatsapp,
-                assunto_email, corpo_email, status, email_status)
+                assunto_email, corpo_email, status, email_status,
+                email_empresa, canal_email, canal_whatsapp, tenant_id)
            VALUES
                (:empresa_id, :empresa_nome, :contato_whatsapp, :contato_email,
                 :oportunidade_id, :etapa, :data_acao, :mensagem_whatsapp,
-                :assunto_email, :corpo_email, :status,
-                :email_status)""",
-        {**dados, "email_status": "sem_email"},
+                :assunto_email, :corpo_email, :status, :email_status,
+                :email_empresa, :canal_email, :canal_whatsapp, :tenant_id)""",
+        {
+            **dados,
+            "email_status":   dados.get("email_status", "sem_email"),
+            "email_empresa":  email_empresa,
+            "canal_email":    canal_email,
+            "canal_whatsapp": canal_whatsapp,
+            "tenant_id":      tenant_id,
+        },
     )
     conn.commit()
     new_id = cur.lastrowid
     conn.close()
 
-    # Envio automático de e-mail para etapas 2 e 4
-    etapa = dados.get("etapa")
-    email = (dados.get("contato_email") or "").strip()
-    if etapa in ETAPAS_EMAIL_AUTO and email:
-        _tentar_enviar_email(
-            cadencia_id=new_id,
-            empresa_nome=dados.get("empresa_nome", ""),
-            etapa=etapa,
-            para_email=email,
-            assunto=dados.get("assunto_email", ""),
-            corpo=dados.get("corpo_email", ""),
-        )
+    # Dispara email automático se canal_email ativo e há endereço
+    etapa_num = dados.get("etapa", 0)
+    if canal_email and email_empresa and etapa_num in (1, 2, 3, 4):
+        try:
+            enviar_email_cadencia(new_id, etapa_num, tenant_id)
+        except Exception as e:
+            print(f"[EMAIL CADENCIA] criar_etapa etapa {etapa_num}: {e}")
 
     return new_id
 
@@ -109,14 +335,13 @@ def _tentar_enviar_email(
     assunto: str,
     corpo: str,
 ) -> None:
-    """Gera conteúdo se necessário e envia via Brevo (requests). Silencia erros."""
+    """Legado — gera conteúdo se necessário e envia via Brevo. Silencia erros."""
     try:
-        # Gera conteúdo via Claude Haiku se não foi pré-gerado
         if not assunto or not corpo:
             import ai
             gerado = ai.gerar_email_cadencia(empresa_nome=empresa_nome, etapa=etapa)
             assunto = gerado.get("assunto", assunto)
-            corpo   = gerado.get("corpo",   corpo)
+            corpo   = gerado.get("corpo", corpo)
 
         resultado = enviar_email_brevo(
             destinatario_email=para_email,
@@ -124,7 +349,7 @@ def _tentar_enviar_email(
             assunto=assunto,
             corpo=corpo,
         )
-        novo_status = resultado["status"]   # 'enviado', 'sem_chave' ou 'erro'
+        novo_status = resultado["status"]
         message_id  = resultado["id"] or ""
 
         conn = get_connection()
@@ -205,7 +430,6 @@ def cancelar(id_: int) -> None:
 
 
 def listar_emails_enviados() -> list:
-    """Retorna todas as cadências onde um e-mail foi enviado via Brevo."""
     conn = get_connection()
     rows = conn.execute(
         """SELECT * FROM cadencias
@@ -227,7 +451,6 @@ def atualizar_email_status(id_: int, status: str) -> None:
 
 
 def _verificar_aberturas_brevo(message_ids: list) -> set:
-    """Consulta eventos 'opened' no Brevo via requests. Retorna set de message_ids abertos."""
     api_key = os.getenv("BREVO_API_KEY", "")
     if not api_key or not message_ids:
         return set()
@@ -249,11 +472,6 @@ def _verificar_aberturas_brevo(message_ids: list) -> set:
 
 
 def sincronizar_aberturas() -> int:
-    """
-    Consulta o Brevo para todas as cadências com status='enviado'
-    e atualiza para 'aberto' as que foram lidas.
-    Retorna quantidade de atualizações.
-    """
     conn = get_connection()
     rows = conn.execute(
         """SELECT id, email_brevo_id FROM cadencias
