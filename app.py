@@ -329,11 +329,12 @@ def dashboard():
     limite_14d = (_hoje_d - _td2(days=14)).isoformat()
     cad_hoje = cad_model.listar_hoje()[:5]
     ops_paradas = [dict(r) for r in conn_m.execute("""
-        SELECT id, titulo, empresa_nome, estagio, data_ultimo_contato
-        FROM oportunidades
-        WHERE estagio NOT IN ('fechado_ganho','fechado_perdido')
-          AND (data_ultimo_contato IS NULL OR data_ultimo_contato < ?)
-        ORDER BY data_ultimo_contato LIMIT 5
+        SELECT o.id, o.titulo, e.nome AS empresa_nome, o.estagio, o.data_ultimo_contato
+        FROM oportunidades o
+        LEFT JOIN empresas e ON e.id = o.empresa_id
+        WHERE o.estagio NOT IN ('fechado_ganho','fechado_perdido')
+          AND (o.data_ultimo_contato IS NULL OR o.data_ultimo_contato < ?)
+        ORDER BY o.data_ultimo_contato LIMIT 5
     """, (limite_14d,)).fetchall()]
     conn_m.close()
     return render_template(
