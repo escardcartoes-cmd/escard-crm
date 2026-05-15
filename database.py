@@ -489,6 +489,12 @@ class _PgConn:
                 rid = row.get("id")
         return _PgCursor(cur, rid)
 
+    def executemany(self, sql: str, params_list) -> None:
+        sql = _to_pg(sql)
+        cur = self._raw.cursor()
+        cur.executemany(sql, list(params_list))
+        cur.close()
+
     def executescript(self, sql: str) -> None:
         for stmt in [s.strip() for s in sql.split(";") if s.strip()]:
             try:
@@ -511,6 +517,32 @@ class _PgConn:
         self._raw.close()
 
 
+class _SqliteConn:
+    """Thin wrapper around sqlite3.Connection that accepts %s placeholders (psycopg2 style)."""
+    def __init__(self, raw):
+        self._raw = raw
+
+    def execute(self, sql: str, params=()):
+        sql = sql.replace('%s', '?')
+        return self._raw.execute(sql, params or ())
+
+    def executemany(self, sql: str, params_list):
+        sql = sql.replace('%s', '?')
+        return self._raw.executemany(sql, params_list)
+
+    def executescript(self, sql: str):
+        return self._raw.executescript(sql)
+
+    def commit(self):
+        self._raw.commit()
+
+    def rollback(self):
+        self._raw.rollback()
+
+    def close(self):
+        self._raw.close()
+
+
 def get_connection():
     if _USE_PG:
         import psycopg2
@@ -522,7 +554,7 @@ def get_connection():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
-    return conn
+    return _SqliteConn(conn)
 
 
 def get_new_db_connection():
@@ -540,7 +572,7 @@ def get_new_db_connection():
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
     conn.execute("PRAGMA journal_mode = WAL")
-    return conn
+    return _SqliteConn(conn)
 
 
 def run_migrations(conn) -> None:
@@ -931,6 +963,29 @@ def run_migrations(conn) -> None:
         "CREATE INDEX IF NOT EXISTS idx_empresas_tenant ON empresas(tenant_id)",
         "CREATE INDEX IF NOT EXISTS idx_cadencias_tenant ON cadencias(tenant_id)",
         "CREATE INDEX IF NOT EXISTS idx_oportunidades_tenant ON oportunidades(tenant_id)",
+        # Base local Receita Federal
+        """CREATE TABLE IF NOT EXISTS rf_empresas (
+            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            cnpj          VARCHAR(14) UNIQUE NOT NULL,
+            razao_social  VARCHAR(200),
+            nome_fantasia VARCHAR(200),
+            cnae_principal VARCHAR(7),
+            cnae_descricao VARCHAR(200),
+            uf            VARCHAR(2),
+            municipio     VARCHAR(100),
+            telefone      VARCHAR(20),
+            email         VARCHAR(200),
+            situacao      VARCHAR(20) DEFAULT 'ATIVA',
+            porte         VARCHAR(20),
+            capital_social NUMERIC(15,2),
+            data_abertura DATE,
+            tipo          VARCHAR(10) DEFAULT 'MATRIZ',
+            importado_em  TIMESTAMP DEFAULT (datetime('now', 'localtime'))
+        )""",
+        "CREATE INDEX IF NOT EXISTS idx_rf_cnae ON rf_empresas(cnae_principal)",
+        "CREATE INDEX IF NOT EXISTS idx_rf_uf ON rf_empresas(uf)",
+        "CREATE INDEX IF NOT EXISTS idx_rf_cnae_uf ON rf_empresas(cnae_principal, uf)",
+        "CREATE INDEX IF NOT EXISTS idx_rf_situacao ON rf_empresas(situacao)",
     ]
 
     for sql in _ALTER + _CREATE:
