@@ -374,6 +374,24 @@ _SQLITE_DDL = """
         dados         TEXT,
         atualizado_em TEXT    DEFAULT (datetime('now', 'localtime'))
     );
+
+    CREATE TABLE IF NOT EXISTS cqa_resultados (
+        id             INTEGER PRIMARY KEY AUTOINCREMENT,
+        check_nome     TEXT    NOT NULL,
+        status         TEXT    NOT NULL,
+        mensagem       TEXT,
+        auto_corrigido INTEGER DEFAULT 0,
+        executado_em   TEXT    DEFAULT (datetime('now', 'localtime'))
+    );
+
+    CREATE TABLE IF NOT EXISTS cqa_alertas (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        tipo       TEXT    NOT NULL,
+        check_nome TEXT    NOT NULL,
+        mensagem   TEXT,
+        resolvido  INTEGER DEFAULT 0,
+        criado_em  TEXT    DEFAULT (datetime('now', 'localtime'))
+    );
 """
 
 
@@ -769,6 +787,22 @@ def run_migrations(conn) -> None:
             id            INTEGER PRIMARY KEY,
             dados         TEXT,
             atualizado_em TEXT    DEFAULT (datetime('now', 'localtime'))
+        )""",
+        """CREATE TABLE IF NOT EXISTS cqa_resultados (
+            id             INTEGER PRIMARY KEY AUTOINCREMENT,
+            check_nome     TEXT    NOT NULL,
+            status         TEXT    NOT NULL,
+            mensagem       TEXT,
+            auto_corrigido INTEGER DEFAULT 0,
+            executado_em   TEXT    DEFAULT (datetime('now', 'localtime'))
+        )""",
+        """CREATE TABLE IF NOT EXISTS cqa_alertas (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            tipo       TEXT    NOT NULL,
+            check_nome TEXT    NOT NULL,
+            mensagem   TEXT,
+            resolvido  INTEGER DEFAULT 0,
+            criado_em  TEXT    DEFAULT (datetime('now', 'localtime'))
         )""",
     ]
 

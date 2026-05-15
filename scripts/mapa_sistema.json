@@ -1,0 +1,837 @@
+{
+  "rotas": [
+    {
+      "path": "/login",
+      "methods": [
+        "GET",
+        "POST"
+      ]
+    },
+    {
+      "path": "/logout",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "path": "/",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "path": "/empresas",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "path": "/empresas/nova",
+      "methods": [
+        "GET",
+        "POST"
+      ]
+    },
+    {
+      "path": "/empresas/<int:id>",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "path": "/empresas/<int:id>/editar",
+      "methods": [
+        "GET",
+        "POST"
+      ]
+    },
+    {
+      "path": "/empresas/<int:id>/excluir",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "path": "/empresas/excluir-lote",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "path": "/contatos",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "path": "/contatos/novo",
+      "methods": [
+        "GET",
+        "POST"
+      ]
+    },
+    {
+      "path": "/contatos/<int:id>/editar",
+      "methods": [
+        "GET",
+        "POST"
+      ]
+    },
+    {
+      "path": "/contatos/<int:id>/excluir",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "path": "/oportunidades",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "path": "/oportunidades/nova",
+      "methods": [
+        "GET",
+        "POST"
+      ]
+    },
+    {
+      "path": "/oportunidades/<int:id>",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "path": "/oportunidades/<int:id>/editar",
+      "methods": [
+        "GET",
+        "POST"
+      ]
+    },
+    {
+      "path": "/oportunidades/<int:id>/excluir",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "path": "/oportunidades/<int:id>/mover",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "path": "/oportunidades/radar",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "path": "/atividades",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "path": "/atividades/nova",
+      "methods": [
+        "GET",
+        "POST"
+      ]
+    },
+    {
+      "path": "/atividades/<int:id>/excluir",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "path": "/ai/score/<int:empresa_id>",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "path": "/ai/whatsapp/<int:contato_id>",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "path": "/ai/proxima-acao/<int:op_id>",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "path": "/leads/importar",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "path": "/leads/importar/preview",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "path": "/leads/importar/confirmar",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "path": "/prospeccao",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "path": "/prospeccao/<int:id>/status",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "path": "/prospeccao/<int:id>/excluir",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "path": "/prospeccao/excluir-lote",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "path": "/prospeccao/exportar",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "path": "/prospeccao/automatica",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "path": "/prospeccao/buscar-automatico",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "path": "/prospeccao/automatica/<int:id>/importar",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "path": "/prospeccao/automatica/importar-selecionados",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "path": "/prospeccao/automatica/<int:id>/status",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "path": "/prospeccao/autonoma/rodar",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "path": "/prospeccao/autonoma/status",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "path": "/ai/leads/pontuar/<int:id>",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "path": "/ai/leads/whatsapp/<int:id>",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "path": "/ai/leads/email/<int:id>",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "path": "/cadencias",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "path": "/cadencia/iniciar",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "path": "/cadencia/<int:id>/concluir",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "path": "/cadencia/<int:id>/cancelar",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "path": "/cadencia/emails",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "path": "/portal/<token>",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "path": "/portal/gerar/<int:empresa_id>",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "path": "/portal/revogar/<int:empresa_id>",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "path": "/radar",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "path": "/radar/buscar",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "path": "/radar/<int:id>/lido",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "path": "/radar/<int:id>",
+      "methods": [
+        "DELETE"
+      ]
+    },
+    {
+      "path": "/radar/analisar-oportunidades",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "path": "/radar/<int:id>/mensagem",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "path": "/expansao",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "path": "/expansao/pitch/<int:empresa_id>",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "path": "/expansao/salvar/<int:empresa_id>",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "path": "/cobranca",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "path": "/cobranca/clientes/novo",
+      "methods": [
+        "GET",
+        "POST"
+      ]
+    },
+    {
+      "path": "/cobranca/clientes/<int:id>/editar",
+      "methods": [
+        "GET",
+        "POST"
+      ]
+    },
+    {
+      "path": "/cobranca/relatorio/gerar",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "path": "/cobranca/relatorio/<int:id>/marcar-enviado",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "path": "/cobranca/relatorio/<int:id>/registrar-retorno",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "path": "/recebiveis",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "path": "/recebiveis/gerar-mensal",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "path": "/recebiveis/<int:id>/pagar",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "path": "/financeiro",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "path": "/termometro",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "path": "/ai/reativar/<int:empresa_id>",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "path": "/simulador",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "path": "/simulador/gerar",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "path": "/relatorio/semanal",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "path": "/relatorio/semanal/json",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "path": "/usuarios",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "path": "/usuarios/novo",
+      "methods": [
+        "GET",
+        "POST"
+      ]
+    },
+    {
+      "path": "/usuarios/<int:id>/editar",
+      "methods": [
+        "GET",
+        "POST"
+      ]
+    },
+    {
+      "path": "/usuarios/<int:id>/toggle",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "path": "/usuarios/<int:id>/excluir",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "path": "/produtos",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "path": "/produtos/<int:pid>",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "path": "/produtos/novo",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "path": "/produtos/<int:pid>/editar",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "path": "/produtos/<int:pid>/toggle",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "path": "/produtos/<int:pid>/deletar",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "path": "/produtos/gerar-com-ia",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "path": "/ia/config",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "path": "/ia/config/salvar",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "path": "/ia/chat",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "path": "/ia/testar-pitch",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "path": "/central-ia",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "path": "/central-ia/chat",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "path": "/central-ia/upload",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "path": "/central-ia/documentos",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "path": "/central-ia/documentos/<int:id>",
+      "methods": [
+        "DELETE"
+      ]
+    },
+    {
+      "path": "/configuracoes/ramos",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "path": "/configuracoes/ramos/novo",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "path": "/configuracoes/ramos/<int:id>/toggle",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "path": "/configuracoes/empresa",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "path": "/configuracoes/empresa/salvar",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "path": "/sdr/painel",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "path": "/sdr/config/salvar",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "path": "/sdr/config/toggle",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "path": "/sdr/execucoes",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "path": "/sdr/stats",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "path": "/api/empresa/<int:empresa_id>/contato",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "path": "/api/cnaes",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "path": "/api/cnaes/busca",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "path": "/sdr/pipeline",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "path": "/sdr/otimizar",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "path": "/sdr/log-ao-vivo",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "path": "/sdr/pausar",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "path": "/sdr/relatorio/<sessao_id>",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "path": "/sdr/sessoes",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "path": "/cqa",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "path": "/cqa/rodar",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "path": "/cqa/alerta/<int:alerta_id>/resolver",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "path": "/cqa/fix/all",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "path": "/dev/ping",
+      "methods": [
+        "GET"
+      ]
+    }
+  ],
+  "templates": [
+    "atividades/form.html",
+    "atividades/lista.html",
+    "base.html",
+    "cadencias/emails.html",
+    "cadencias/index.html",
+    "central_ia.html",
+    "cobranca/form_cliente.html",
+    "cobranca/index.html",
+    "configuracoes_empresa.html",
+    "configuracoes_ramos.html",
+    "contatos/form.html",
+    "contatos/lista.html",
+    "cqa_dashboard.html",
+    "dashboard.html",
+    "empresas/detalhe.html",
+    "empresas/form.html",
+    "empresas/lista.html",
+    "expansao/index.html",
+    "financeiro.html",
+    "ia_painel.html",
+    "leads/busca_automatica.html",
+    "leads/importar.html",
+    "leads/prospeccao.html",
+    "login.html",
+    "oportunidades/detalhe.html",
+    "oportunidades/form.html",
+    "oportunidades/kanban.html",
+    "portal_cliente.html",
+    "portal_erro.html",
+    "radar/index.html",
+    "recebiveis/index.html",
+    "relatorio_semanal.html",
+    "sdr_painel.html",
+    "sdr_relatorio.html",
+    "simulador.html",
+    "termometro.html",
+    "usuarios/form.html",
+    "usuarios/lista.html"
+  ],
+  "modelos": [
+    "atividade",
+    "brevo",
+    "cadencia",
+    "cnaes",
+    "cobranca",
+    "contato",
+    "empresa",
+    "expansao",
+    "ia_config",
+    "oportunidade",
+    "portal",
+    "prospeccao",
+    "prospeccao_auto",
+    "prospeccao_autonoma",
+    "radar",
+    "recebivel",
+    "relatorio",
+    "usuario"
+  ],
+  "tabelas": [
+    "atividades",
+    "cadencias",
+    "clientes_cobranca",
+    "cnae_cache",
+    "contatos",
+    "cqa_alertas",
+    "cqa_resultados",
+    "documentos_ia",
+    "empresa_config",
+    "empresas",
+    "ia_config",
+    "oportunidades",
+    "portal_acessos",
+    "produtos_krylo",
+    "prospeccao",
+    "prospeccao_automatica",
+    "radar_analises",
+    "radar_mercado",
+    "ramos_atividade",
+    "recebiveis_krylo",
+    "relatorios_cobranca",
+    "sdr_config",
+    "sdr_execucoes",
+    "sdr_log_ao_vivo",
+    "sdr_sessoes",
+    "sqlite_sequence",
+    "usuarios"
+  ]
+}
