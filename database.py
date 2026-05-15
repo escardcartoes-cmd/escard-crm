@@ -590,6 +590,18 @@ def run_migrations(conn) -> None:
         f"ALTER TABLE sdr_config ADD COLUMN{_ifne} tenant_id INTEGER DEFAULT 1",
         f"ALTER TABLE prospeccao_automatica ADD COLUMN{_ifne} tenant_id INTEGER DEFAULT 1",
         f"ALTER TABLE cqa_resultados ADD COLUMN{_ifne} tenant_id INTEGER DEFAULT 1",
+        # cadencias — email multi-canal por etapa
+        f"ALTER TABLE cadencias ADD COLUMN{_ifne} email_empresa TEXT",
+        f"ALTER TABLE cadencias ADD COLUMN{_ifne} canal_email INTEGER DEFAULT 1",
+        f"ALTER TABLE cadencias ADD COLUMN{_ifne} canal_whatsapp INTEGER DEFAULT 1",
+        f"ALTER TABLE cadencias ADD COLUMN{_ifne} email_d0_enviado INTEGER DEFAULT 0",
+        f"ALTER TABLE cadencias ADD COLUMN{_ifne} email_d3_enviado INTEGER DEFAULT 0",
+        f"ALTER TABLE cadencias ADD COLUMN{_ifne} email_d7_enviado INTEGER DEFAULT 0",
+        f"ALTER TABLE cadencias ADD COLUMN{_ifne} email_d14_enviado INTEGER DEFAULT 0",
+        f"ALTER TABLE cadencias ADD COLUMN{_ifne} email_d0_at TEXT",
+        f"ALTER TABLE cadencias ADD COLUMN{_ifne} email_d3_at TEXT",
+        f"ALTER TABLE cadencias ADD COLUMN{_ifne} email_d7_at TEXT",
+        f"ALTER TABLE cadencias ADD COLUMN{_ifne} email_d14_at TEXT",
     ]
 
     _CREATE = [

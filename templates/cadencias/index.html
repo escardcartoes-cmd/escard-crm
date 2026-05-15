@@ -28,6 +28,16 @@
   {% endif %}
 {% endmacro %}
 
+{% macro canal_status(enviado, data, sem_email=false) %}
+  {% if sem_email %}
+    <span style="color:#EF4444;font-size:11px" title="Sem email cadastrado">❌</span>
+  {% elif enviado %}
+    <span style="color:#16A34A;font-size:11px" title="Enviado em {{ data or '' }}">✅ {{ data or '' }}</span>
+  {% else %}
+    <span style="color:#94A3B8;font-size:11px">⏳</span>
+  {% endif %}
+{% endmacro %}
+
 <!-- ── HOJE ────────────────────────────────────────────────────────────────── -->
 <div class="card" style="margin-bottom:24px">
   <div class="flex items-center gap-2" style="justify-content:space-between;margin-bottom:16px">
@@ -59,10 +69,49 @@
         <div class="cad-empresa" style="display:flex;align-items:center;gap:8px">
           {{ item.empresa_nome }}
           {{ email_badge(item.email_status or 'sem_email') }}
+          {% if item.canal_whatsapp %}<span style="font-size:10px;color:#64748B">📱</span>{% endif %}
+          {% if item.canal_email %}<span style="font-size:10px;color:#64748B">📧</span>{% endif %}
         </div>
         {% if item.mensagem_whatsapp %}
         <p class="cad-preview">{{ item.mensagem_whatsapp[:120] }}{% if item.mensagem_whatsapp|length > 120 %}…{% endif %}</p>
         {% endif %}
+
+        {# Tabela de status por canal e etapa #}
+        {% set tem_email = item.email_empresa or item.contato_email %}
+        <div style="margin:8px 0;overflow-x:auto">
+          <table style="font-size:11px;border-collapse:collapse;min-width:320px">
+            <thead>
+              <tr style="color:#94A3B8;text-align:left">
+                <th style="padding:2px 8px;font-weight:600">Etapa</th>
+                <th style="padding:2px 8px;font-weight:600">📧 Email</th>
+                <th style="padding:2px 8px;font-weight:600">📅 Data</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td style="padding:2px 8px;color:#475569;font-weight:600">D0</td>
+                <td style="padding:2px 8px">{{ canal_status(item.email_d0_enviado, item.email_d0_at, not tem_email) }}</td>
+                <td style="padding:2px 8px;color:#94A3B8">{{ item.email_d0_at or '—' }}</td>
+              </tr>
+              <tr>
+                <td style="padding:2px 8px;color:#475569;font-weight:600">D+3</td>
+                <td style="padding:2px 8px">{{ canal_status(item.email_d3_enviado, item.email_d3_at, not tem_email) }}</td>
+                <td style="padding:2px 8px;color:#94A3B8">{{ item.email_d3_at or '—' }}</td>
+              </tr>
+              <tr>
+                <td style="padding:2px 8px;color:#475569;font-weight:600">D+7</td>
+                <td style="padding:2px 8px">{{ canal_status(item.email_d7_enviado, item.email_d7_at, not tem_email) }}</td>
+                <td style="padding:2px 8px;color:#94A3B8">{{ item.email_d7_at or '—' }}</td>
+              </tr>
+              <tr>
+                <td style="padding:2px 8px;color:#475569;font-weight:600">D+14</td>
+                <td style="padding:2px 8px">{{ canal_status(item.email_d14_enviado, item.email_d14_at, not tem_email) }}</td>
+                <td style="padding:2px 8px;color:#94A3B8">{{ item.email_d14_at or '—' }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
         <div class="cad-actions">
           {% if item.wa_url %}
           <a href="{{ item.wa_url }}" target="_blank" rel="noopener" class="btn btn-wa btn-xs">

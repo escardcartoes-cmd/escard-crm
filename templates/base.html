@@ -353,6 +353,152 @@
     </main>
   </div>
 
+  <!-- ── Modal Iniciar Cadência ───────────────────────────────────────────── -->
+  <div class="modal-overlay" id="cadenciaModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9990;align-items:center;justify-content:center">
+    <div style="background:#fff;border-radius:14px;padding:28px 32px;width:100%;max-width:460px;box-shadow:0 12px 40px rgba(0,0,0,.2)">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
+        <h3 style="font-size:16px;font-weight:700;margin:0">🚀 Iniciar Cadência</h3>
+        <button onclick="fecharModalCadencia()" style="background:none;border:none;font-size:18px;cursor:pointer;color:#94A3B8">✕</button>
+      </div>
+
+      <div style="margin-bottom:14px">
+        <label style="display:block;font-size:11px;font-weight:700;color:#64748B;text-transform:uppercase;margin-bottom:4px">Empresa</label>
+        <input id="cad_empresa_nome" type="text" readonly
+               style="width:100%;padding:9px 12px;border:1.5px solid #E2E8F0;border-radius:8px;font-size:13px;background:#F8FAFC;color:#475569">
+      </div>
+
+      <div style="margin-bottom:14px">
+        <label style="display:block;font-size:11px;font-weight:700;color:#64748B;text-transform:uppercase;margin-bottom:4px">WhatsApp</label>
+        <input id="cad_whatsapp" type="text" placeholder="(11) 99999-9999"
+               style="width:100%;padding:9px 12px;border:1.5px solid #E2E8F0;border-radius:8px;font-size:13px">
+      </div>
+
+      <div style="margin-bottom:14px">
+        <label style="display:block;font-size:11px;font-weight:700;color:#64748B;text-transform:uppercase;margin-bottom:4px">Email</label>
+        <input id="cad_email" type="email" placeholder="contato@empresa.com.br"
+               oninput="atualizarPreviewCanal()"
+               style="width:100%;padding:9px 12px;border:1.5px solid #E2E8F0;border-radius:8px;font-size:13px">
+        <div id="cad_aviso_email" style="display:none;margin-top:6px;font-size:11px;color:#D97706;background:#FFFBEB;padding:6px 10px;border-radius:6px">
+          ⚠️ Email não cadastrado — cadência rodará só no WhatsApp
+        </div>
+      </div>
+
+      <div style="margin-bottom:16px;background:#F8FAFC;border-radius:10px;padding:14px">
+        <p style="font-size:11px;font-weight:700;color:#64748B;text-transform:uppercase;margin:0 0 10px 0">Canais de envio</p>
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-bottom:8px;font-size:13px">
+          <input type="checkbox" id="cad_canal_whatsapp" checked onchange="atualizarPreviewCanal()"
+                 style="width:15px;height:15px;accent-color:var(--tenant-primary,#C5A089)">
+          📱 Enviar por WhatsApp
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px">
+          <input type="checkbox" id="cad_canal_email" checked onchange="atualizarPreviewCanal()"
+                 style="width:15px;height:15px;accent-color:var(--tenant-primary,#C5A089)">
+          📧 Enviar por Email
+        </label>
+        <div id="cad_preview_canais" style="margin-top:10px;font-size:12px;color:#475569;padding:6px 10px;background:#fff;border-radius:6px;border:1px solid #E2E8F0">
+          Esta cadência será enviada por: <strong>WhatsApp + Email</strong>
+        </div>
+      </div>
+
+      <div id="cad_erro" style="display:none;color:#EF4444;font-size:12px;margin-bottom:10px"></div>
+
+      <button onclick="confirmarIniciarCadencia()"
+              style="width:100%;padding:12px;background:var(--tenant-primary,#C5A089);color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer">
+        Gerar Cadência com IA →
+      </button>
+      <p style="text-align:center;font-size:11px;color:#94A3B8;margin-top:8px">
+        4 mensagens serão criadas: D0, D+3, D+7, D+14
+      </p>
+
+      <input type="hidden" id="cad_empresa_id">
+      <input type="hidden" id="cad_op_id">
+    </div>
+  </div>
+
+  <script>
+  function abrirModalCadencia(opts) {
+    opts = opts || {};
+    document.getElementById('cad_empresa_id').value   = opts.empresa_id   || '';
+    document.getElementById('cad_empresa_nome').value = opts.empresa_nome || '';
+    document.getElementById('cad_whatsapp').value     = opts.whatsapp     || '';
+    document.getElementById('cad_email').value        = opts.email        || '';
+    document.getElementById('cad_op_id').value        = opts.op_id        || '';
+    document.getElementById('cad_erro').style.display = 'none';
+    atualizarPreviewCanal();
+    document.getElementById('cadenciaModal').style.display = 'flex';
+  }
+
+  function fecharModalCadencia() {
+    document.getElementById('cadenciaModal').style.display = 'none';
+  }
+
+  function atualizarPreviewCanal() {
+    const email = document.getElementById('cad_email').value.trim();
+    const chkEmail = document.getElementById('cad_canal_email').checked;
+    const chkWa    = document.getElementById('cad_canal_whatsapp').checked;
+    const aviso    = document.getElementById('cad_aviso_email');
+    const preview  = document.getElementById('cad_preview_canais');
+
+    aviso.style.display = (chkEmail && !email) ? 'block' : 'none';
+
+    const canais = [];
+    if (chkWa)    canais.push('WhatsApp');
+    if (chkEmail) canais.push('Email');
+    preview.innerHTML = canais.length
+      ? `Esta cadência será enviada por: <strong>${canais.join(' + ')}</strong>`
+      : '<span style="color:#EF4444">⚠️ Selecione ao menos um canal</span>';
+  }
+
+  async function confirmarIniciarCadencia() {
+    const empresa_id     = document.getElementById('cad_empresa_id').value;
+    const empresa_nome   = document.getElementById('cad_empresa_nome').value.trim();
+    const whatsapp       = document.getElementById('cad_whatsapp').value.trim();
+    const email          = document.getElementById('cad_email').value.trim();
+    const op_id          = document.getElementById('cad_op_id').value;
+    const canal_whatsapp = document.getElementById('cad_canal_whatsapp').checked;
+    const canal_email    = document.getElementById('cad_canal_email').checked;
+    const erroEl         = document.getElementById('cad_erro');
+
+    if (!empresa_nome) { erroEl.textContent = 'Nome da empresa é obrigatório.'; erroEl.style.display = 'block'; return; }
+    if (!canal_whatsapp && !canal_email) { erroEl.textContent = 'Selecione ao menos um canal.'; erroEl.style.display = 'block'; return; }
+
+    erroEl.style.display = 'none';
+    const btn = event.target;
+    const orig = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = '⏳ Gerando cadência…';
+
+    try {
+      const r = await fetch('/cadencia/iniciar', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ empresa_id, empresa_nome, whatsapp, email,
+                               oportunidade_id: op_id || null,
+                               canal_email, canal_whatsapp })
+      });
+      const d = await r.json();
+      if (d.ok) {
+        fecharModalCadencia();
+        window._cadenciaIniciadaCb && window._cadenciaIniciadaCb(d);
+        window.location.href = '/cadencias';
+      } else {
+        erroEl.textContent = d.error || 'Erro ao iniciar cadência.';
+        erroEl.style.display = 'block';
+      }
+    } catch(e) {
+      erroEl.textContent = 'Erro de rede. Tente novamente.';
+      erroEl.style.display = 'block';
+    } finally {
+      btn.disabled = false;
+      btn.textContent = orig;
+    }
+  }
+
+  document.getElementById('cadenciaModal').addEventListener('click', function(e) {
+    if (e.target === this) fecharModalCadencia();
+  });
+  </script>
+
   <!-- ── AI Modal ─────────────────────────────────────────────────────────── -->
   <div class="modal-overlay" id="aiModal">
     <div class="modal">

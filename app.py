@@ -1305,12 +1305,15 @@ def cadencia_iniciar():
     import re as _re
     from datetime import date as _date, timedelta as _td
     try:
-        dados        = request.json or {}
-        empresa_id   = dados.get("empresa_id")
-        empresa_nome = (dados.get("empresa_nome") or "").strip()
-        whatsapp     = (dados.get("whatsapp") or "").strip()
-        email        = (dados.get("email") or "").strip()
-        op_id        = dados.get("oportunidade_id")
+        dados          = request.json or {}
+        empresa_id     = dados.get("empresa_id")
+        empresa_nome   = (dados.get("empresa_nome") or "").strip()
+        whatsapp       = (dados.get("whatsapp") or "").strip()
+        email          = (dados.get("email") or "").strip()
+        op_id          = dados.get("oportunidade_id")
+        canal_email    = bool(dados.get("canal_email", True))
+        canal_whatsapp = bool(dados.get("canal_whatsapp", True))
+        tenant_id      = session.get("tenant_id", 1) or 1
 
         if not empresa_nome:
             return jsonify({"error": "Nome da empresa é obrigatório."}), 400
@@ -1366,6 +1369,7 @@ E-mail: assunto objetivo (max 8 palavras), corpo profissional com cumprimento e 
                 "empresa_nome":      empresa_nome,
                 "contato_whatsapp":  whatsapp,
                 "contato_email":     email,
+                "email_empresa":     email,
                 "oportunidade_id":   op_id,
                 "etapa":             et.get("etapa", i + 1),
                 "data_acao":         datas[i],
@@ -1373,6 +1377,9 @@ E-mail: assunto objetivo (max 8 palavras), corpo profissional com cumprimento e 
                 "assunto_email":     et.get("assunto_email", ""),
                 "corpo_email":       et.get("corpo_email", ""),
                 "status":            "pendente",
+                "canal_email":       canal_email,
+                "canal_whatsapp":    canal_whatsapp,
+                "tenant_id":         tenant_id,
             }))
 
         return jsonify({"ok": True, "ids": ids, "total": len(ids)})
