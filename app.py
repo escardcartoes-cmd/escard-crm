@@ -143,8 +143,15 @@ def unauthorized():
 
 _START_TIME = str(time.time())
 
-database.init_db()
-user_model.criar_admin_se_necessario()
+try:
+    database.init_db()
+except Exception as _e:
+    print(f"[STARTUP] init_db error (non-fatal): {_e}")
+
+try:
+    user_model.criar_admin_se_necessario()
+except Exception as _e:
+    print(f"[STARTUP] criar_admin error (non-fatal): {_e}")
 
 
 # ── APScheduler — SDR Autônomo ────────────────────────────────────────────────
@@ -3212,9 +3219,10 @@ def ajuda_kia():
     try:
         import json as _json
         body = request.json or {}
-        pergunta = (body.get("pergunta") or "").strip()
+        pergunta = (body.get("mensagem") or body.get("pergunta") or "").strip()
         if not pergunta:
             return jsonify({"error": "Pergunta vazia"}), 400
+        historico = body.get("historico") or []
 
         t = tenant_model.get_tenant_atual()
         nome_plataforma = (t or {}).get("nome_plataforma", "Krylo")
@@ -3249,13 +3257,22 @@ BASE DE CONHECIMENTO:
 
 Use sempre o nome "{nome_plataforma}" ao referenciar o sistema. Seja breve (máximo 4 parágrafos)."""
 
+        # Build messages with conversation history (last 10 turns)
+        msgs = []
+        for h in historico[-10:]:
+            role = h.get("role")
+            content = h.get("content", "")
+            if role in ("user", "assistant") and content:
+                msgs.append({"role": role, "content": content})
+        msgs.append({"role": "user", "content": pergunta})
+
         import anthropic as _ant
         client = _ant.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY", ""))
         resp = client.messages.create(
             model="claude-haiku-4-5-20251001",
             max_tokens=600,
             system=system,
-            messages=[{"role": "user", "content": pergunta}],
+            messages=msgs,
         )
         resposta = resp.content[0].text
 
