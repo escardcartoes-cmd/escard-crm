@@ -14,6 +14,71 @@ DIAS_POR_ETAPA = {1: 0, 2: 3, 3: 7, 4: 14}
 _ETAPA_KEY = {1: "d0", 2: "d3", 3: "d7", 4: "d14"}
 
 
+def _brevo_disponivel() -> bool:
+    key = os.getenv("BREVO_API_KEY", "")
+    return bool(key and len(key) > 10)
+
+
+def _salvar_email_na_fila(
+    destinatario: str,
+    nome_destinatario: str,
+    assunto: str,
+    html: str,
+    texto: str = "",
+    tenant_id: int = 1,
+) -> None:
+    try:
+        conn = get_connection()
+        conn.execute(
+            """INSERT INTO email_fila
+               (tenant_id, destinatario, nome_destinatario, assunto, html, texto, status)
+               VALUES (?, ?, ?, ?, ?, ?, 'pendente')""",
+            (tenant_id, destinatario, nome_destinatario or destinatario, assunto, html, texto),
+        )
+        conn.commit()
+        conn.close()
+        print(f"[EMAIL FILA] Enfileirado para {destinatario}: {assunto[:50]}")
+    except Exception as e:
+        print(f"[EMAIL FILA] Erro ao enfileirar: {e}")
+
+
+def processar_fila_email(tenant_id: int = 1) -> int:
+    """Processa emails enfileirados quando Brevo estiver disponível."""
+    if not _brevo_disponivel():
+        return 0
+    conn = get_connection()
+    pendentes = [dict(r) for r in conn.execute(
+        "SELECT * FROM email_fila WHERE status='pendente' AND tenant_id=? AND tentativas < 3 ORDER BY criado_em ASC LIMIT 20",
+        (tenant_id,)
+    ).fetchall()]
+    conn.close()
+
+    enviados = 0
+    for item in pendentes:
+        resultado = enviar_email_brevo(
+            destinatario_email=item["destinatario"],
+            destinatario_nome=item["nome_destinatario"] or "",
+            assunto=item["assunto"] or "",
+            corpo=item["html"] or item["texto"] or "",
+        )
+        novo_status = "enviado" if resultado["status"] == "enviado" else "erro"
+        agora = str(date.today())
+        try:
+            conn2 = get_connection()
+            conn2.execute(
+                "UPDATE email_fila SET status=?, tentativas=tentativas+1, enviado_em=?, erro=? WHERE id=?",
+                (novo_status, agora if novo_status == "enviado" else None,
+                 None if novo_status == "enviado" else resultado.get("id"), item["id"]),
+            )
+            conn2.commit()
+            conn2.close()
+        except Exception:
+            pass
+        if novo_status == "enviado":
+            enviados += 1
+    return enviados
+
+
 def enviar_email_brevo(
     destinatario_email: str,
     destinatario_nome: str,
@@ -25,7 +90,8 @@ def enviar_email_brevo(
     """Envia e-mail transacional via Brevo (requests). Retorna status e message_id."""
     api_key = os.getenv("BREVO_API_KEY", "")
     if not api_key:
-        return {"status": "sem_chave", "id": None}
+        _salvar_email_na_fila(destinatario_email, destinatario_nome, assunto, corpo)
+        return {"status": "enfileirado", "id": None}
     try:
         html = corpo if ("<p>" in corpo or "<br" in corpo) else \
                "".join(f"<p>{p}</p>" for p in corpo.split("\n\n") if p.strip())
@@ -493,3 +559,136 @@ def sincronizar_aberturas() -> int:
             atualizar_email_status(cad_id, "aberto")
             updated += 1
     return updated
+
+
+def atualizar_temperatura_lead(empresa_id: int, evento: str, tenant_id: int = 1) -> None:
+    """
+    Atualiza score e temperatura da empresa baseado em evento de engajamento.
+    evento: 'email_aberto', 'email_clicado', 'email_respondido', 'sem_engajamento'
+    """
+    ajustes = {
+        "email_aberto":     +1,
+        "email_clicado":    +2,
+        "email_respondido": +4,
+        "sem_engajamento":  -1,
+    }
+    delta = ajustes.get(evento, 0)
+    if delta == 0:
+        return
+
+    conn = get_connection()
+    try:
+        row = conn.execute(
+            "SELECT score FROM empresas WHERE id = ?", (empresa_id,)
+        ).fetchone()
+        score_atual = int(row["score"] if row and row["score"] is not None else 0)
+        novo_score = max(0, min(10, score_atual + delta))
+
+        temperatura = "frio"
+        if novo_score >= 8:
+            temperatura = "quente"
+        elif novo_score >= 5:
+            temperatura = "morno"
+
+        conn.execute(
+            "UPDATE empresas SET score = ?, temperatura = ? WHERE id = ?",
+            (novo_score, temperatura, empresa_id),
+        )
+
+        if temperatura == "quente":
+            conn.execute(
+                """UPDATE cadencias SET whatsapp_status = 'aguardando_aprovacao'
+                   WHERE empresa_id = ? AND status = 'pendente' AND tenant_id = ?""",
+                (empresa_id, tenant_id),
+            )
+            print(f"[TEMPERATURA] Empresa {empresa_id} ficou QUENTE — adicionada à fila WhatsApp")
+
+        conn.commit()
+    except Exception as e:
+        print(f"[TEMPERATURA] Erro ao atualizar empresa {empresa_id}: {e}")
+    finally:
+        conn.close()
+
+
+def processar_cadencias_pendentes(tenant_id: int = 1) -> int:
+    """
+    Processa cadências pendentes cuja data_acao já chegou.
+    Envia email da etapa atual e cria a próxima (D3→D7→D14).
+    """
+    from datetime import timedelta
+
+    PROXIMA: dict = {1: (2, 3), 2: (3, 4), 3: (4, 7)}  # etapa → (próxima, dias_offset)
+
+    conn = get_connection()
+    hoje = str(date.today())
+
+    pendentes = [dict(r) for r in conn.execute(
+        """SELECT * FROM cadencias
+           WHERE status = 'pendente'
+             AND data_acao <= ?
+             AND tenant_id = ?
+           ORDER BY data_acao ASC LIMIT 30""",
+        (hoje, tenant_id),
+    ).fetchall()]
+
+    print(f"[CADÊNCIA] {len(pendentes)} cadências para processar")
+    processados = 0
+
+    for cad in pendentes:
+        etapa_atual = int(cad.get("etapa") or 1)
+        cad_id = cad["id"]
+        email = (cad.get("email_empresa") or cad.get("contato_email") or "").strip()
+
+        # Envia email desta etapa (idempotente — ignora se já enviado)
+        if email and int(cad.get("canal_email") or 1) and etapa_atual in (1, 2, 3, 4):
+            try:
+                enviar_email_cadencia(cad_id, etapa_atual, tenant_id)
+            except Exception as e:
+                print(f"[CADÊNCIA] Erro email cad {cad_id}: {e}")
+
+        # Cria próxima etapa se houver e ainda não existir
+        if etapa_atual in PROXIMA:
+            proxima_etapa, dias_offset = PROXIMA[etapa_atual]
+            proxima_data = (date.today() + timedelta(days=dias_offset)).isoformat()
+            empresa_nome = cad.get("empresa_nome") or ""
+
+            try:
+                ja_existe = conn.execute(
+                    """SELECT id FROM cadencias
+                       WHERE empresa_nome = ? AND etapa = ?
+                         AND status = 'pendente' AND tenant_id = ?""",
+                    (empresa_nome, proxima_etapa, tenant_id),
+                ).fetchone()
+                if not ja_existe:
+                    criar_etapa({
+                        "empresa_id":        cad.get("empresa_id"),
+                        "empresa_nome":      empresa_nome,
+                        "contato_whatsapp":  cad.get("contato_whatsapp"),
+                        "contato_email":     cad.get("contato_email"),
+                        "oportunidade_id":   cad.get("oportunidade_id"),
+                        "etapa":             proxima_etapa,
+                        "data_acao":         proxima_data,
+                        "mensagem_whatsapp": cad.get("mensagem_whatsapp") or "",
+                        "assunto_email":     "",
+                        "corpo_email":       "",
+                        "status":            "pendente",
+                        "email_empresa":     email,
+                        "canal_email":       int(cad.get("canal_email") or 1),
+                        "canal_whatsapp":    int(cad.get("canal_whatsapp") or 1),
+                        "tenant_id":         tenant_id,
+                    })
+            except Exception as e:
+                print(f"[CADÊNCIA] Erro criar etapa {proxima_etapa} para {empresa_nome}: {e}")
+
+        # Marca etapa atual como concluída
+        try:
+            conn.execute(
+                "UPDATE cadencias SET status = 'concluida' WHERE id = ?", (cad_id,)
+            )
+            conn.commit()
+            processados += 1
+        except Exception as e:
+            print(f"[CADÊNCIA] Erro ao concluir cad {cad_id}: {e}")
+
+    conn.close()
+    return processados

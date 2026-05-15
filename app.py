@@ -236,6 +236,19 @@ def _job_cqa():
         print(f"[SCHEDULER CQA] Erro: {_e}")
 
 
+def _job_processar_cadencias():
+    try:
+        from models.cadencia import processar_cadencias_pendentes, processar_fila_email
+        n = processar_cadencias_pendentes(tenant_id=1)
+        if n:
+            print(f"[SCHEDULER] Cadências processadas: {n}")
+        e = processar_fila_email(tenant_id=1)
+        if e:
+            print(f"[SCHEDULER] Emails da fila enviados: {e}")
+    except Exception as _e:
+        print(f"[SCHEDULER CADENCIAS] Erro: {_e}")
+
+
 scheduler = BackgroundScheduler(timezone="America/Sao_Paulo")
 scheduler.add_job(
     func=_job_prospeccao_autonoma,
@@ -249,6 +262,13 @@ scheduler.add_job(
     trigger="interval",
     hours=24,
     id="cqa_automatico",
+    replace_existing=True,
+)
+scheduler.add_job(
+    func=_job_processar_cadencias,
+    trigger="interval",
+    hours=1,
+    id="processar_cadencias",
     replace_existing=True,
 )
 scheduler.start()
@@ -3193,6 +3213,36 @@ def sdr_rejeitar_whatsapp(cad_id):
         return jsonify({"ok": True})
     except Exception as e:
         return jsonify({"ok": False, "erro": str(e)}), 500
+
+
+@app.route("/sdr/fila-whatsapp")
+@login_required
+@require_perfil("gerente")
+def sdr_fila_whatsapp():
+    try:
+        conn = database.get_connection()
+        tid = session.get("tenant_id", 1)
+        fila = [dict(r) for r in conn.execute(
+            """SELECT c.*, e.nome AS empresa_nome_crm, e.telefone AS telefone_crm,
+                      e.score AS score_emp, e.temperatura AS temperatura_emp,
+                      e.cidade AS cidade_emp, e.estado AS estado_emp
+               FROM cadencias c
+               LEFT JOIN empresas e ON e.id = c.empresa_id
+               WHERE c.whatsapp_status = 'aguardando_aprovacao'
+                 AND c.tenant_id = ?
+               ORDER BY COALESCE(e.score, 0) DESC
+               LIMIT 100""",
+            (tid,)
+        ).fetchall()]
+        conn.close()
+        for item in fila:
+            fone = re.sub(r'\D', '', str(item.get("contato_whatsapp") or item.get("telefone_crm") or ""))
+            from urllib.parse import quote as _q
+            item["wa_url"] = f"https://wa.me/55{fone}?text={_q(item.get('mensagem_whatsapp') or '')}" if fone else ""
+        return render_template("fila_whatsapp.html", fila=fila)
+    except Exception as e:
+        flash(f"Erro ao carregar fila WhatsApp: {e}", "danger")
+        return redirect(url_for("sdr_painel"))
 
 
 # ── Super Admin — Gestão de Tenants ──────────────────────────────────────────

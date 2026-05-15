@@ -1,0 +1,138 @@
+{% extends 'base.html' %}
+{% block title %}📱 Fila WhatsApp — Leads Quentes{% endblock %}
+{% block topbar_title %}📱 Fila WhatsApp — Leads Quentes{% endblock %}
+
+{% block topbar_actions %}
+  <a href="{{ url_for('sdr_painel') }}" class="btn btn-sm btn-outline-secondary">← SDR</a>
+  <a href="{{ url_for('sdr_fila_aprovacao') }}" class="btn btn-sm btn-outline-secondary">Fila Geral</a>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-4 py-3">
+
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+      <h5 class="mb-0 fw-bold">Leads Quentes — prontos para WhatsApp</h5>
+      <small class="text-muted">Estes leads abriram ou interagiram com seus emails. Aprove para enviar WhatsApp.</small>
+    </div>
+    <span class="badge bg-danger fs-6">🔥 {{ fila|length }} lead{{ 's' if fila|length != 1 else '' }}</span>
+  </div>
+
+  {% if not fila %}
+  <div class="card border-0 shadow-sm">
+    <div class="card-body text-center py-5 text-muted">
+      <div style="font-size:2.5rem">🧊</div>
+      <div class="mt-2 fw-semibold">Nenhum lead quente no momento.</div>
+      <div class="small mt-1">Os leads ficam quentes quando abrem ou clicam nos emails da cadência.</div>
+    </div>
+  </div>
+  {% else %}
+  <div class="d-flex flex-column gap-3" id="filaContainer">
+    {% for item in fila %}
+    {% set score = item.score_emp or 0 %}
+    {% set temp = item.temperatura_emp or 'frio' %}
+    <div class="card border-0 shadow-sm" id="lead-{{ item.id }}">
+      <div class="card-body">
+        <div class="row align-items-start g-3">
+
+          <!-- Info da empresa -->
+          <div class="col-md-5">
+            <div class="d-flex align-items-center gap-2 mb-1">
+              {% if temp == 'quente' %}
+                <span class="badge bg-danger">🔥 Quente</span>
+              {% elif temp == 'morno' %}
+                <span class="badge bg-warning text-dark">🌡️ Morno</span>
+              {% else %}
+                <span class="badge bg-secondary">🧊 Frio</span>
+              {% endif %}
+              <span class="fw-bold">{{ item.empresa_nome_crm or item.empresa_nome }}</span>
+            </div>
+            <div class="text-muted small">
+              {% if item.cidade_emp %}📍 {{ item.cidade_emp }}{% if item.estado_emp %}/{{ item.estado_emp }}{% endif %} &nbsp;·&nbsp; {% endif %}
+              📞 {{ item.contato_whatsapp or item.telefone_crm or '—' }}
+              &nbsp;·&nbsp; Score {{ score }}/10
+            </div>
+            <div class="mt-1 small text-muted">
+              Etapa {{ item.etapa }} &nbsp;·&nbsp; Ação em {{ (item.data_acao or '')[:10] }}
+            </div>
+          </div>
+
+          <!-- Mensagem sugerida -->
+          <div class="col-md-4">
+            <label class="form-label small fw-semibold text-muted mb-1">Mensagem WhatsApp</label>
+            <textarea class="form-control form-control-sm" rows="3"
+                      id="msg-{{ item.id }}" style="font-size:12px;resize:none">{{ item.mensagem_whatsapp or '' }}</textarea>
+          </div>
+
+          <!-- Ações -->
+          <div class="col-md-3 d-flex flex-column gap-2 pt-2">
+            {% if item.wa_url %}
+            <a href="{{ item.wa_url }}" target="_blank" class="btn btn-success btn-sm"
+               id="btn-aprovar-{{ item.id }}"
+               onclick="aprovarLead({{ item.id }}, this)">
+              ✅ Aprovar e abrir WhatsApp
+            </a>
+            {% else %}
+            <button class="btn btn-success btn-sm" onclick="aprovarLead({{ item.id }}, this)">
+              ✅ Aprovar
+            </button>
+            {% endif %}
+            <button class="btn btn-outline-secondary btn-sm"
+                    onclick="editarMsg({{ item.id }})">
+              ✏️ Editar mensagem
+            </button>
+            <button class="btn btn-outline-danger btn-sm"
+                    onclick="rejeitarLead({{ item.id }}, this)">
+              ❌ Rejeitar
+            </button>
+          </div>
+
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+</div>
+
+<script>
+async function aprovarLead(id, btn) {
+  btn.disabled = true;
+  btn.textContent = 'Aprovando…';
+  try {
+    const res = await fetch(`/sdr/aprovar/${id}`, { method: 'POST' });
+    const data = await res.json();
+    if (data.ok) {
+      document.getElementById(`lead-${id}`).remove();
+      if (data.wa_url) window.open(data.wa_url, '_blank');
+    } else {
+      alert('Erro: ' + (data.erro || 'desconhecido'));
+      btn.disabled = false;
+      btn.textContent = '✅ Aprovar e abrir WhatsApp';
+    }
+  } catch(e) { alert('Erro de rede'); btn.disabled = false; btn.textContent = '✅ Aprovar'; }
+}
+
+async function rejeitarLead(id, btn) {
+  btn.disabled = true;
+  btn.textContent = 'Rejeitando…';
+  try {
+    const res = await fetch(`/sdr/rejeitar/${id}`, { method: 'POST' });
+    const data = await res.json();
+    if (data.ok) {
+      document.getElementById(`lead-${id}`).remove();
+    } else {
+      alert('Erro: ' + (data.erro || 'desconhecido'));
+      btn.disabled = false;
+      btn.textContent = '❌ Rejeitar';
+    }
+  } catch(e) { alert('Erro de rede'); btn.disabled = false; btn.textContent = '❌ Rejeitar'; }
+}
+
+function editarMsg(id) {
+  const ta = document.getElementById(`msg-${id}`);
+  if (ta) { ta.readOnly = !ta.readOnly; ta.focus(); }
+}
+</script>
+{% endblock %}

@@ -75,6 +75,29 @@ def get_sdr_config(db) -> dict:
     return dict(_SDR_DEFAULTS)
 
 
+CNAES_BENEFICIOS_CORPORATIVOS = [
+    # Saúde
+    '8610101', '8610102', '8621601', '8630501', '8630502',
+    # Educação
+    '8511200', '8512100', '8513900', '8531700', '8532500',
+    # Indústria
+    '1011201', '1012102', '2121101', '2411300', '2910701',
+    # Construção
+    '4120400', '4211101', '4321500',
+    # Comércio Varejista
+    '4711302', '4731800', '4771701',
+    # Transporte
+    '4930201', '4930202', '4921301',
+    # Tecnologia
+    '6201501', '6202300', '6204000',
+    # Serviços Empresariais
+    '7020400', '7490101', '7810800',
+    # Governo
+    '8411600', '8412400', '8421300',
+    # Alimentação
+    '5611201', '5620101', '5620102',
+]
+
 REGRAS_POR_PRODUTO = [
     {
         "produto": "VR",
@@ -163,8 +186,9 @@ def obter_cnaes_para_busca(config: dict) -> list:
     if cnaes_raw:
         return [c.strip() for c in cnaes_raw.split(",") if c.strip()]
 
-    # Prioridade 3: sem filtro — busca geral
-    return []
+    # Prioridade 3: CNAEs padrão de benefícios corporativos
+    print("[SDR] Sem ramos configurados — usando CNAEs padrão de benefícios")
+    return list(CNAES_BENEFICIOS_CORPORATIVOS)
 
 
 def _ramo_do_cnae(cnae: str) -> str:
@@ -177,6 +201,44 @@ def _ramo_do_cnae(cnae: str) -> str:
     except Exception:
         pass
     return cnae
+
+
+FAIXAS_CNPJ_POR_UF = {
+    'AC': ['01'], 'AL': ['12'], 'AM': ['04'],
+    'AP': ['03'], 'BA': ['13', '14', '15'],
+    'CE': ['23'], 'DF': ['00'],
+    'ES': ['27', '28'], 'GO': ['17', '18'],
+    'MA': ['06'], 'MG': ['17', '18', '19', '20', '21'],
+    'MS': ['15'], 'MT': ['03'],
+    'PA': ['04', '05'], 'PB': ['09'],
+    'PE': ['10', '11'], 'PI': ['07'],
+    'PR': ['75', '76', '77', '78', '79', '80', '81', '82', '83', '84', '85'],
+    'RJ': ['21', '22', '23', '24', '28', '29', '30'],
+    'RN': ['08'], 'RO': ['05'],
+    'RR': ['24'], 'RS': ['87', '88', '89', '90', '91', '92', '93', '94'],
+    'SC': ['82', '83', '84', '85', '86', '87', '88', '89'],
+    'SE': ['13'], 'SP': ['44', '45', '46', '47', '48', '49', '50',
+                         '51', '52', '53', '54', '55', '56', '57',
+                         '58', '59', '60', '61', '62', '63', '64',
+                         '65', '66', '67', '68', '69', '70', '71'],
+    'TO': ['25'],
+}
+
+_cache_cnae: dict = {}
+_CACHE_TTL = 3600  # 1 hora
+
+
+def _cache_get(cnae: str, estado: str):
+    key = (cnae, estado)
+    if key in _cache_cnae:
+        ts, resultado = _cache_cnae[key]
+        if time.time() - ts < _CACHE_TTL:
+            return resultado
+    return None
+
+
+def _cache_set(cnae: str, estado: str, resultado: list):
+    _cache_cnae[(cnae, estado)] = (time.time(), list(resultado))
 
 
 def _carregar_regras_do_banco() -> list:
@@ -348,12 +410,8 @@ def _normalizar_empresa(dados: dict) -> dict:
 
 
 def _buscar_por_geracao_cnpj(cnae_alvo: str, estado: str, limite: int) -> list:
-    """
-    Fallback: gera CNPJs candidatos e filtra pelo prefixo CNAE (2 dígitos).
-    UF não é filtrada aqui — o engine descarta não-correspondentes via scoring.
-    """
-    cnae_prefixo = cnae_alvo[:2]  # filtro amplo (setor principal)
-
+    """Fallback amplo: gera CNPJs, filtra por prefixo CNAE 2 dígitos sem filtro UF."""
+    cnae_prefixo = cnae_alvo[:2] if cnae_alvo else ""
     resultados = []
     _stop = [False]
 
@@ -369,16 +427,13 @@ def _buscar_por_geracao_cnpj(cnae_alvo: str, estado: str, limite: int) -> list:
         emp = _normalizar_brasilapi(data) if source == "brasilapi" else _normalizar_cnpjws(data)
         if "ATIVA" not in emp.get("situacao", "").upper():
             return None
-        if not emp.get("cnae_codigo", "").startswith(cnae_prefixo):
+        if cnae_prefixo and not emp.get("cnae_codigo", "").startswith(cnae_prefixo):
             return None
         return emp
 
     ranges = [(1_000_000, 15_000_000), (15_000_000, 35_000_000), (35_000_000, 65_000_000)]
     max_cands = min(limite * 80, 500)
-    candidatos = []
-    for _ in range(max_cands):
-        r_min, r_max = random.choice(ranges)
-        candidatos.append(_gerar_cnpj_valido(random.randint(r_min, r_max)))
+    candidatos = [_gerar_cnpj_valido(random.randint(*random.choice(ranges))) for _ in range(max_cands)]
 
     with ThreadPoolExecutor(max_workers=8) as executor:
         futures = [executor.submit(checar, c) for c in candidatos]
@@ -395,59 +450,65 @@ def _buscar_por_geracao_cnpj(cnae_alvo: str, estado: str, limite: int) -> list:
 
 def buscar_empresas_por_cnae(cnae: str, uf: str, limit: int = 10) -> list:
     """
-    Busca empresas por CNAE e UF.
-    Estratégia 1: minha-receita.cnpja.com.br
-    Estratégia 2: cnpj.biz
-    Estratégia 3: geração de CNPJs com filtro por prefixo CNAE (4 dígitos)
+    Busca empresas por CNAE e UF com cache de 1h.
+    Tenta faixas por estado (UF-biased) + filtro CNAE 4 dígitos;
+    se insuficiente, usa fallback amplo (2 dígitos, sem UF).
     """
     uf_upper = uf.upper().strip()
 
-    # Estratégia 1: minha-receita.cnpja.com.br
-    try:
-        url = f"https://minha-receita.cnpja.com.br/company?cnae={cnae}&uf={uf_upper}&limit={limit}"
-        r = requests.get(url, timeout=12, headers=_HEADERS)
-        if r.status_code == 200:
-            data = r.json()
-            items = data if isinstance(data, list) else data.get("data") or data.get("companies") or []
-            if isinstance(items, list) and items:
-                cnpjs = []
-                for item in items[:limit]:
-                    raw = str(item.get("cnpj") or item.get("taxId") or item.get("cnpj_cpf") or "")
-                    cnpj = raw.replace(".", "").replace("/", "").replace("-", "").strip()
-                    if cnpj:
-                        cnpjs.append({"cnpj": cnpj})
-                if cnpjs:
-                    return cnpjs
-    except Exception:
-        pass
+    # Verifica cache
+    cached = _cache_get(cnae, uf_upper)
+    if cached is not None:
+        print(f"[CACHE] {cnae}/{uf_upper}: {len(cached)} empresas")
+        return cached[:limit]
 
-    # Estratégia 2: cnpj.biz
-    try:
-        url = f"https://www.cnpj.biz/pesquisa/estabelecimentos?cnae={cnae}&uf={uf_upper}"
-        r = requests.get(url, timeout=12, headers=_HEADERS)
-        if r.status_code == 200:
-            try:
-                data = r.json()
-                items = data if isinstance(data, list) else data.get("data") or data.get("results") or []
-                if isinstance(items, list) and items:
-                    cnpjs = []
-                    for item in items[:limit]:
-                        raw = str(item.get("cnpj") or "").replace(".", "").replace("/", "").replace("-", "")
-                        if raw:
-                            cnpjs.append({"cnpj": raw})
-                    if cnpjs:
-                        return cnpjs
-            except Exception:
-                pass
-            # Fallback HTML: extrai CNPJs do texto da página
-            found = re.findall(r'\d{2}\.\d{3}\.\d{3}/\d{4}-\d{2}', r.text)
-            if found:
-                return [{"cnpj": c.replace(".", "").replace("/", "").replace("-", "")} for c in found[:limit]]
-    except Exception:
-        pass
+    encontradas = []
+    faixas = FAIXAS_CNPJ_POR_UF.get(uf_upper, ['11', '21', '31', '41', '51'])
+    cnae_prefixo4 = cnae[:4] if len(cnae) >= 4 else cnae
 
-    # Estratégia 3: geração de CNPJs com filtro por prefixo CNAE
-    return _buscar_por_geracao_cnpj(cnae, uf, limit)
+    def verificar_cnpj(cnpj_str: str):
+        try:
+            r = requests.get(
+                f"https://brasilapi.com.br/api/cnpj/v1/{cnpj_str}",
+                timeout=8, headers=_HEADERS,
+            )
+            if r.status_code != 200:
+                return None
+            emp = _normalizar_empresa(r.json())
+            if uf_upper and emp.get("uf", "").upper() != uf_upper:
+                return None
+            if "ATIVA" not in emp.get("situacao", "").upper():
+                return None
+            if cnae_prefixo4 and emp.get("cnae_codigo", "") and \
+               not emp.get("cnae_codigo", "").startswith(cnae_prefixo4):
+                return None
+            return emp
+        except Exception:
+            return None
+
+    # Gera candidatos com faixas do estado (15x o limite, máx 50)
+    max_cands = min(limit * 15, 50)
+    candidatos = [
+        _gerar_cnpj_valido(int(random.choice(faixas)) * 1_000_000 + random.randint(0, 999_999))
+        for _ in range(max_cands)
+    ]
+
+    with ThreadPoolExecutor(max_workers=5) as executor:
+        futures = {executor.submit(verificar_cnpj, c): c for c in candidatos}
+        for future in as_completed(futures):
+            if len(encontradas) >= limit:
+                break
+            resultado = future.result()
+            if resultado:
+                encontradas.append(resultado)
+
+    # Se não achou o suficiente, usa fallback amplo (2 dígitos, sem UF)
+    if len(encontradas) < limit:
+        extras = _buscar_por_geracao_cnpj(cnae, uf_upper, limit - len(encontradas))
+        encontradas.extend(extras)
+
+    _cache_set(cnae, uf_upper, encontradas)
+    return encontradas[:limit]
 
 
 # ── Scoring ───────────────────────────────────────────────────────────────────
