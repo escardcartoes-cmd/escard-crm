@@ -112,12 +112,12 @@
               <td>
                 <div class="d-flex gap-1">
                   {% if t.id != 1 %}
-                  <form method="post" action="{{ url_for('admin_tenant_entrar', tid=t.id) }}" class="d-inline">
+                  <form method="post" action="{{ url_for('admin_tenant_entrar', tenant_id=t.id) }}" class="d-inline">
                     <button type="submit" class="btn btn-xs btn-outline-primary" title="Entrar como este tenant">
                       Entrar
                     </button>
                   </form>
-                  <form method="post" action="{{ url_for('admin_tenant_toggle', tid=t.id) }}" class="d-inline">
+                  <form method="post" action="{{ url_for('admin_tenant_toggle', tenant_id=t.id) }}" class="d-inline">
                     <button type="submit" class="btn btn-xs btn-outline-{{ 'danger' if t.ativo else 'success' }}"
                             title="{{ 'Desativar' if t.ativo else 'Ativar' }}">
                       {{ 'Desativar' if t.ativo else 'Ativar' }}
