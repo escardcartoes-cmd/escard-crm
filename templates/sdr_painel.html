@@ -271,6 +271,40 @@
       </select>
     </div>
 
+    <!-- CNAEs -->
+    <div style="grid-column:1/-1">
+      <div style="font-weight:600;font-size:13px;color:#4A3F35;margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid var(--border)">
+        🏭 Setores Alvo (CNAE)
+        <span id="cnae-count-badge" style="font-size:11px;color:var(--muted);font-weight:400;margin-left:6px"></span>
+      </div>
+
+      <div id="cnae-tags" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;min-height:26px"></div>
+
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <input type="text" id="cnae-search" class="form-input"
+               style="font-size:12px;max-width:280px"
+               placeholder="Buscar setor ou código CNAE…"
+               oninput="filtrarCnaes(this.value)">
+        <button type="button" onclick="toggleCnaePainel()" class="btn btn-outline btn-sm" id="btn-toggle-cnae">
+          ▼ Ver todos os setores
+        </button>
+        <button type="button" onclick="limparCnaes()" class="btn btn-sm"
+                style="color:#DC2626;border-color:#DC2626;font-size:12px">
+          ✕ Limpar seleção
+        </button>
+      </div>
+
+      <div id="cnae-painel" style="display:none;border:1px solid var(--border);border-radius:8px;
+           max-height:380px;overflow-y:auto;background:#fff;margin-top:10px">
+        <div id="cnae-loading" style="padding:20px;text-align:center;color:var(--muted);font-size:13px">
+          Carregando setores IBGE…
+        </div>
+        <div id="cnae-grupos" style="padding:8px"></div>
+      </div>
+
+      <input type="hidden" id="cnaes" value="{{ config.cnaes or '' }}">
+    </div>
+
     <!-- Cadência -->
     <div style="grid-column:1/-1">
       <div style="font-weight:600;font-size:13px;color:#4A3F35;margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid var(--border)">📅 Cadência e Execução</div>
@@ -576,6 +610,7 @@ function coletarFiltros() {
     dias_recontato:             parseInt(document.getElementById('dias_recontato').value) || 30,
     dias_semana:                diasCks.join(','),
     modo_busca:                 document.getElementById('modo_busca').value || 'cnae',
+    cnaes:                      document.getElementById('cnaes').value || '',
   };
 }
 
@@ -721,8 +756,8 @@ document.addEventListener('DOMContentLoaded', () => {
   carregarInteligencia();
   atualizarPainel();
   intervalAoVivo = setInterval(atualizarPainel, 3000);
-  // Inicializa seletor visual do modo de busca
   selecionarModo(document.getElementById('modo_busca').value || 'cnae');
+  _parseCnaeInicial();
 });
 
 document.addEventListener('keydown', e => {
@@ -859,6 +894,149 @@ function mostrarToast(msg, cor) {
   t.style.display = 'block';
   clearTimeout(t._timer);
   t._timer = setTimeout(() => t.style.display = 'none', 3000);
+}
+
+// ── CNAE multi-select ─────────────────────────────────────────────────────────
+let _cnaeData = null;
+let _cnaeSelected = new Set();
+let _cnaePainelAberto = false;
+
+function _parseCnaeInicial() {
+  const val = document.getElementById('cnaes').value || '';
+  val.split(',').map(s => s.trim()).filter(Boolean).forEach(c => _cnaeSelected.add(c));
+  _renderTags();
+}
+
+function toggleCnaePainel() {
+  _cnaePainelAberto = !_cnaePainelAberto;
+  document.getElementById('cnae-painel').style.display = _cnaePainelAberto ? 'block' : 'none';
+  document.getElementById('btn-toggle-cnae').textContent =
+    _cnaePainelAberto ? '▲ Fechar setores' : '▼ Ver todos os setores';
+  if (_cnaePainelAberto && !_cnaeData) _carregarCnaes();
+}
+
+async function _carregarCnaes() {
+  try {
+    const r = await fetch('/api/cnaes');
+    _cnaeData = await r.json();
+    document.getElementById('cnae-loading').style.display = 'none';
+    _renderGrupos(document.getElementById('cnae-search').value || '');
+  } catch(e) {
+    document.getElementById('cnae-loading').textContent = 'Erro ao carregar setores.';
+  }
+}
+
+function _renderGrupos(filtro) {
+  if (!_cnaeData) return;
+  const container = document.getElementById('cnae-grupos');
+  container.innerHTML = '';
+  const q = filtro.toLowerCase().trim();
+  let total = 0;
+
+  for (const [divCod, div] of Object.entries(_cnaeData)) {
+    const itens = div.itens.filter(i =>
+      !q || i.id.includes(q) || i.descricao.toLowerCase().includes(q)
+    );
+    if (!itens.length) continue;
+    total += itens.length;
+
+    const grupo = document.createElement('div');
+    grupo.style.cssText = 'margin-bottom:4px';
+
+    const titulo = document.createElement('div');
+    titulo.style.cssText = 'font-weight:600;font-size:11px;color:#4A3F35;padding:6px 8px;background:#F9F6F3;border-radius:4px;cursor:pointer;display:flex;justify-content:space-between;user-select:none';
+    titulo.innerHTML = `<span>${divCod} — ${div.nome}</span><span style="color:var(--muted)">${itens.length}</span>`;
+
+    const lista = document.createElement('div');
+    lista.style.cssText = 'display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:1px;padding:4px 8px;' + (q ? '' : 'display:none');
+
+    titulo.onclick = () => {
+      lista.style.display = lista.style.display === 'none' ? 'grid' : 'none';
+    };
+
+    itens.forEach(item => {
+      const label = document.createElement('label');
+      label.style.cssText = 'display:flex;align-items:center;gap:5px;font-size:11px;cursor:pointer;padding:3px 4px;border-radius:3px';
+      label.onmouseover = () => { label.style.background = '#F5F0EB'; };
+      label.onmouseout  = () => { label.style.background = ''; };
+
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.value = item.id;
+      cb.checked = _cnaeSelected.has(item.id);
+      cb.onchange = () => {
+        if (cb.checked) _cnaeSelected.add(item.id);
+        else _cnaeSelected.delete(item.id);
+        _renderTags();
+        _atualizarInputCnaes();
+        marcarAlterado();
+      };
+
+      label.appendChild(cb);
+      label.appendChild(document.createTextNode(' ' + item.id + ' — ' + item.descricao));
+      lista.appendChild(label);
+    });
+
+    grupo.appendChild(titulo);
+    grupo.appendChild(lista);
+    container.appendChild(grupo);
+  }
+
+  if (total === 0) {
+    container.innerHTML = '<div style="padding:12px;color:var(--muted);font-size:12px;text-align:center">Nenhum setor encontrado para "' + filtro + '"</div>';
+  }
+}
+
+function filtrarCnaes(q) {
+  if (!_cnaePainelAberto && q.length >= 2) {
+    _cnaePainelAberto = true;
+    document.getElementById('cnae-painel').style.display = 'block';
+    document.getElementById('btn-toggle-cnae').textContent = '▲ Fechar setores';
+    if (!_cnaeData) { _carregarCnaes(); return; }
+  }
+  if (_cnaeData) _renderGrupos(q);
+}
+
+function _renderTags() {
+  const container = document.getElementById('cnae-tags');
+  const badge = document.getElementById('cnae-count-badge');
+  container.innerHTML = '';
+  if (_cnaeSelected.size === 0) {
+    container.innerHTML = '<span style="font-size:11px;color:var(--muted);font-style:italic">Todos os setores (sem filtro por CNAE)</span>';
+    badge.textContent = '';
+    return;
+  }
+  badge.textContent = `(${_cnaeSelected.size} selecionado${_cnaeSelected.size > 1 ? 's' : ''})`;
+  [..._cnaeSelected].sort().forEach(cod => {
+    const tag = document.createElement('span');
+    tag.style.cssText = 'display:inline-flex;align-items:center;gap:4px;background:#FDF5EE;border:1px solid #C5A089;color:#4A3F35;font-size:11px;padding:3px 8px;border-radius:12px;font-weight:500';
+    tag.appendChild(document.createTextNode(cod));
+    const x = document.createElement('span');
+    x.textContent = '×';
+    x.style.cssText = 'cursor:pointer;font-size:14px;line-height:1;color:#9A7B6A;margin-left:2px';
+    x.onclick = () => {
+      _cnaeSelected.delete(cod);
+      const cb = document.querySelector(`#cnae-grupos input[value="${cod}"]`);
+      if (cb) cb.checked = false;
+      _renderTags();
+      _atualizarInputCnaes();
+      marcarAlterado();
+    };
+    tag.appendChild(x);
+    container.appendChild(tag);
+  });
+}
+
+function _atualizarInputCnaes() {
+  document.getElementById('cnaes').value = [..._cnaeSelected].sort().join(',');
+}
+
+function limparCnaes() {
+  _cnaeSelected.clear();
+  document.querySelectorAll('#cnae-grupos input[type="checkbox"]').forEach(cb => cb.checked = false);
+  _renderTags();
+  _atualizarInputCnaes();
+  marcarAlterado();
 }
 </script>
 {% endblock %}
