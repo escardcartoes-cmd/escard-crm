@@ -12,7 +12,7 @@ load_dotenv(override=True)
 from apscheduler.schedulers.background import BackgroundScheduler
 
 from datetime import date
-from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, Response
+from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, Response, session
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
 import database
 import models.empresa as emp_model
