@@ -271,6 +271,13 @@ scheduler.add_job(
     id="processar_cadencias",
     replace_existing=True,
 )
+scheduler.add_job(
+    func=lambda: radar_model.rodar_radar_todos_tenants(),
+    trigger="cron",
+    hour=7, minute=0,
+    id="radar_diario",
+    replace_existing=True,
+)
 scheduler.start()
 atexit.register(lambda: scheduler.shutdown(wait=False))
 
@@ -1721,144 +1728,150 @@ def portal_revogar(empresa_id):
     return jsonify({"ok": True})
 
 
-# ── Radar de Mercado ─────────────────────────────────────────────────────────
+# ── Radar de Mercado Inteligente ─────────────────────────────────────────────
 
 @app.route("/radar")
 @login_required
-def radar_index():
-    dados = radar_model.listar()
-    badge = radar_model.contar_nao_lidos()
-    return render_template(
-        "radar/index.html",
-        editais=dados["editais"],
-        concorrentes=dados["concorrentes"],
-        badge=badge,
-    )
-
-
-@app.route("/radar/buscar", methods=["POST"])
-@login_required
-@require_perfil('vendedor')
-def radar_buscar():
+def radar():
     try:
-        resultado = radar_model.buscar_feeds()
-        return jsonify(resultado)
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        tenant = tenant_model.get_tenant_atual()
+        if not tenant:
+            tenant = {"id": 1, "nome_empresa": "Krylo", "nome_plataforma": "Krylo"}
+        tenant_id = tenant.get("id", 1)
+        db = database.get_new_db_connection()
 
+        alertas_raw = db.execute("""
+            SELECT * FROM radar_alertas
+            WHERE tenant_id = %s AND arquivado = 0
+            ORDER BY relevancia DESC, criado_em DESC
+            LIMIT 50
+        """, (tenant_id,)).fetchall()
 
-@app.route("/radar/<int:id>/lido", methods=["POST"])
-@login_required
-def radar_marcar_lido(id):
-    radar_model.marcar_lido(id)
-    return jsonify({"ok": True})
+        alertas_raw = [dict(a) for a in alertas_raw]
+        alertas_ops      = [a for a in alertas_raw if a.get('tipo') in ('edital', 'noticia', 'insight', 'melhoria')]
+        alertas_conteudo = [a for a in alertas_raw if a.get('tipo') == 'conteudo']
 
+        insights = db.execute("""
+            SELECT * FROM radar_insights
+            WHERE tenant_id = %s
+            ORDER BY criado_em DESC
+            LIMIT 5
+        """, (tenant_id,)).fetchall()
+        insights = [dict(i) for i in insights]
 
-@app.route("/radar/<int:id>", methods=["DELETE"])
-@login_required
-@require_perfil('vendedor')
-def radar_excluir(id):
-    radar_model.excluir(id)
-    return jsonify({"ok": True})
-
-
-@app.route("/radar/analisar-oportunidades", methods=["POST"])
-@login_required
-@require_perfil("vendedor")
-def radar_analisar_oportunidades():
-    try:
-        import anthropic as _ant, models.ia_config as ia_mod
-        conn = database.get_connection()
-        itens = [dict(r) for r in conn.execute(
-            "SELECT id, tipo, titulo, fonte FROM radar_mercado WHERE lido=0"
-        ).fetchall()]
-        if not itens:
-            conn.close()
-            return jsonify({
-                "analise": "Nenhuma notícia não lida no radar. Clique em **Buscar agora** primeiro.",
-                "oportunidades": 0,
-            })
-        emp_row = conn.execute(
-            "SELECT nome FROM empresa_config WHERE id=1"
+        config = db.execute(
+            "SELECT * FROM radar_config WHERE tenant_id = %s", (tenant_id,)
         ).fetchone()
-        empresa_nome = emp_row["nome"] if emp_row else "Krylo"
-        system = ia_mod.get_system_prompt(conn)
-        conn.close()
+        config = dict(config) if config else {}
 
-        lista = "\n".join(f"- [{it['tipo']}] {it['titulo']}" for it in itens)
-        prompt = (
-            f"Analise estas {len(itens)} notícias e alertas de mercado encontrados hoje:\n\n"
-            f"{lista}\n\n"
-            f"Com base no que você sabe sobre a empresa ({empresa_nome}) e seus produtos/serviços, identifique:\n\n"
-            "1. OPORTUNIDADES IMEDIATAS (máximo 3): situações onde a empresa pode agir HOJE para gerar negócio\n"
-            "2. AMEAÇAS A MONITORAR (máximo 2): movimentos de mercado que precisam de atenção\n"
-            "3. AÇÃO RECOMENDADA: uma ação específica e concreta para executar nas próximas 24h\n\n"
-            "Seja direto e específico. Cite os nomes das empresas/situações das notícias.\n"
-            "Formato: use markdown com ## para seções."
-        )
+        nao_lidos = db.execute("""
+            SELECT COUNT(*) AS n FROM radar_alertas
+            WHERE tenant_id = %s AND lido = 0 AND arquivado = 0
+        """, (tenant_id,)).fetchone()["n"]
 
-        client = _ant.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
-        resp = client.messages.create(
-            model="claude-haiku-4-5-20251001",
-            max_tokens=1000,
-            system=system,
-            messages=[{"role": "user", "content": prompt}],
-        )
-        analise = resp.content[0].text.strip()
+        db.close()
 
-        conn2 = database.get_connection()
-        conn2.execute(
-            "INSERT INTO radar_analises (analise, num_itens_analisados) VALUES (?, ?)",
-            (analise, len(itens)),
-        )
-        conn2.commit()
-        conn2.close()
-
-        return jsonify({"analise": analise, "oportunidades": len(itens)})
+        return render_template("radar.html",
+            alertas_ops=alertas_ops,
+            alertas_conteudo=alertas_conteudo,
+            insights=insights,
+            config=config,
+            nao_lidos=nao_lidos,
+            tenant=tenant)
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        import traceback; traceback.print_exc()
+        return render_template("radar.html",
+            alertas_ops=[], alertas_conteudo=[],
+            insights=[], config={}, nao_lidos=0,
+            tenant={}, erro=str(e))
 
 
-@app.route("/radar/<int:id>/mensagem", methods=["POST"])
+@app.route("/radar/rodar", methods=["POST"])
 @login_required
-@require_perfil('vendedor')
-def radar_mensagem(id):
-    import re as _re
+def radar_rodar():
     try:
-        conn = database.get_connection()
-        item = conn.execute("SELECT * FROM radar_mercado WHERE id=?", (id,)).fetchone()
-        conn.close()
-        if not item:
-            return jsonify({"error": "Item não encontrado"}), 404
-        titulo = item["titulo"] or ""
-        prompt = f"""Você é um consultor comercial da Krylo Cartão de Benefícios B2B.
-Um concorrente está com problemas. Use isso para gerar uma mensagem de WhatsApp de abordagem.
-Retorne SOMENTE um JSON válido: {{"mensagem": "<texto completo>"}}
-
-Notícia: {titulo}
-
-Regras: mensagem curta (máx 4 linhas), mencione o problema do concorrente de forma delicada,
-destaque a estabilidade e confiabilidade da Krylo, termine com CTA para uma conversa rápida.
-Tom amigável e consultivo, não agressivo."""
-
-        import anthropic as _ant, models.ia_config as ia_mod
-        _conn_rad = database.get_connection()
-        _sys_rad  = ia_mod.get_system_prompt(_conn_rad)
-        _conn_rad.close()
-        client = _ant.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
-        resp = client.messages.create(
-            model="claude-haiku-4-5-20251001",
-            max_tokens=400,
-            system=_sys_rad,
-            messages=[{"role": "user", "content": prompt}],
-        )
-        raw = resp.content[0].text.strip()
-        raw = _re.sub(r"^```(?:json)?\s*", "", raw, flags=_re.MULTILINE)
-        raw = _re.sub(r"```\s*$", "", raw, flags=_re.MULTILINE)
-        result = json.loads(raw.strip())
-        return jsonify({"ok": True, "mensagem": result.get("mensagem", "")})
+        tenant = tenant_model.get_tenant_atual()
+        if not tenant:
+            tenant = {"id": 1}
+        total = radar_model.rodar_radar_completo(tenant.get("id", 1))
+        return jsonify({"ok": True, "total": total})
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"ok": False, "erro": str(e)})
+
+
+@app.route("/radar/marcar-lido/<int:alerta_id>", methods=["POST"])
+@login_required
+def radar_marcar_lido(alerta_id):
+    try:
+        db = database.get_new_db_connection()
+        db.execute("UPDATE radar_alertas SET lido=1 WHERE id=%s", (alerta_id,))
+        db.commit()
+        db.close()
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"ok": False, "erro": str(e)})
+
+
+@app.route("/radar/arquivar/<int:alerta_id>", methods=["POST"])
+@login_required
+def radar_arquivar(alerta_id):
+    try:
+        db = database.get_new_db_connection()
+        db.execute("UPDATE radar_alertas SET arquivado=1 WHERE id=%s", (alerta_id,))
+        db.commit()
+        db.close()
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"ok": False, "erro": str(e)})
+
+
+@app.route("/radar/config/salvar", methods=["POST"])
+@login_required
+def radar_config_salvar():
+    try:
+        tenant = tenant_model.get_tenant_atual()
+        tenant_id = tenant.get("id", 1) if tenant else 1
+        f = request.form
+        db = database.get_new_db_connection()
+        now_str = __import__("datetime").datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        existing = db.execute(
+            "SELECT id FROM radar_config WHERE tenant_id = %s", (tenant_id,)
+        ).fetchone()
+        if existing:
+            db.execute("""
+                UPDATE radar_config
+                SET palavras_chave=%s, estados=%s,
+                    monitorar_editais=%s, monitorar_noticias=%s,
+                    gerar_conteudo=%s, atualizado_em=%s
+                WHERE tenant_id=%s
+            """, (
+                f.get("palavras_chave", ""),
+                f.get("estados", "ES"),
+                1 if f.get("monitorar_editais") else 0,
+                1 if f.get("monitorar_noticias") else 0,
+                1 if f.get("gerar_conteudo") else 0,
+                now_str, tenant_id
+            ))
+        else:
+            db.execute("""
+                INSERT INTO radar_config
+                (tenant_id, palavras_chave, estados, monitorar_editais,
+                 monitorar_noticias, gerar_conteudo, ativo)
+                VALUES (%s,%s,%s,%s,%s,%s,1)
+            """, (
+                tenant_id,
+                f.get("palavras_chave", ""),
+                f.get("estados", "ES"),
+                1 if f.get("monitorar_editais") else 0,
+                1 if f.get("monitorar_noticias") else 0,
+                1 if f.get("gerar_conteudo") else 0,
+            ))
+        db.commit()
+        db.close()
+        flash("Configurações salvas!", "success")
+    except Exception as e:
+        flash(f"Erro: {e}", "danger")
+    return redirect(url_for("radar"))
 
 
 # ── Motor de Expansão ────────────────────────────────────────────────────────

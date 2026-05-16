@@ -999,6 +999,49 @@ def run_migrations(conn) -> None:
             valor       TEXT,
             atualizado_em TIMESTAMP DEFAULT (datetime('now', 'localtime'))
         )""",
+        """CREATE TABLE IF NOT EXISTS radar_alertas (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            tenant_id       INTEGER REFERENCES tenants(id),
+            tipo            TEXT,
+            titulo          TEXT,
+            descricao       TEXT,
+            fonte           TEXT,
+            url_original    TEXT,
+            valor_estimado  REAL,
+            estado          TEXT,
+            orgao           TEXT,
+            palavras_chave  TEXT,
+            relevancia      INTEGER DEFAULT 50,
+            lido            INTEGER DEFAULT 0,
+            arquivado       INTEGER DEFAULT 0,
+            conteudo_gerado TEXT,
+            tipo_conteudo   TEXT,
+            criado_em       TEXT DEFAULT (datetime('now', 'localtime'))
+        )""",
+        """CREATE TABLE IF NOT EXISTS radar_config (
+            id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+            tenant_id           INTEGER UNIQUE REFERENCES tenants(id),
+            palavras_chave      TEXT,
+            estados             TEXT DEFAULT 'ES',
+            monitorar_editais   INTEGER DEFAULT 1,
+            monitorar_noticias  INTEGER DEFAULT 1,
+            gerar_conteudo      INTEGER DEFAULT 1,
+            gerar_insights      INTEGER DEFAULT 1,
+            ativo               INTEGER DEFAULT 1,
+            ultima_busca        TEXT,
+            atualizado_em       TEXT DEFAULT (datetime('now', 'localtime'))
+        )""",
+        """CREATE TABLE IF NOT EXISTS radar_insights (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            tenant_id   INTEGER REFERENCES tenants(id),
+            tipo        TEXT,
+            titulo      TEXT,
+            conteudo    TEXT,
+            fonte_dados TEXT,
+            aplicado    INTEGER DEFAULT 0,
+            criado_em   TEXT DEFAULT (datetime('now', 'localtime'))
+        )""",
+        "CREATE INDEX IF NOT EXISTS idx_radar_tenant_lido ON radar_alertas(tenant_id, lido, criado_em)",
     ]
 
     for sql in _ALTER + _CREATE:
