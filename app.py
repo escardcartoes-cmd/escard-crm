@@ -128,6 +128,7 @@ def check_tenant_setup():
     _bypass = {
         "login", "logout", "static", "setup_wizard", "setup_salvar",
         "ajuda_index", "ajuda_kia",
+        "login_2fa", "login_2fa_reenviar", "recuperar_senha", "nova_senha",
     }
     endpoint = request.endpoint or ""
     if endpoint in _bypass or endpoint.startswith("setup") or endpoint.startswith("admin_"):
@@ -302,14 +303,35 @@ def login():
 
     if request.method == "POST":
         try:
-            usuario = request.form.get("usuario", "").strip()
-            senha   = request.form.get("senha", "")
-            u = user_model.autenticar(usuario, senha)
+            usuario_str = request.form.get("usuario", "").strip()
+            senha       = request.form.get("senha", "")
+
+            u_raw = user_model.buscar_dict_por_usuario(usuario_str)
+
+            if u_raw and user_model.verificar_bloqueio(u_raw):
+                flash("Conta bloqueada temporariamente após tentativas excessivas. Aguarde 15 minutos.", "danger")
+                return render_template("login.html", tenant_login=tenant_login)
+
+            u = user_model.autenticar(usuario_str, senha)
             if u:
+                user_model.resetar_tentativas(u.id)
+                if u_raw and u_raw.get('dois_fatores_ativo'):
+                    user_model.enviar_codigo_2fa(u_raw)
+                    session['pre_auth_user_id'] = u.id
+                    session['pre_auth_canal']   = u_raw.get('dois_fatores_canal', 'email')
+                    return redirect(url_for('login_2fa'))
                 login_user(u, remember=True)
                 session["tenant_id"] = getattr(u, "tenant_id", 1) or 1
                 return redirect(request.args.get("next") or url_for("dashboard"))
-            flash("Usuário ou senha incorretos.", "danger")
+
+            if u_raw and u_raw.get('ativo'):
+                tentativas = user_model.registrar_tentativa_falha(u_raw['id'])
+                if tentativas >= 5:
+                    flash("Conta bloqueada por 15 minutos após 5 tentativas incorretas.", "danger")
+                else:
+                    flash(f"Usuário ou senha incorretos. ({tentativas}/5 tentativas)", "danger")
+            else:
+                flash("Usuário ou senha incorretos.", "danger")
         except Exception as _e:
             print(f"[LOGIN] Erro: {_e}")
             flash("Erro ao processar login. Tente novamente.", "danger")
@@ -323,6 +345,83 @@ def logout():
     logout_user()
     flash("Sessão encerrada.", "success")
     return redirect(url_for("login"))
+
+
+# ── 2FA & Recuperação de Senha ────────────────────────────────────────────────
+
+@app.route("/login/2fa", methods=["GET", "POST"])
+def login_2fa():
+    try:
+        user_id = session.get("pre_auth_user_id")
+        if not user_id:
+            return redirect(url_for("login"))
+        canal = session.get("pre_auth_canal", "email")
+        if request.method == "POST":
+            codigo = request.form.get("codigo", "").strip()
+            if user_model.verificar_codigo_2fa(user_id, codigo):
+                user_model.resetar_tentativas(user_id)
+                u_obj = user_model.buscar_por_id(user_id)
+                session.pop("pre_auth_user_id", None)
+                session.pop("pre_auth_canal", None)
+                login_user(u_obj, remember=True)
+                session["tenant_id"] = getattr(u_obj, "tenant_id", 1) or 1
+                return redirect(url_for("dashboard"))
+            return render_template("login_2fa.html", erro="Código inválido ou expirado.", canal=canal)
+        return render_template("login_2fa.html", canal=canal)
+    except Exception as e:
+        print(f"[2FA] Erro: {e}")
+        return redirect(url_for("login"))
+
+
+@app.route("/login/2fa/reenviar", methods=["POST"])
+def login_2fa_reenviar():
+    user_id = session.get("pre_auth_user_id")
+    if not user_id:
+        return redirect(url_for("login"))
+    try:
+        u_raw = user_model.buscar_dict_por_id(user_id)
+        if u_raw:
+            user_model.enviar_codigo_2fa(u_raw)
+    except Exception as e:
+        print(f"[2FA reenviar] Erro: {e}")
+    flash("Código reenviado.", "success")
+    return redirect(url_for("login_2fa"))
+
+
+@app.route("/recuperar-senha", methods=["GET", "POST"])
+def recuperar_senha():
+    try:
+        if request.method == "POST":
+            contato = request.form.get("contato", "").strip()
+            user_model.iniciar_recuperacao_senha(contato)
+            return render_template("recuperar_senha.html",
+                                   sucesso="Se encontrarmos sua conta, enviaremos o código por email.")
+        return render_template("recuperar_senha.html")
+    except Exception as e:
+        print(f"[RECUPERAR] Erro: {e}")
+        return render_template("recuperar_senha.html", erro="Erro. Tente novamente.")
+
+
+@app.route("/nova-senha", methods=["GET", "POST"])
+def nova_senha():
+    try:
+        if request.method == "POST":
+            email    = request.form.get("email", "").strip()
+            codigo   = request.form.get("codigo", "").strip()
+            nova     = request.form.get("nova_senha", "").strip()
+            confirma = request.form.get("confirmar_senha", "").strip()
+            if nova != confirma:
+                return render_template("nova_senha.html", erro="As senhas não coincidem")
+            if len(nova) < 8:
+                return render_template("nova_senha.html", erro="Mínimo 8 caracteres")
+            ok, msg = user_model.verificar_recuperacao_e_trocar_senha(email, codigo, nova)
+            if ok:
+                return render_template("nova_senha.html", sucesso="Senha atualizada! Faça login.")
+            return render_template("nova_senha.html", erro=msg)
+        return render_template("nova_senha.html")
+    except Exception as e:
+        print(f"[NOVA SENHA] Erro: {e}")
+        return render_template("nova_senha.html", erro="Erro. Tente novamente.")
 
 
 # ── Tenant helper ─────────────────────────────────────────────────────────────

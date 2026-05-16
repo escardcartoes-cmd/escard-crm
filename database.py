@@ -658,6 +658,16 @@ def run_migrations(conn) -> None:
         f"ALTER TABLE relatorios_cobranca ADD COLUMN{_ifne} tenant_id INTEGER DEFAULT 1",
         f"ALTER TABLE portal_acessos ADD COLUMN{_ifne} tenant_id INTEGER DEFAULT 1",
         f"ALTER TABLE prospeccao ADD COLUMN{_ifne} tenant_id INTEGER DEFAULT 1",
+        # 2FA & security
+        f"ALTER TABLE usuarios ADD COLUMN{_ifne} telefone VARCHAR(20)",
+        f"ALTER TABLE usuarios ADD COLUMN{_ifne} dois_fatores_ativo BOOLEAN DEFAULT FALSE",
+        f"ALTER TABLE usuarios ADD COLUMN{_ifne} dois_fatores_canal VARCHAR(20) DEFAULT 'email'",
+        f"ALTER TABLE usuarios ADD COLUMN{_ifne} codigo_2fa VARCHAR(10)",
+        f"ALTER TABLE usuarios ADD COLUMN{_ifne} codigo_2fa_expira TIMESTAMP",
+        f"ALTER TABLE usuarios ADD COLUMN{_ifne} codigo_recuperacao VARCHAR(10)",
+        f"ALTER TABLE usuarios ADD COLUMN{_ifne} recuperacao_expira TIMESTAMP",
+        f"ALTER TABLE usuarios ADD COLUMN{_ifne} tentativas_login INTEGER DEFAULT 0",
+        f"ALTER TABLE usuarios ADD COLUMN{_ifne} bloqueado_ate TIMESTAMP",
     ]
 
     _CREATE = [
