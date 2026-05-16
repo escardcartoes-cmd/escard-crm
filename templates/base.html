@@ -1179,6 +1179,12 @@ tbody tr:hover { background: var(--color-primary-subtle); }
           Minha Empresa
         </a>
 
+        <a href="{{ url_for('metas_configurar') }}"
+           class="nav-item {% if request.endpoint == 'metas_configurar' %}active{% endif %}">
+          <span class="nav-item-icon">🎯</span>
+          Metas
+        </a>
+
         <a href="{{ url_for('cqa_dashboard') }}"
            class="nav-item {% if request.endpoint and request.endpoint.startswith('cqa_') %}active{% endif %}">
           <span class="nav-item-icon">🛡️</span>

@@ -432,6 +432,18 @@ _SQLITE_DDL = """
         resposta   TEXT,
         criado_em  TEXT DEFAULT (datetime('now', 'localtime'))
     );
+
+    CREATE TABLE IF NOT EXISTS metas (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        tenant_id   INTEGER REFERENCES tenants(id),
+        nome        TEXT    DEFAULT 'Meta Principal',
+        valor_meta  REAL    DEFAULT 100000,
+        data_inicio TEXT    DEFAULT (date('now', 'localtime')),
+        data_fim    TEXT,
+        tipo        TEXT    DEFAULT 'receita',
+        ativo       INTEGER DEFAULT 1,
+        criado_em   TEXT    DEFAULT (datetime('now', 'localtime'))
+    );
 """
 
 
@@ -982,6 +994,17 @@ def run_migrations(conn) -> None:
             pergunta   TEXT,
             resposta   TEXT,
             criado_em  TEXT DEFAULT (datetime('now', 'localtime'))
+        )""",
+        """CREATE TABLE IF NOT EXISTS metas (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            tenant_id   INTEGER REFERENCES tenants(id),
+            nome        TEXT    DEFAULT 'Meta Principal',
+            valor_meta  REAL    DEFAULT 100000,
+            data_inicio TEXT    DEFAULT (date('now', 'localtime')),
+            data_fim    TEXT,
+            tipo        TEXT    DEFAULT 'receita',
+            ativo       INTEGER DEFAULT 1,
+            criado_em   TEXT    DEFAULT (datetime('now', 'localtime'))
         )""",
         # Indexes for multi-tenant performance
         "CREATE INDEX IF NOT EXISTS idx_empresas_tenant ON empresas(tenant_id)",
