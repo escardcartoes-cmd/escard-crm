@@ -967,7 +967,8 @@ def atividades_lista():
     cadencias_hoje = cad_model.listar_hoje(tenant_id=tid)
     conn = database.get_connection()
     radar_items = [dict(r) for r in conn.execute(
-        "SELECT * FROM radar_mercado WHERE lido=0 ORDER BY criado_em DESC LIMIT 20"
+        "SELECT *, descricao AS resumo, url_original AS link FROM radar_alertas WHERE lido=0 AND arquivado=0 AND tenant_id=? ORDER BY criado_em DESC LIMIT 20",
+        (tid,)
     ).fetchall()]
     conn.close()
     return render_template("atividades/lista.html",
@@ -1294,8 +1295,8 @@ def prospeccao_lista():
     elif tab == "frios":
         score_max = 39
 
-    leads  = prosp_model.listar(score_min=score_min, score_max=score_max, status=status or None)
-    counts = prosp_model.contar_por_status()
+    leads  = prosp_model.listar(score_min=score_min, score_max=score_max, status=status or None, tenant_id=_tid())
+    counts = prosp_model.contar_por_status(tenant_id=_tid())
     total  = sum(counts.values())
     quentes_count = sum(1 for l in leads if l["score"] is not None and l["score"] >= 70)
     return render_template(
@@ -1348,7 +1349,7 @@ def prospeccao_exportar():
         flash("Selecione pelo menos um lead para exportar.", "danger")
         return redirect(url_for("prospeccao_lista"))
 
-    leads = prosp_model.listar_ids_para_exportacao(ids)
+    leads = prosp_model.listar_ids_para_exportacao(ids, tenant_id=_tid())
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow([
