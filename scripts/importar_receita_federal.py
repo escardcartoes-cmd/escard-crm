@@ -13,6 +13,7 @@ import csv
 import os
 import sys
 import time
+import random
 import argparse
 
 # Garante que a raiz do projeto está no path
@@ -231,6 +232,127 @@ def _inserir_batch(db, batch):
             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
         """, batch)
     db.commit()
+
+
+def importar_via_brasilapi(uf_filtro='ES', cnaes_lista=None, limite=500):
+    """
+    Importa empresas usando BrasilAPI como fonte com 8 workers paralelos.
+    Fallback garantido: funciona mesmo sem acesso ao servidor da RF.
+    """
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    from database import get_new_db_connection, _USE_PG
+    from models.prospeccao_autonoma import (
+        CNAES_BENEFICIOS_CORPORATIVOS,
+        _gerar_cnpj_valido,
+        FAIXAS_CNPJ_POR_UF,
+    )
+
+    cnaes_alvo = set(cnaes_lista or CNAES_BENEFICIOS_CORPORATIVOS)
+    cnaes_prefixos = set(c[:4] for c in cnaes_alvo)
+
+    # Usa faixas do estado + amplas para aumentar volume
+    faixas_uf = FAIXAS_CNPJ_POR_UF.get(uf_filtro, ['11', '21', '31', '41', '51'])
+    # Adiciona faixas genéricas para ampliar a rede
+    faixas_amplas = faixas_uf * 4 + ['10', '11', '21', '22', '31', '33', '41', '51', '60', '70']
+
+    # Gera pool grande de candidatos (taxa de acerto ~0.5-1%)
+    num_candidatos = max(limite * 250, 3000)
+    candidatos = [
+        _gerar_cnpj_valido(int(random.choice(faixas_amplas)) * 1_000_000 + random.randint(0, 999_999))
+        for _ in range(num_candidatos)
+    ]
+
+    print(f'Importando via BrasilAPI: {uf_filtro}, limite {limite}, {num_candidatos} candidatos, 8 workers')
+
+    _sql_pg = """
+        INSERT INTO rf_empresas
+        (cnpj, razao_social, nome_fantasia, cnae_principal,
+         cnae_descricao, uf, municipio, telefone, email,
+         situacao, capital_social, tipo)
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+        ON CONFLICT (cnpj) DO NOTHING
+    """
+    _sql_sq = """
+        INSERT OR IGNORE INTO rf_empresas
+        (cnpj, razao_social, nome_fantasia, cnae_principal,
+         cnae_descricao, uf, municipio, telefone, email,
+         situacao, capital_social, tipo)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+    """
+    _sql = _sql_pg if _USE_PG else _sql_sq
+
+    _stop = [False]
+
+    def checar(cnpj):
+        if _stop[0]:
+            return None
+        try:
+            r = requests.get(
+                f'https://brasilapi.com.br/api/cnpj/v1/{cnpj}',
+                timeout=8,
+            )
+            if r.status_code == 429:
+                time.sleep(2)
+                return None
+            if r.status_code != 200:
+                return None
+            d = r.json()
+            if (d.get('uf', '') != uf_filtro):
+                return None
+            sit = (d.get('descricao_situacao_cadastral', '') or '').upper()
+            if 'ATIVA' not in sit:
+                return None
+            cnae_cod = str(d.get('cnae_fiscal', ''))
+            if not any(cnae_cod.startswith(p) for p in cnaes_prefixos):
+                return None
+            return d
+        except Exception:
+            return None
+
+    db = get_new_db_connection()
+    total = 0
+
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        futures = [executor.submit(checar, c) for c in candidatos]
+        for future in as_completed(futures):
+            if total >= limite:
+                _stop[0] = True
+                break
+            dados = future.result()
+            if not dados:
+                continue
+            try:
+                cnpj = (dados.get('cnpj') or '').replace('.', '').replace('/', '').replace('-', '')
+                tel_raw = (dados.get('ddd_telefone_1', '') or '')
+                telefone = ''.join(filter(str.isdigit, tel_raw)) or None
+                email_raw = (dados.get('email', '') or '').strip().lower() or None
+                db.execute(_sql, (
+                    cnpj,
+                    dados.get('razao_social', ''),
+                    dados.get('nome_fantasia', ''),
+                    str(dados.get('cnae_fiscal', '')),
+                    dados.get('cnae_fiscal_descricao', ''),
+                    dados.get('uf', ''),
+                    dados.get('municipio', ''),
+                    telefone,
+                    email_raw,
+                    'ATIVA',
+                    float(dados.get('capital_social', 0) or 0),
+                    'MATRIZ' if dados.get('identificador_matriz_filial') == 1 else 'FILIAL',
+                ))
+                db.commit()
+                total += 1
+                if total % 50 == 0:
+                    print(f'  {total}/{limite} empresas importadas...')
+            except Exception:
+                try:
+                    db.rollback()
+                except Exception:
+                    pass
+
+    db.close()
+    print(f'Concluído BrasilAPI: {total} empresas importadas')
+    return total
 
 
 if __name__ == '__main__':

@@ -3785,8 +3785,12 @@ def setup_salvar():
             "whatsapp":        request.form.get("whatsapp", "").strip(),
             "email_contato":   request.form.get("email_contato", "").strip(),
             "site":            request.form.get("site", "").strip(),
-            "cor_primaria":    request.form.get("cor_primaria", "#C5A089"),
-            "logo_url":        request.form.get("logo_url", "").strip() or None,
+            "cor_primaria":     request.form.get("cor_primaria", "#C5A089"),
+            "cor_secundaria":   request.form.get("cor_secundaria", "#8B6914"),
+            "logo_url":         request.form.get("logo_url", "").strip() or None,
+            "historico":        request.form.get("historico", "").strip(),
+            "concorrentes":     request.form.get("concorrentes", "").strip(),
+            "personalidade_ia": request.form.get("personalidade_ia", "").strip(),
         }
         tenant_model.salvar_setup(t["id"], dados)
         # Limpa cache de tenant no g para recarregar
