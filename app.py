@@ -318,22 +318,30 @@ def logout():
     return redirect(url_for("login"))
 
 
+# ── Tenant helper ─────────────────────────────────────────────────────────────
+
+def _tid() -> int:
+    """Retorna o tenant_id da sessão atual (fallback: 1)."""
+    return int(session.get("tenant_id") or 1)
+
+
 # ── Dashboard ─────────────────────────────────────────────────────────────────
 
 @app.route("/")
 @login_required
 def dashboard():
-    status_counts  = emp_model.contar_por_status()
-    estagio_counts = op_model.contar_por_estagio()
-    pipeline_val   = op_model.valor_total_pipeline()
-    atividades     = atv_model.listar(limit=8)
+    tid = _tid()
+    status_counts  = emp_model.contar_por_status(tenant_id=tid)
+    estagio_counts = op_model.contar_por_estagio(tenant_id=tid)
+    pipeline_val   = op_model.valor_total_pipeline(tenant_id=tid)
+    atividades     = atv_model.listar(limit=8, tenant_id=tid)
     total_empresas = sum(status_counts.values())
     clientes       = status_counts.get("cliente", 0)
     em_aberto      = sum(
         v for k, v in estagio_counts.items()
         if k not in ("fechado_ganho", "fechado_perdido")
     )
-    radar = op_model.listar_radar()
+    radar = op_model.listar_radar(tenant_id=tid)
     op_model.salvar_scores_radar(radar)
     radar_alerta_count = sum(
         1 for r in radar
@@ -359,8 +367,8 @@ def dashboard():
     conn_m = database.get_connection()
     _row90 = conn_m.execute(
         "SELECT COALESCE(SUM(valor_estimado),0) AS total FROM oportunidades"
-        " WHERE estagio='fechado_ganho' AND criado_em >= ?",
-        (_meta_inicio.isoformat(),)
+        " WHERE estagio='fechado_ganho' AND criado_em >= ? AND tenant_id = ?",
+        (_meta_inicio.isoformat(), tid)
     ).fetchone()
     faturado_90d = float(_row90["total"] if _row90 else 0)
     pct_90d = round(min(faturado_90d / 100_000 * 100, 100), 1)
@@ -368,26 +376,27 @@ def dashboard():
     # Funil comercial
     _f = conn_m.execute("""
         SELECT
-          (SELECT COALESCE(COUNT(*),0) FROM prospeccao_automatica WHERE status='novo') AS sdr_novos,
-          (SELECT COALESCE(COUNT(*),0) FROM cadencias WHERE status='pendente') AS em_cadencia,
+          (SELECT COALESCE(COUNT(*),0) FROM prospeccao_automatica WHERE status='novo' AND tenant_id=?) AS sdr_novos,
+          (SELECT COALESCE(COUNT(*),0) FROM cadencias WHERE status='pendente' AND tenant_id=?) AS em_cadencia,
           (SELECT COALESCE(COUNT(*),0) FROM oportunidades
-           WHERE estagio NOT IN ('fechado_ganho','fechado_perdido')) AS props_abertas,
+           WHERE estagio NOT IN ('fechado_ganho','fechado_perdido') AND tenant_id=?) AS props_abertas,
           (SELECT COALESCE(SUM(valor_estimado),0) FROM oportunidades
-           WHERE estagio='fechado_ganho' AND criado_em LIKE ?) AS fechados_mes
-    """, (mes_atual + "%",)).fetchone()
+           WHERE estagio='fechado_ganho' AND criado_em LIKE ? AND tenant_id=?) AS fechados_mes
+    """, (tid, tid, tid, mes_atual + "%", tid)).fetchone()
     funil = dict(_f) if _f else {"sdr_novos":0,"em_cadencia":0,"props_abertas":0,"fechados_mes":0}
     # Atividade de hoje
     limite_7d  = (_hoje_d - _td2(days=7)).isoformat()
     limite_14d = (_hoje_d - _td2(days=14)).isoformat()
-    cad_hoje = cad_model.listar_hoje()[:5]
+    cad_hoje = cad_model.listar_hoje(tenant_id=tid)[:5]
     ops_paradas = [dict(r) for r in conn_m.execute("""
         SELECT o.id, o.titulo, e.nome AS empresa_nome, o.estagio, o.data_ultimo_contato
         FROM oportunidades o
         LEFT JOIN empresas e ON e.id = o.empresa_id
         WHERE o.estagio NOT IN ('fechado_ganho','fechado_perdido')
+          AND o.tenant_id = ?
           AND (o.data_ultimo_contato IS NULL OR o.data_ultimo_contato < ?)
         ORDER BY o.data_ultimo_contato LIMIT 5
-    """, (limite_14d,)).fetchall()]
+    """, (tid, limite_14d)).fetchall()]
     conn_m.close()
     return render_template(
         "dashboard.html",
@@ -431,7 +440,7 @@ def dashboard():
 def empresas_lista():
     q      = request.args.get("q", "").strip()
     status = request.args.get("status", "").strip()
-    todas  = emp_model.listar(status=status or None)
+    todas  = emp_model.listar(status=status or None, tenant_id=_tid())
     if q:
         ql = q.lower()
         todas = [e for e in todas if ql in e["nome"].lower()
@@ -445,7 +454,7 @@ def empresas_lista():
 @require_perfil('gerente')
 def empresas_nova():
     if request.method == "POST":
-        emp_model.criar(_form_empresa(request.form))
+        emp_model.criar({**_form_empresa(request.form), "tenant_id": _tid()})
         flash("Empresa cadastrada com sucesso.", "success")
         return redirect(url_for("empresas_lista"))
     return render_template("empresas/form.html", empresa=None,
@@ -456,16 +465,17 @@ def empresas_nova():
 @login_required
 @require_perfil('gerente')
 def empresas_detalhe(id):
-    emp = emp_model.buscar_por_id(id)
+    tid = _tid()
+    emp = emp_model.buscar_por_id(id, tenant_id=tid)
     if not emp:
         flash("Empresa não encontrada.", "danger")
         return redirect(url_for("empresas_lista"))
     return render_template(
         "empresas/detalhe.html",
         empresa=emp,
-        contatos=cont_model.listar(empresa_id=id),
-        ops=op_model.listar(empresa_id=id),
-        atividades=atv_model.listar(empresa_id=id, limit=10),
+        contatos=cont_model.listar(empresa_id=id, tenant_id=tid),
+        ops=op_model.listar(empresa_id=id, tenant_id=tid),
+        atividades=atv_model.listar(empresa_id=id, limit=10, tenant_id=tid),
         labels=op_model.ESTAGIO_LABELS,
     )
 
@@ -474,7 +484,7 @@ def empresas_detalhe(id):
 @login_required
 @require_perfil('gerente')
 def empresas_editar(id):
-    emp = emp_model.buscar_por_id(id)
+    emp = emp_model.buscar_por_id(id, tenant_id=_tid())
     if not emp:
         flash("Empresa não encontrada.", "danger")
         return redirect(url_for("empresas_lista"))
@@ -540,7 +550,7 @@ def _form_empresa(f):
 @login_required
 def contatos_lista():
     q    = request.args.get("q", "").strip()
-    todos = cont_model.listar()
+    todos = cont_model.listar(tenant_id=_tid())
     if q:
         ql = q.lower()
         todos = [c for c in todos if ql in c["nome"].lower()
@@ -553,12 +563,13 @@ def contatos_lista():
 @login_required
 @require_perfil('vendedor')
 def contatos_novo():
+    tid = _tid()
     if request.method == "POST":
         cont_model.criar(_form_contato(request.form))
         flash("Contato cadastrado.", "success")
         return redirect(url_for("contatos_lista"))
     return render_template("contatos/form.html", contato=None,
-                           empresas=emp_model.listar(),
+                           empresas=emp_model.listar(tenant_id=tid),
                            action=url_for("contatos_novo"))
 
 
@@ -566,7 +577,8 @@ def contatos_novo():
 @login_required
 @require_perfil('vendedor')
 def contatos_editar(id):
-    c = cont_model.buscar_por_id(id)
+    tid = _tid()
+    c = cont_model.buscar_por_id(id, tenant_id=tid)
     if not c:
         flash("Contato não encontrado.", "danger")
         return redirect(url_for("contatos_lista"))
@@ -575,7 +587,7 @@ def contatos_editar(id):
         flash("Contato atualizado.", "success")
         return redirect(url_for("contatos_lista"))
     return render_template("contatos/form.html", contato=c,
-                           empresas=emp_model.listar(),
+                           empresas=emp_model.listar(tenant_id=tid),
                            action=url_for("contatos_editar", id=id))
 
 
@@ -603,7 +615,7 @@ def _form_contato(f):
 @app.route("/oportunidades")
 @login_required
 def oportunidades_kanban():
-    todas      = op_model.listar()
+    todas      = op_model.listar(tenant_id=_tid())
     by_estagio = {e: [] for e in op_model.ESTAGIOS}
     for o in todas:
         by_estagio.setdefault(o["estagio"], []).append(o)
@@ -619,13 +631,14 @@ def oportunidades_kanban():
 @login_required
 @require_perfil('vendedor')
 def oportunidades_nova():
+    tid = _tid()
     if request.method == "POST":
-        op_model.criar(_form_oportunidade(request.form))
+        op_model.criar({**_form_oportunidade(request.form), "tenant_id": tid})
         flash("Oportunidade criada.", "success")
         return redirect(url_for("oportunidades_kanban"))
     return render_template(
         "oportunidades/form.html", op=None,
-        empresas=emp_model.listar(),
+        empresas=emp_model.listar(tenant_id=tid),
         estagios=op_model.ESTAGIOS, labels=op_model.ESTAGIO_LABELS,
         action=url_for("oportunidades_nova"),
         pre_titulo=request.args.get("titulo", ""),
@@ -635,14 +648,15 @@ def oportunidades_nova():
 @app.route("/oportunidades/<int:id>")
 @login_required
 def oportunidades_detalhe(id):
-    o = op_model.buscar_por_id(id)
+    tid = _tid()
+    o = op_model.buscar_por_id(id, tenant_id=tid)
     if not o:
         flash("Oportunidade não encontrada.", "danger")
         return redirect(url_for("oportunidades_kanban"))
     return render_template(
         "oportunidades/detalhe.html",
         op=o,
-        atividades=atv_model.listar(oportunidade_id=id),
+        atividades=atv_model.listar(oportunidade_id=id, tenant_id=tid),
         labels=op_model.ESTAGIO_LABELS,
         estagios=op_model.ESTAGIOS,
     )
@@ -652,7 +666,8 @@ def oportunidades_detalhe(id):
 @login_required
 @require_perfil('vendedor')
 def oportunidades_editar(id):
-    o = op_model.buscar_por_id(id)
+    tid = _tid()
+    o = op_model.buscar_por_id(id, tenant_id=tid)
     if not o:
         flash("Oportunidade não encontrada.", "danger")
         return redirect(url_for("oportunidades_kanban"))
@@ -662,7 +677,7 @@ def oportunidades_editar(id):
         return redirect(url_for("oportunidades_detalhe", id=id))
     return render_template(
         "oportunidades/form.html", op=o,
-        empresas=emp_model.listar(),
+        empresas=emp_model.listar(tenant_id=tid),
         estagios=op_model.ESTAGIOS, labels=op_model.ESTAGIO_LABELS,
         action=url_for("oportunidades_editar", id=id),
     )
@@ -696,7 +711,8 @@ def oportunidades_mover(id):
 @app.route("/oportunidades/radar")
 @login_required
 def oportunidades_radar():
-    radar = op_model.listar_radar()
+    tid = _tid()
+    radar = op_model.listar_radar(tenant_id=tid)
     op_model.salvar_scores_radar(radar)
     return jsonify([
         {
@@ -740,9 +756,10 @@ def _form_oportunidade(f):
 @app.route("/atividades")
 @login_required
 def atividades_lista():
+    tid = _tid()
     tipo_filtro = request.args.get("tipo", "todos")
-    atividades = atv_model.listar(limit=100)
-    cadencias_hoje = cad_model.listar_hoje()
+    atividades = atv_model.listar(limit=100, tenant_id=tid)
+    cadencias_hoje = cad_model.listar_hoje(tenant_id=tid)
     conn = database.get_connection()
     radar_items = [dict(r) for r in conn.execute(
         "SELECT * FROM radar_mercado WHERE lido=0 ORDER BY criado_em DESC LIMIT 20"
@@ -773,8 +790,9 @@ def atividades_nova():
         flash("Atividade registrada.", "success")
         next_url = request.form.get("next") or url_for("atividades_lista")
         return redirect(next_url)
-    empresas      = emp_model.listar()
-    oportunidades = op_model.listar()
+    tid = _tid()
+    empresas      = emp_model.listar(tenant_id=tid)
+    oportunidades = op_model.listar(tenant_id=tid)
     pre_empresa   = request.args.get("empresa_id", "")
     pre_op        = request.args.get("oportunidade_id", "")
     next_url      = request.args.get("next", "")
@@ -938,7 +956,7 @@ def _auto_mapear(colunas: list) -> dict:
     return resultado
 
 
-def _processar_linhas(linhas: list, mapa: dict) -> tuple:
+def _processar_linhas(linhas: list, mapa: dict, tenant_id: int = 1) -> tuple:
     empresas_cache = {}
     importados = 0
     ignorados  = 0
@@ -967,6 +985,7 @@ def _processar_linhas(linhas: list, mapa: dict) -> tuple:
                 "produtos_ativos": None, "num_funcionarios": None,
                 "cliente_ativo": 0, "valor_mensal": None,
                 "tipo_cartao": None, "nome_private_label": None,
+                "tenant_id": tenant_id,
             })
             empresas_cache[chave_emp] = emp_id
         else:
@@ -979,11 +998,13 @@ def _processar_linhas(linhas: list, mapa: dict) -> tuple:
             "cargo": _v("cargo"),
             "email": _v("email"),
             "telefone": _v("telefone"),
+            "tenant_id": tenant_id,
         })
         prosp_model.criar({
             "contato_id": contato_id,
             "empresa_id": emp_id,
             "status": "pendente",
+            "tenant_id": tenant_id,
         })
         importados += 1
 
@@ -1036,7 +1057,7 @@ def leads_importar_confirmar():
         }
         raw = arquivo.stream.read()
         _, linhas = _ler_arquivo(raw, arquivo.filename)
-        importados, ignorados = _processar_linhas(linhas, mapa)
+        importados, ignorados = _processar_linhas(linhas, mapa, tenant_id=_tid())
         return jsonify({
             "ok": True,
             "importados": importados,
@@ -1312,8 +1333,9 @@ def ai_leads_email(id):
 @login_required
 def cadencias_index():
     from urllib.parse import quote as _quote
-    hoje    = cad_model.listar_hoje()
-    proximos = cad_model.listar_proximos_dias(7)
+    tid = _tid()
+    hoje    = cad_model.listar_hoje(tenant_id=tid)
+    proximos = cad_model.listar_proximos_dias(7, tenant_id=tid)
 
     def _limpar_fone(n):
         return "".join(c for c in (n or "") if c.isdigit()).lstrip("55")

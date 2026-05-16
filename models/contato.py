@@ -1,42 +1,44 @@
 from database import get_connection
 
 
-def listar(empresa_id: int | None = None) -> list:
+def listar(empresa_id=None, tenant_id=None) -> list:
     conn = get_connection()
+    sql = """SELECT c.*, e.nome AS empresa_nome
+             FROM contatos c JOIN empresas e ON c.empresa_id = e.id
+             WHERE 1=1"""
+    params = []
+    if tenant_id is not None:
+        sql += " AND e.tenant_id = ?"
+        params.append(tenant_id)
     if empresa_id:
-        rows = conn.execute(
-            """SELECT c.*, e.nome AS empresa_nome
-               FROM contatos c JOIN empresas e ON c.empresa_id = e.id
-               WHERE c.empresa_id = ? ORDER BY c.nome""",
-            (empresa_id,),
-        ).fetchall()
-    else:
-        rows = conn.execute(
-            """SELECT c.*, e.nome AS empresa_nome
-               FROM contatos c JOIN empresas e ON c.empresa_id = e.id
-               ORDER BY c.nome"""
-        ).fetchall()
+        sql += " AND c.empresa_id = ?"
+        params.append(empresa_id)
+    sql += " ORDER BY c.nome"
+    rows = conn.execute(sql, params).fetchall()
     conn.close()
     return rows
 
 
-def buscar_por_id(id_: int):
+def buscar_por_id(id_: int, tenant_id=None):
     conn = get_connection()
-    row = conn.execute(
-        """SELECT c.*, e.nome AS empresa_nome
-           FROM contatos c JOIN empresas e ON c.empresa_id = e.id
-           WHERE c.id = ?""",
-        (id_,),
-    ).fetchone()
+    sql = """SELECT c.*, e.nome AS empresa_nome
+             FROM contatos c JOIN empresas e ON c.empresa_id = e.id
+             WHERE c.id = ?"""
+    params = [id_]
+    if tenant_id is not None:
+        sql += " AND e.tenant_id = ?"
+        params.append(tenant_id)
+    row = conn.execute(sql, params).fetchone()
     conn.close()
     return row
 
 
 def criar(dados: dict) -> int:
+    dados = {**dados, "tenant_id": dados.get("tenant_id", 1)}
     conn = get_connection()
     cur = conn.execute(
-        """INSERT INTO contatos (empresa_id, nome, cargo, email, telefone)
-           VALUES (:empresa_id, :nome, :cargo, :email, :telefone)""",
+        """INSERT INTO contatos (empresa_id, nome, cargo, email, telefone, tenant_id)
+           VALUES (:empresa_id, :nome, :cargo, :email, :telefone, :tenant_id)""",
         dados,
     )
     conn.commit()
