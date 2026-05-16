@@ -1,0 +1,9 @@
+#!/bin/sh
+echo "Rodando pre-deploy check..."
+python scripts/pre_deploy_check.py
+if [ $? -ne 0 ]; then
+    echo "Pre-deploy check FALHOU. Push bloqueado."
+    exit 1
+fi
+echo "Pre-deploy check aprovado. Fazendo push..."
+exit 0
