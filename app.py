@@ -751,6 +751,204 @@ def _form_oportunidade(f):
     )
 
 
+# ── Pipeline Inteligente ──────────────────────────────────────────────────────
+
+PIPELINE_ETAPAS = ["prospect", "contato", "proposta", "negociacao", "fechado"]
+PIPELINE_LABELS = {
+    "prospect":   "📋 Prospect",
+    "contato":    "📞 Contato Feito",
+    "proposta":   "📄 Proposta Enviada",
+    "negociacao": "🤝 Em Negociação",
+    "fechado":    "✅ Fechado",
+}
+
+
+def _calcular_velocidade(ultima_acao_em):
+    import datetime as _dt
+    if not ultima_acao_em:
+        return 'morto', '💀'
+    try:
+        ua = _dt.datetime.fromisoformat(str(ultima_acao_em)[:19])
+        dias = (_dt.datetime.now() - ua).days
+    except Exception:
+        return 'morto', '💀'
+    if dias <= 7:  return 'acelerando', '🟢'
+    if dias <= 14: return 'normal', '🟡'
+    if dias <= 30: return 'travado', '🔴'
+    return 'morto', '💀'
+
+
+def _calcular_score_pipeline(oportunidade, porte=''):
+    score = 50
+    dias_etapa = int(oportunidade.get('dias_etapa') or 0)
+    if dias_etapa <= 3:   score += 20
+    elif dias_etapa <= 7: score += 10
+    elif dias_etapa > 30: score -= 30
+    elif dias_etapa > 14: score -= 15
+    etapa = oportunidade.get('etapa', 'prospect')
+    score += {'prospect': -10, 'contato': 0, 'proposta': 10, 'negociacao': 20}.get(etapa, 0)
+    p = (porte or '').upper()
+    if 'GRANDE' in p:    score += 10
+    elif 'MEDIO' in p:   score += 5
+    return max(0, min(100, score))
+
+
+@app.route("/pipeline")
+@login_required
+def pipeline_index():
+    import datetime as _dt
+    tid  = _tid()
+    conn = database.get_connection()
+    rows = conn.execute("""
+        SELECT o.*, e.nome AS empresa_nome, e.cidade AS empresa_cidade,
+               e.estado AS empresa_estado, e.porte AS empresa_porte
+        FROM oportunidades o
+        JOIN empresas e ON o.empresa_id = e.id
+        WHERE o.tenant_id = ?
+          AND o.estagio NOT IN ('fechado_perdido')
+        ORDER BY o.criado_em DESC
+    """, (tid,)).fetchall()
+    conn.close()
+
+    hoje = _dt.datetime.now()
+    by_etapa     = {e: [] for e in PIPELINE_ETAPAS}
+    total_neg    = 0.0
+    score_soma   = 0
+    n_scores     = 0
+    acelerando   = 0
+    travados     = 0
+
+    for raw in rows:
+        r = dict(raw)
+        ultima_acao = r.get('ultima_acao_em') or r.get('data_ultimo_contato')
+        vel_status, vel_emoji = _calcular_velocidade(ultima_acao)
+
+        try:
+            ref = str(ultima_acao or r.get('criado_em') or '')[:19]
+            ref_dt = _dt.datetime.fromisoformat(ref) if ref else hoje
+            dias_etapa = max(0, (hoje - ref_dt).days)
+        except Exception:
+            dias_etapa = 0
+
+        r['dias_etapa']  = dias_etapa
+        r['vel_status']  = vel_status
+        r['vel_emoji']   = vel_emoji
+        score = int(r.get('score_fechamento') or 0) or _calcular_score_pipeline(r, r.get('empresa_porte', ''))
+        r['score_calc']  = score
+
+        etapa = r.get('etapa') or 'prospect'
+        if etapa not in by_etapa:
+            etapa = 'prospect'
+        r['etapa'] = etapa
+
+        if etapa == 'negociacao':
+            total_neg += float(r.get('valor_estimado') or 0)
+
+        score_soma += score
+        n_scores   += 1
+        if vel_status == 'acelerando': acelerando += 1
+        elif vel_status == 'travado':  travados   += 1
+
+        by_etapa[etapa].append(r)
+
+    meta        = 100_000.0
+    score_medio = round(score_soma / n_scores) if n_scores else 0
+
+    return render_template("pipeline.html",
+        by_etapa=by_etapa,
+        etapas=PIPELINE_ETAPAS,
+        labels=PIPELINE_LABELS,
+        total_neg=total_neg,
+        meta=meta,
+        falta=max(0.0, meta - total_neg),
+        score_medio=score_medio,
+        acelerando=acelerando,
+        travados=travados,
+    )
+
+
+@app.route("/pipeline/mover", methods=["POST"])
+@login_required
+@require_perfil('vendedor')
+def pipeline_mover():
+    import datetime as _dt
+    dados     = request.json or {}
+    op_id     = dados.get("oportunidade_id")
+    nova_etapa = dados.get("nova_etapa", "")
+    if nova_etapa not in PIPELINE_ETAPAS:
+        return jsonify({"error": "Etapa inválida"}), 400
+    tid  = _tid()
+    conn = database.get_connection()
+    op   = conn.execute(
+        "SELECT id FROM oportunidades WHERE id = ? AND tenant_id = ?", (op_id, tid)
+    ).fetchone()
+    if not op:
+        conn.close()
+        return jsonify({"error": "Oportunidade não encontrada"}), 404
+    agora = _dt.datetime.now().isoformat(timespec='seconds')
+    conn.execute(
+        "UPDATE oportunidades SET etapa = ?, ultima_acao_em = ?, dias_etapa = 0 WHERE id = ?",
+        (nova_etapa, agora, op_id),
+    )
+    conn.commit()
+    conn.close()
+    return jsonify({"ok": True, "etapa": nova_etapa})
+
+
+@app.route("/pipeline/proxima-acao/<int:op_id>", methods=["POST"])
+@login_required
+def pipeline_proxima_acao(op_id):
+    tid  = _tid()
+    conn = database.get_connection()
+    row  = conn.execute("""
+        SELECT o.*, e.nome AS empresa_nome, e.cidade AS empresa_cidade,
+               e.estado AS empresa_estado, e.segmento AS empresa_segmento
+        FROM oportunidades o JOIN empresas e ON o.empresa_id = e.id
+        WHERE o.id = ? AND o.tenant_id = ?
+    """, (op_id, tid)).fetchone()
+    if not row:
+        conn.close()
+        return jsonify({"error": "Não encontrado"}), 404
+    ativs = conn.execute(
+        "SELECT tipo, descricao, data FROM atividades WHERE oportunidade_id = ? ORDER BY data DESC LIMIT 5",
+        (op_id,),
+    ).fetchall()
+    conn.close()
+
+    r = dict(row)
+    historico = "; ".join(
+        f"{a['tipo']}: {a['descricao'] or ''} ({a['data'] or ''})" for a in ativs
+    ) or "Sem histórico de contato"
+
+    try:
+        import anthropic as _ant
+        client = _ant.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+        prompt = f"""Você é um consultor comercial especialista em benefícios corporativos.
+
+LEAD: {r.get('empresa_nome')} — {r.get('empresa_cidade','')}/{r.get('empresa_estado','')}
+SEGMENTO: {r.get('empresa_segmento') or 'não informado'}
+ETAPA DO PIPELINE: {r.get('etapa','prospect')}
+TÍTULO: {r.get('titulo','')}
+VALOR: R$ {r.get('valor_estimado') or '0'}
+HISTÓRICO: {historico}
+
+Sugira em 2 linhas numeradas:
+1. O que fazer AGORA (ação específica)
+2. O que falar (argumento para esse segmento)
+
+Máximo 40 palavras. Foco em benefícios corporativos: VA, VR, Wellhub, combustível."""
+        resp = client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=150,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        sugestao = resp.content[0].text.strip()
+    except Exception:
+        sugestao = "Entre em contato para reativar o interesse nesta oportunidade."
+
+    return jsonify({"ok": True, "sugestao": sugestao})
+
+
 # ── Atividades ────────────────────────────────────────────────────────────────
 
 @app.route("/atividades")

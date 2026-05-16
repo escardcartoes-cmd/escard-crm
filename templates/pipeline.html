@@ -1,0 +1,375 @@
+{% extends 'base.html' %}
+{% block title %}Pipeline Inteligente — Krylo CRM{% endblock %}
+{% block topbar_title %}🎯 Pipeline Inteligente{% endblock %}
+{% block topbar_actions %}
+  <a href="{{ url_for('oportunidades_nova') }}" class="btn btn-primary">+ Nova Oportunidade</a>
+{% endblock %}
+
+{% block content %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
+
+<style>
+/* ── Header ── */
+.pipe-header {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-bottom: 20px;
+}
+.pipe-stat {
+  background: #fff;
+  border: 1px solid #E2E8F0;
+  border-radius: 12px;
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.pipe-stat-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: #94A3B8;
+}
+.pipe-stat-value {
+  font-size: 22px;
+  font-weight: 800;
+  color: #1E293B;
+  line-height: 1.2;
+}
+.pipe-stat-sub {
+  font-size: 11px;
+  color: #64748B;
+}
+
+/* ── Kanban ── */
+.pipeline-board {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 14px;
+  align-items: start;
+}
+.pipe-col {
+  background: #F8FAFC;
+  border: 1px solid #E2E8F0;
+  border-radius: 12px;
+  min-height: 300px;
+  display: flex;
+  flex-direction: column;
+}
+.pipe-col-header {
+  padding: 12px 14px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #475569;
+  border-bottom: 1px solid #E2E8F0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: #fff;
+  border-radius: 12px 12px 0 0;
+}
+.pipe-col-count {
+  background: #E2E8F0;
+  color: #64748B;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 10px;
+}
+.pipe-col-body {
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 200px;
+}
+.pipe-col.drag-over .pipe-col-body {
+  background: #EFF6FF;
+  border-radius: 0 0 12px 12px;
+}
+
+/* ── Cards ── */
+.pipe-card {
+  background: #fff;
+  border: 1px solid #E2E8F0;
+  border-radius: 10px;
+  padding: 12px 14px;
+  cursor: grab;
+  transition: box-shadow .15s, transform .1s;
+  user-select: none;
+}
+.pipe-card:hover {
+  box-shadow: 0 4px 16px rgba(0,0,0,.1);
+  transform: translateY(-1px);
+}
+.pipe-card.sortable-drag {
+  opacity: .6;
+  box-shadow: 0 8px 24px rgba(0,0,0,.18);
+}
+.pipe-card.sortable-ghost {
+  opacity: .3;
+}
+.pc-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 6px;
+}
+.pc-semaforo {
+  font-size: 16px;
+  cursor: default;
+  flex-shrink: 0;
+}
+.pc-empresa {
+  font-size: 13px;
+  font-weight: 700;
+  color: #1E293B;
+  line-height: 1.3;
+  flex: 1;
+  padding-right: 6px;
+}
+.pc-cidade {
+  font-size: 11px;
+  color: #94A3B8;
+  margin-bottom: 6px;
+}
+.pc-valor {
+  font-size: 13px;
+  font-weight: 700;
+  color: #059669;
+  margin-bottom: 6px;
+}
+.pc-dias {
+  font-size: 11px;
+  color: #94A3B8;
+  margin-bottom: 8px;
+}
+.pc-score-bar-wrap {
+  margin-bottom: 8px;
+}
+.pc-score-label {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  color: #94A3B8;
+  margin-bottom: 3px;
+}
+.pc-score-bar {
+  height: 4px;
+  background: #E2E8F0;
+  border-radius: 4px;
+  overflow: hidden;
+}
+.pc-score-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width .3s;
+}
+.pc-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+.pc-btn {
+  flex: 1;
+  padding: 5px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 6px;
+  cursor: pointer;
+  border: none;
+  text-align: center;
+  text-decoration: none;
+  display: inline-block;
+}
+.pc-btn-ver {
+  background: #F1F5F9;
+  color: #475569;
+  border: 1px solid #E2E8F0;
+}
+.pc-btn-ver:hover { background: #E2E8F0; color: #1E293B; }
+.pc-btn-ia {
+  background: var(--tenant-primary, #C5A089);
+  color: #fff;
+}
+.pc-btn-ia:hover { opacity: .85; }
+
+/* ── Tooltip para próxima ação ── */
+.pc-suggestion {
+  display: none;
+  margin-top: 8px;
+  padding: 8px 10px;
+  background: #FFFBEB;
+  border: 1px solid #FDE68A;
+  border-radius: 8px;
+  font-size: 11px;
+  color: #78350F;
+  line-height: 1.5;
+}
+
+/* ── Score color ── */
+.score-alto  { background: #10B981; }
+.score-medio { background: #F59E0B; }
+.score-baixo { background: #EF4444; }
+</style>
+
+<!-- ── Header ─────────────────────────────────────────────────────────── -->
+<div class="pipe-header">
+  <div class="pipe-stat">
+    <div class="pipe-stat-label">💰 Em Negociação</div>
+    <div class="pipe-stat-value">R$ {{ '{:,.0f}'.format(total_neg).replace(',','.') }}<span style="font-size:13px;font-weight:500">/mês</span></div>
+    <div class="pipe-stat-sub">valor nas oportunidades abertas</div>
+  </div>
+  <div class="pipe-stat">
+    <div class="pipe-stat-label">🎯 Meta Mensal</div>
+    <div class="pipe-stat-value">R$ {{ '{:,.0f}'.format(meta).replace(',','.') }}</div>
+    <div class="pipe-stat-sub">
+      Falta: <strong>R$ {{ '{:,.0f}'.format(falta).replace(',','.') }}</strong>
+    </div>
+  </div>
+  <div class="pipe-stat">
+    <div class="pipe-stat-label">🔥 Score Médio</div>
+    <div class="pipe-stat-value">{{ score_medio }}<span style="font-size:13px;font-weight:500">/100</span></div>
+    <div class="pipe-stat-sub">índice de fechamento do pipeline</div>
+  </div>
+  <div class="pipe-stat">
+    <div class="pipe-stat-label">⚡ Velocidade</div>
+    <div class="pipe-stat-value" style="font-size:16px">🟢 {{ acelerando }} acelerando</div>
+    <div class="pipe-stat-sub">🔴 {{ travados }} travados</div>
+  </div>
+</div>
+
+<!-- ── Board ──────────────────────────────────────────────────────────── -->
+<div class="pipeline-board" id="pipelineBoard">
+  {% for etapa in etapas %}
+  {% set cards = by_etapa.get(etapa, []) %}
+  <div class="pipe-col" id="col-{{ etapa }}" data-etapa="{{ etapa }}">
+    <div class="pipe-col-header">
+      <span>{{ labels[etapa] }}</span>
+      <span class="pipe-col-count">{{ cards | length }}</span>
+    </div>
+    <div class="pipe-col-body sortable-list" id="list-{{ etapa }}">
+      {% for c in cards %}
+      {% set score = c.score_calc %}
+      {% set score_cls = 'score-alto' if score >= 70 else ('score-medio' if score >= 40 else 'score-baixo') %}
+      <div class="pipe-card" id="card-{{ c.id }}" data-id="{{ c.id }}">
+        <div class="pc-top">
+          <div class="pc-empresa">{{ c.titulo }}</div>
+          <span class="pc-semaforo" title="{{ c.vel_status }}">{{ c.vel_emoji }}</span>
+        </div>
+        <div class="pc-empresa" style="font-size:12px;font-weight:500;color:#64748B">{{ c.empresa_nome }}</div>
+        <div class="pc-cidade">
+          {% if c.empresa_cidade %}{{ c.empresa_cidade }}{% if c.empresa_estado %}/{{ c.empresa_estado }}{% endif %}{% endif %}
+        </div>
+        {% if c.valor_estimado %}
+        <div class="pc-valor">R$ {{ '{:,.0f}'.format(c.valor_estimado).replace(',','.') }}/mês</div>
+        {% endif %}
+        <div class="pc-dias">
+          {% if c.dias_etapa is not none %}
+            {{ c.dias_etapa }} dia{{ 's' if c.dias_etapa != 1 else '' }} nessa etapa
+          {% endif %}
+        </div>
+        <div class="pc-score-bar-wrap">
+          <div class="pc-score-label">
+            <span>Score fechamento</span>
+            <span><strong>{{ score }}</strong>/100</span>
+          </div>
+          <div class="pc-score-bar">
+            <div class="pc-score-fill {{ score_cls }}" style="width:{{ score }}%"></div>
+          </div>
+        </div>
+        <div class="pc-actions">
+          <a href="{{ url_for('oportunidades_detalhe', id=c.id) }}" class="pc-btn pc-btn-ver">Ver</a>
+          <button class="pc-btn pc-btn-ia" onclick="pedirProximaAcao({{ c.id }}, this)">✦ IA</button>
+        </div>
+        <div class="pc-suggestion" id="sug-{{ c.id }}"></div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// ── Semáforo legenda ──────────────────────────────────────────────────────────
+const SEL = {
+  acelerando: '🟢 Avançou nos últimos 7 dias',
+  normal:     '🟡 Parado há 8-14 dias',
+  travado:    '🔴 Parado há 15-30 dias',
+  morto:      '💀 Sem contato há +30 dias',
+};
+
+// ── SortableJS — drag & drop ──────────────────────────────────────────────────
+document.querySelectorAll('.sortable-list').forEach(list => {
+  Sortable.create(list, {
+    group:     'pipeline',
+    animation: 150,
+    ghostClass: 'sortable-ghost',
+    dragClass:  'sortable-drag',
+    onEnd(evt) {
+      const cardId  = evt.item.dataset.id;
+      const novaEtapa = evt.to.closest('.pipe-col').dataset.etapa;
+      if (evt.from === evt.to) return;
+      moverCard(cardId, novaEtapa);
+    },
+  });
+});
+
+function moverCard(opId, novaEtapa) {
+  fetch('/pipeline/mover', {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body:    JSON.stringify({ oportunidade_id: parseInt(opId), nova_etapa: novaEtapa }),
+  })
+  .then(r => r.json())
+  .then(d => {
+    if (!d.ok) {
+      alert('Erro ao mover: ' + (d.error || 'desconhecido'));
+      location.reload();
+    } else {
+      // Atualiza contador das colunas
+      atualizarContadores();
+    }
+  })
+  .catch(() => { alert('Erro de rede ao mover card.'); location.reload(); });
+}
+
+function atualizarContadores() {
+  document.querySelectorAll('.pipe-col').forEach(col => {
+    const count = col.querySelectorAll('.pipe-card').length;
+    col.querySelector('.pipe-col-count').textContent = count;
+  });
+}
+
+// ── IA: próxima ação ──────────────────────────────────────────────────────────
+async function pedirProximaAcao(opId, btn) {
+  const sugEl = document.getElementById('sug-' + opId);
+  const origText = btn.textContent;
+  btn.disabled   = true;
+  btn.textContent = '⏳';
+  sugEl.style.display = 'none';
+
+  try {
+    const r = await fetch('/pipeline/proxima-acao/' + opId, { method: 'POST' });
+    const d = await r.json();
+    if (d.ok) {
+      sugEl.textContent    = d.sugestao;
+      sugEl.style.display  = 'block';
+    } else {
+      sugEl.textContent    = d.error || 'Erro ao consultar IA.';
+      sugEl.style.display  = 'block';
+    }
+  } catch(e) {
+    sugEl.textContent   = 'Erro de rede. Tente novamente.';
+    sugEl.style.display = 'block';
+  } finally {
+    btn.disabled    = false;
+    btn.textContent = origText;
+  }
+}
+</script>
+{% endblock %}

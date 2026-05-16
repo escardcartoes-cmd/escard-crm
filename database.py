@@ -645,6 +645,11 @@ def run_migrations(conn) -> None:
         f"ALTER TABLE empresas ADD COLUMN{_ifne} score INTEGER DEFAULT 0",
         # prospeccao_automatica — temperatura
         f"ALTER TABLE prospeccao_automatica ADD COLUMN{_ifne} temperatura TEXT DEFAULT 'frio'",
+        # oportunidades — Pipeline Inteligente
+        f"ALTER TABLE oportunidades ADD COLUMN{_ifne} etapa VARCHAR(30) DEFAULT 'prospect'",
+        f"ALTER TABLE oportunidades ADD COLUMN{_ifne} valor_mensal REAL DEFAULT 0",
+        f"ALTER TABLE oportunidades ADD COLUMN{_ifne} dias_etapa INTEGER DEFAULT 0",
+        f"ALTER TABLE oportunidades ADD COLUMN{_ifne} ultima_acao_em TEXT",
     ]
 
     _CREATE = [
@@ -1040,6 +1045,16 @@ def run_migrations(conn) -> None:
             """UPDATE empresas
                SET cidade = convert_from(convert_to(cidade, 'LATIN1'), 'UTF8')
                WHERE cidade IS NOT NULL AND cidade ~ '[ÃÂ]'""",
+            """UPDATE empresas
+               SET nome = convert_from(convert_to(nome, 'LATIN1'), 'UTF8')
+               WHERE nome IS NOT NULL AND nome ~ '[ÃÂ]'""",
+            # Trailing dash/em-dash fix
+            """UPDATE empresas
+               SET cidade = TRIM(REGEXP_REPLACE(cidade, '[-–—]+\\s*$', ''))
+               WHERE cidade IS NOT NULL AND cidade ~ '[-–—]\\s*$'""",
+            """UPDATE empresas
+               SET nome = TRIM(REGEXP_REPLACE(nome, '[-–—]+\\s*$', ''))
+               WHERE nome IS NOT NULL AND nome ~ '[-–—]\\s*$'""",
         ]:
             try:
                 conn.execute(_repair_sql)
@@ -1049,6 +1064,25 @@ def run_migrations(conn) -> None:
                     conn.rollback()
                 except Exception:
                     pass
+    else:
+        # SQLite: trailing dash fix via Python (re module available at module level)
+        try:
+            _rows_dash = conn.execute(
+                "SELECT id, cidade, nome FROM empresas "
+                "WHERE (cidade IS NOT NULL AND (cidade LIKE '%—' OR cidade LIKE '%–' OR cidade LIKE '%-')) "
+                "   OR (nome IS NOT NULL AND (nome LIKE '%—' OR nome LIKE '%–'))"
+            ).fetchall()
+            for _dr in _rows_dash:
+                _dr = dict(_dr)
+                _cidade_f = re.sub(r'[-–—]+\s*$', '', (_dr.get('cidade') or '')).strip() or None
+                _nome_f   = re.sub(r'[-–—]+\s*$', '', (_dr.get('nome') or '')).strip() or None
+                conn.execute("UPDATE empresas SET cidade=?, nome=? WHERE id=?",
+                             (_cidade_f, _nome_f, _dr['id']))
+            conn.commit()
+        except Exception as _e:
+            print(f"Trailing dash fix aviso: {_e}")
+            try: conn.rollback()
+            except Exception: pass
 
     # Seed ramos_atividade only if empty
     try:
