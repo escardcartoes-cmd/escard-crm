@@ -37,7 +37,11 @@ from models.usuario import require_perfil, PERFIS, PERFIL_LABELS
 import ai
 
 app = Flask(__name__)
-app.secret_key = os.getenv("SECRET_KEY", "krylo-crm-2024")
+app.secret_key = os.environ.get("SECRET_KEY")
+if not app.secret_key:
+    import secrets as _sec
+    app.secret_key = _sec.token_hex(32)
+    print("[AVISO] SECRET_KEY nao configurada - usando chave temporaria")
 app.permanent_session_lifetime = timedelta(hours=8)
 app.config["JSON_AS_ASCII"] = False
 
@@ -90,8 +94,10 @@ def inject_globals():
     ]
     try:
         conn = database.get_connection()
+        tid = session.get("tenant_id", 1)
         cfg = conn.execute(
-            "SELECT nome, nome_fantasia, whatsapp FROM empresa_config WHERE id=1"
+            "SELECT nome, nome_fantasia, whatsapp FROM empresa_config WHERE tenant_id=%s LIMIT 1",
+            (tid,)
         ).fetchone()
         conn.close()
         return {
@@ -2172,7 +2178,8 @@ def expansao_index():
     potencial = sum(r["potencial_mensal"] for r in oportunidades)
     conn = database.get_connection()
     prods_db = [r["nome"] for r in conn.execute(
-        "SELECT nome FROM produtos_krylo WHERE ativo=1 ORDER BY nome"
+        "SELECT nome FROM produtos_krylo WHERE ativo=1 AND tenant_id=%s ORDER BY nome",
+        (_tid(),)
     ).fetchall()]
     conn.close()
     produtos = prods_db if prods_db else exp_model.PRODUTOS
@@ -2197,7 +2204,8 @@ def expansao_pitch(empresa_id):
         ativos = [p.strip() for p in (emp.get("produtos_ativos") or "").split(",") if p.strip()]
         _conn_prods = database.get_connection()
         _prods_db = [r["nome"] for r in _conn_prods.execute(
-            "SELECT nome FROM produtos_krylo WHERE ativo=1 ORDER BY nome"
+            "SELECT nome FROM produtos_krylo WHERE ativo=1 AND tenant_id=%s ORDER BY nome",
+            (_tid(),)
         ).fetchall()]
         _conn_prods.close()
         _lista_prods = _prods_db if _prods_db else exp_model.PRODUTOS
@@ -2219,7 +2227,7 @@ Destaque o benefício principal de cada produto faltando, o impacto para os func
 
         import anthropic as _ant, models.ia_config as ia_mod
         _conn_exp = database.get_connection()
-        _sys_exp  = ia_mod.get_system_prompt(_conn_exp)
+        _sys_exp  = ia_mod.get_system_prompt(_conn_exp, tenant_id=_tid())
         _conn_exp.close()
         client = _ant.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
         resp = client.messages.create(
@@ -2531,7 +2539,8 @@ _TICKET_MEDIO = {
 def simulador_index():
     conn = database.get_connection()
     prods_db = [r["nome"] for r in conn.execute(
-        "SELECT nome FROM produtos_krylo WHERE ativo=1 ORDER BY nome"
+        "SELECT nome FROM produtos_krylo WHERE ativo=1 AND tenant_id=%s ORDER BY nome",
+        (_tid(),)
     ).fetchall()]
     conn.close()
     produtos = prods_db if prods_db else list(_TICKET_MEDIO.keys())
@@ -2561,7 +2570,7 @@ Retorne SOMENTE JSON válido: {{"proposta": "<texto>"}}
 Tom consultivo. Inclua benefícios dos produtos, impacto nos funcionários, chamada para reunião."""
         import anthropic as _ant, models.ia_config as ia_mod
         _c = database.get_connection()
-        _sys = ia_mod.get_system_prompt(_c)
+        _sys = ia_mod.get_system_prompt(_c, tenant_id=_tid())
         _c.close()
         client = _ant.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
         resp = client.messages.create(
@@ -2706,7 +2715,8 @@ def _form_usuario(f, editando=False):
 def produtos_lista():
     conn = database.get_connection()
     rows = [dict(r) for r in conn.execute(
-        "SELECT * FROM produtos_krylo ORDER BY ativo DESC, nome ASC"
+        "SELECT * FROM produtos_krylo WHERE tenant_id=%s ORDER BY ativo DESC, nome ASC",
+        (_tid(),)
     ).fetchall()]
     conn.close()
     return jsonify(rows)
@@ -2716,7 +2726,9 @@ def produtos_lista():
 @login_required
 def produto_detalhe(pid):
     conn = database.get_connection()
-    row = conn.execute("SELECT * FROM produtos_krylo WHERE id=?", (pid,)).fetchone()
+    row = conn.execute(
+        "SELECT * FROM produtos_krylo WHERE id=%s AND tenant_id=%s", (pid, _tid())
+    ).fetchone()
     conn.close()
     if not row:
         return jsonify({"error": "Não encontrado"}), 404
@@ -2734,12 +2746,13 @@ def produto_novo():
         conn = database.get_connection()
         cur = conn.execute(
             """INSERT INTO produtos_krylo
-               (nome, descricao, pitch_whatsapp, pitch_email, cnaes_alvo,
+               (tenant_id, nome, descricao, pitch_whatsapp, pitch_email, cnaes_alvo,
                 estados_alvo, capital_min, score_min, valor_por_funcionario,
                 palavras_chave, publico_alvo, beneficios, objecoes_comuns,
                 como_responder_objecoes, ativo, criado_em, atualizado_em)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+               VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
             (
+                _tid(),
                 (f.get("nome") or "").strip(),
                 f.get("descricao") or "",
                 f.get("pitch_whatsapp") or "",
@@ -2786,7 +2799,7 @@ def produto_editar(pid):
                beneficios=:ben, objecoes_comuns=:obj,
                como_responder_objecoes=:resp,
                ativo=:ativo, atualizado_em=:at
-               WHERE id=:id""",
+               WHERE id=:id AND tenant_id=:tid""",
             {
                 "nome": (f.get("nome") or "").strip(),
                 "descricao": f.get("descricao") or "",
@@ -2805,6 +2818,7 @@ def produto_editar(pid):
                 "ativo": 1 if f.get("ativo", True) else 0,
                 "at": _agora,
                 "id": pid,
+                "tid": _tid(),
             },
         )
         conn.commit()
@@ -2821,14 +2835,16 @@ def produto_toggle(pid):
     try:
         import datetime as _dt
         conn = database.get_connection()
-        row = conn.execute("SELECT ativo FROM produtos_krylo WHERE id=?", (pid,)).fetchone()
+        row = conn.execute(
+            "SELECT ativo FROM produtos_krylo WHERE id=%s AND tenant_id=%s", (pid, _tid())
+        ).fetchone()
         if not row:
             conn.close()
             return jsonify({"error": "Não encontrado"}), 404
         novo = 0 if row["ativo"] else 1
         conn.execute(
-            "UPDATE produtos_krylo SET ativo=:v, atualizado_em=:t WHERE id=:id",
-            {"v": novo, "t": _dt.datetime.now().isoformat(sep=" ", timespec="seconds"), "id": pid},
+            "UPDATE produtos_krylo SET ativo=:v, atualizado_em=:t WHERE id=:id AND tenant_id=:tid",
+            {"v": novo, "t": _dt.datetime.now().isoformat(sep=" ", timespec="seconds"), "id": pid, "tid": _tid()},
         )
         conn.commit()
         conn.close()
@@ -2843,7 +2859,9 @@ def produto_toggle(pid):
 def produto_deletar(pid):
     try:
         conn = database.get_connection()
-        conn.execute("DELETE FROM produtos_krylo WHERE id=?", (pid,))
+        conn.execute(
+            "DELETE FROM produtos_krylo WHERE id=%s AND tenant_id=%s", (pid, _tid())
+        )
         conn.commit()
         conn.close()
         return jsonify({"ok": True})
@@ -2864,7 +2882,7 @@ def produto_gerar_com_ia():
         if not nome:
             return jsonify({"error": "Nome é obrigatório"}), 400
         conn = database.get_connection()
-        system = ia_mod.get_system_prompt(conn)
+        system = ia_mod.get_system_prompt(conn, tenant_id=_tid())
         conn.close()
         prompt = (
             f"Você é especialista em vendas B2B de benefícios corporativos.\n"
@@ -2908,7 +2926,7 @@ def produto_gerar_com_ia():
 def ia_config_painel():
     import models.ia_config as ia_mod
     conn = database.get_connection()
-    cfg  = ia_mod.get_ia_config(conn)
+    cfg  = ia_mod.get_ia_config(conn, _tid())
     conn.close()
     return render_template("ia_painel.html", cfg=cfg)
 
@@ -2926,12 +2944,17 @@ def ia_config_salvar():
         ]
         conn = database.get_connection()
         import datetime as _dt
+        tid = _tid()
         _agora = _dt.datetime.now().isoformat(sep=" ", timespec="seconds")
+        # Ensure row exists for this tenant
+        conn.execute(
+            "INSERT OR IGNORE INTO ia_config (tenant_id) VALUES (%s)", (tid,)
+        )
         for campo in campos:
             if campo in f:
                 conn.execute(
-                    f"UPDATE ia_config SET {campo}=:v, atualizado_em=:t WHERE id=1",
-                    {"v": f[campo], "t": _agora},
+                    f"UPDATE ia_config SET {campo}=:v, atualizado_em=:t WHERE tenant_id=:tid",
+                    {"v": f[campo], "t": _agora, "tid": tid},
                 )
         conn.commit()
         conn.close()
@@ -2952,7 +2975,7 @@ def ia_chat():
         if not mensagem:
             return jsonify({"error": "Mensagem vazia"}), 400
         conn = database.get_connection()
-        resposta = ia_mod.chat_com_ia(conn, mensagem, historico, contexto)
+        resposta = ia_mod.chat_com_ia(conn, mensagem, historico, contexto, _tid())
         conn.close()
         return jsonify({"resposta": resposta})
     except Exception as e:
@@ -2974,8 +2997,8 @@ def ia_testar_pitch():
             return jsonify({"error": "Empresa é obrigatória"}), 400
 
         conn   = database.get_connection()
-        system = ia_mod.get_system_prompt(conn)
-        cfg    = ia_mod.get_ia_config(conn)
+        system = ia_mod.get_system_prompt(conn, tenant_id=_tid())
+        cfg    = ia_mod.get_ia_config(conn, _tid())
         conn.close()
 
         if canal == "email":
@@ -3234,7 +3257,9 @@ def configuracoes_ramos_toggle(id):
 @require_perfil("gerente")
 def configuracoes_empresa():
     conn = database.get_connection()
-    row  = conn.execute("SELECT * FROM empresa_config WHERE id=1").fetchone()
+    row  = conn.execute(
+        "SELECT * FROM empresa_config WHERE tenant_id=%s LIMIT 1", (_tid(),)
+    ).fetchone()
     conn.close()
     return render_template("configuracoes_empresa.html", cfg=dict(row) if row else {})
 
@@ -3255,11 +3280,16 @@ def configuracoes_empresa_salvar():
         ]
         _agora = _dt.datetime.now().isoformat(sep=" ", timespec="seconds")
         conn = database.get_connection()
+        tid = _tid()
+        # Ensure row exists for this tenant
+        conn.execute(
+            "INSERT OR IGNORE INTO empresa_config (tenant_id) VALUES (%s)", (tid,)
+        )
         for campo in campos:
             if campo in f:
                 conn.execute(
-                    f"UPDATE empresa_config SET {campo}=:v, atualizado_em=:t WHERE id=1",
-                    {"v": f[campo], "t": _agora},
+                    f"UPDATE empresa_config SET {campo}=:v, atualizado_em=:t WHERE tenant_id=:tid",
+                    {"v": f[campo], "t": _agora, "tid": tid},
                 )
         conn.commit()
         conn.close()

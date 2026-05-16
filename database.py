@@ -198,6 +198,7 @@ _SQLITE_DDL = """
 
     CREATE TABLE IF NOT EXISTS ia_config (
         id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+        tenant_id          INTEGER   DEFAULT 1,
         nome_assistente    TEXT      DEFAULT 'Bia',
         personalidade      TEXT      DEFAULT 'Profissional, direta e empática. Fala de forma natural e consultiva, nunca como vendedora agressiva.',
         tom                TEXT      DEFAULT 'consultivo',
@@ -240,6 +241,7 @@ _SQLITE_DDL = """
 
     CREATE TABLE IF NOT EXISTS empresa_config (
         id                INTEGER PRIMARY KEY AUTOINCREMENT,
+        tenant_id         INTEGER   DEFAULT 1,
         nome              TEXT      DEFAULT 'Krylo',
         nome_fantasia     TEXT      DEFAULT 'Krylo',
         cnpj              TEXT      DEFAULT '',
@@ -316,7 +318,8 @@ _SQLITE_DDL = """
 
     CREATE TABLE IF NOT EXISTS produtos_krylo (
         id                      INTEGER PRIMARY KEY AUTOINCREMENT,
-        nome                    TEXT    NOT NULL UNIQUE,
+        tenant_id               INTEGER DEFAULT 1,
+        nome                    TEXT    NOT NULL,
         descricao               TEXT    DEFAULT '',
         pitch_whatsapp          TEXT    DEFAULT '',
         pitch_email             TEXT    DEFAULT '',
@@ -680,6 +683,10 @@ def run_migrations(conn) -> None:
         f"ALTER TABLE usuarios ADD COLUMN{_ifne} recuperacao_expira TIMESTAMP",
         f"ALTER TABLE usuarios ADD COLUMN{_ifne} tentativas_login INTEGER DEFAULT 0",
         f"ALTER TABLE usuarios ADD COLUMN{_ifne} bloqueado_ate TIMESTAMP",
+        # Multi-tenant: ia_config, empresa_config, produtos_krylo
+        f"ALTER TABLE ia_config ADD COLUMN{_ifne} tenant_id INTEGER DEFAULT 1",
+        f"ALTER TABLE empresa_config ADD COLUMN{_ifne} tenant_id INTEGER DEFAULT 1",
+        f"ALTER TABLE produtos_krylo ADD COLUMN{_ifne} tenant_id INTEGER DEFAULT 1",
     ]
 
     _CREATE = [
@@ -772,6 +779,7 @@ def run_migrations(conn) -> None:
         )""",
         """CREATE TABLE IF NOT EXISTS ia_config (
             id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+            tenant_id          INTEGER   DEFAULT 1,
             nome_assistente    TEXT      DEFAULT 'Bia',
             personalidade      TEXT      DEFAULT 'Profissional, direta e empática. Fala de forma natural e consultiva, nunca como vendedora agressiva.',
             tom                TEXT      DEFAULT 'consultivo',
@@ -801,6 +809,7 @@ def run_migrations(conn) -> None:
         )""",
         """CREATE TABLE IF NOT EXISTS empresa_config (
             id                INTEGER PRIMARY KEY AUTOINCREMENT,
+            tenant_id         INTEGER   DEFAULT 1,
             nome              TEXT      DEFAULT 'Krylo',
             nome_fantasia     TEXT      DEFAULT 'Krylo',
             cnpj              TEXT      DEFAULT '',
@@ -887,7 +896,8 @@ def run_migrations(conn) -> None:
         )""",
         """CREATE TABLE IF NOT EXISTS produtos_krylo (
             id                      INTEGER PRIMARY KEY AUTOINCREMENT,
-            nome                    TEXT    NOT NULL UNIQUE,
+            tenant_id               INTEGER DEFAULT 1,
+            nome                    TEXT    NOT NULL,
             descricao               TEXT    DEFAULT '',
             pitch_whatsapp          TEXT    DEFAULT '',
             pitch_email             TEXT    DEFAULT '',
@@ -1096,8 +1106,8 @@ def run_migrations(conn) -> None:
 
     # Seeds
     _seeds = [
-        "INSERT OR IGNORE INTO ia_config (id) VALUES (1)",
-        "INSERT OR IGNORE INTO empresa_config (id) VALUES (1)",
+        "INSERT OR IGNORE INTO ia_config (id, tenant_id) VALUES (1, 1)",
+        "INSERT OR IGNORE INTO empresa_config (id, tenant_id) VALUES (1, 1)",
         "INSERT OR IGNORE INTO sdr_config (id) VALUES (1)",
         # Tenant padrão Escard (id=1 garantido na primeira execução)
         "INSERT OR IGNORE INTO tenants (slug, nome_empresa, nome_plataforma, cor_primaria, cor_secundaria, ativo, configurado) VALUES ('escard', 'Escard Cartões', 'Krylo', '#C5A089', '#8B6914', 1, 1)",
@@ -1116,7 +1126,8 @@ def run_migrations(conn) -> None:
 
     # Ensure tenant_id=1 for all existing rows (idempotent)
     for _tab_tenant in ["empresas", "cadencias", "oportunidades", "atividades",
-                         "prospeccao_automatica", "usuarios"]:
+                         "prospeccao_automatica", "usuarios",
+                         "ia_config", "empresa_config", "produtos_krylo"]:
         try:
             conn.execute(f"UPDATE {_tab_tenant} SET tenant_id=1 WHERE tenant_id IS NULL")
             conn.commit()

@@ -138,10 +138,11 @@ REGRAS_POR_PRODUTO = [
 ]
 
 
-def carregar_produtos_do_banco(db) -> list:
+def carregar_produtos_do_banco(db, tenant_id: int = 1) -> list:
     try:
         rows = db.execute(
-            "SELECT * FROM produtos_krylo WHERE ativo=1 ORDER BY nome"
+            "SELECT * FROM produtos_krylo WHERE ativo=1 AND tenant_id=%s ORDER BY nome",
+            (tenant_id,)
         ).fetchall()
         if not rows:
             return REGRAS_POR_PRODUTO
