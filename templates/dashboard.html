@@ -485,7 +485,7 @@
           {% if r.valor_estimado %}
             <span class="radar-valor">R$&nbsp;{{ '{:,.0f}'.format(r.valor_estimado) }}</span>
           {% endif %}
-          <span class="badge badge-{{ r.estagio }}">{{ r.estagio_label }}</span>
+          <span class="badge badge-{{ r.etapa }}">{{ r.estagio_label }}</span>
           {% if r.dias_sem_contato is not none %}
             <span class="radar-dias" style="color:{{ rc }}">
               {% if r.dias_sem_contato == 0 %}contato hoje

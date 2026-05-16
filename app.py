@@ -127,7 +127,7 @@ def inject_tenant():
 def check_tenant_setup():
     _bypass = {
         "login", "logout", "static", "setup_wizard", "setup_salvar",
-        "ajuda_index", "ajuda_kia", "dev_ping",
+        "ajuda_index", "ajuda_kia",
     }
     endpoint = request.endpoint or ""
     if endpoint in _bypass or endpoint.startswith("setup") or endpoint.startswith("admin_"):
@@ -339,7 +339,7 @@ def dashboard():
     clientes       = status_counts.get("cliente", 0)
     em_aberto      = sum(
         v for k, v in estagio_counts.items()
-        if k not in ("fechado_ganho", "fechado_perdido")
+        if k != "fechado"
     )
     radar = op_model.listar_radar(tenant_id=tid)
     op_model.salvar_scores_radar(radar)
@@ -367,7 +367,7 @@ def dashboard():
     conn_m = database.get_connection()
     _row90 = conn_m.execute(
         "SELECT COALESCE(SUM(valor_estimado),0) AS total FROM oportunidades"
-        " WHERE estagio='fechado_ganho' AND criado_em >= ? AND tenant_id = ?",
+        " WHERE etapa='fechado' AND criado_em >= ? AND tenant_id = ?",
         (_meta_inicio.isoformat(), tid)
     ).fetchone()
     faturado_90d = float(_row90["total"] if _row90 else 0)
@@ -379,9 +379,9 @@ def dashboard():
           (SELECT COALESCE(COUNT(*),0) FROM prospeccao_automatica WHERE status='novo' AND tenant_id=?) AS sdr_novos,
           (SELECT COALESCE(COUNT(*),0) FROM cadencias WHERE status='pendente' AND tenant_id=?) AS em_cadencia,
           (SELECT COALESCE(COUNT(*),0) FROM oportunidades
-           WHERE estagio NOT IN ('fechado_ganho','fechado_perdido') AND tenant_id=?) AS props_abertas,
+           WHERE etapa != 'fechado' AND tenant_id=?) AS props_abertas,
           (SELECT COALESCE(SUM(valor_estimado),0) FROM oportunidades
-           WHERE estagio='fechado_ganho' AND criado_em LIKE ? AND tenant_id=?) AS fechados_mes
+           WHERE etapa='fechado' AND criado_em LIKE ? AND tenant_id=?) AS fechados_mes
     """, (tid, tid, tid, mes_atual + "%", tid)).fetchone()
     funil = dict(_f) if _f else {"sdr_novos":0,"em_cadencia":0,"props_abertas":0,"fechados_mes":0}
     # Atividade de hoje
@@ -389,10 +389,10 @@ def dashboard():
     limite_14d = (_hoje_d - _td2(days=14)).isoformat()
     cad_hoje = cad_model.listar_hoje(tenant_id=tid)[:5]
     ops_paradas = [dict(r) for r in conn_m.execute("""
-        SELECT o.id, o.titulo, e.nome AS empresa_nome, o.estagio, o.data_ultimo_contato
+        SELECT o.id, o.titulo, e.nome AS empresa_nome, o.etapa, o.data_ultimo_contato
         FROM oportunidades o
         LEFT JOIN empresas e ON e.id = o.empresa_id
-        WHERE o.estagio NOT IN ('fechado_ganho','fechado_perdido')
+        WHERE o.etapa != 'fechado'
           AND o.tenant_id = ?
           AND (o.data_ultimo_contato IS NULL OR o.data_ultimo_contato < ?)
         ORDER BY o.data_ultimo_contato LIMIT 5
@@ -618,7 +618,7 @@ def oportunidades_kanban():
     todas      = op_model.listar(tenant_id=_tid())
     by_estagio = {e: [] for e in op_model.ESTAGIOS}
     for o in todas:
-        by_estagio.setdefault(o["estagio"], []).append(o)
+        by_estagio.setdefault(o["etapa"] or "prospect", []).append(o)
     return render_template(
         "oportunidades/kanban.html",
         by_estagio=by_estagio,
@@ -696,16 +696,16 @@ def oportunidades_excluir(id):
 @login_required
 @require_perfil('vendedor')
 def oportunidades_mover(id):
-    novo = request.json.get("estagio", "")
+    novo = request.json.get("etapa") or request.json.get("estagio", "")
     if novo not in op_model.ESTAGIOS:
         return jsonify({"error": "Estágio inválido"}), 400
     o = op_model.buscar_por_id(id)
     if not o:
         return jsonify({"error": "Não encontrado"}), 404
     dados = dict(o)
-    dados["estagio"] = novo
+    dados["etapa"] = novo
     op_model.atualizar(id, dados)
-    return jsonify({"ok": True, "estagio": novo, "label": op_model.ESTAGIO_LABELS[novo]})
+    return jsonify({"ok": True, "etapa": novo, "label": op_model.ESTAGIO_LABELS[novo]})
 
 
 @app.route("/oportunidades/radar")
@@ -719,7 +719,7 @@ def oportunidades_radar():
             "id": r["id"],
             "titulo": r["titulo"],
             "empresa": r["empresa_nome"],
-            "estagio": r["estagio"],
+            "etapa": r["etapa"],
             "estagio_label": r["estagio_label"],
             "valor": r["valor_estimado"],
             "score": r["score_calc"],
@@ -742,7 +742,7 @@ def _form_oportunidade(f):
     return dict(
         empresa_id=int(f.get("empresa_id")),
         titulo=f.get("titulo", "").strip(),
-        estagio=f.get("estagio", "lead"),
+        etapa=f.get("etapa") or f.get("estagio", "prospect"),
         valor_estimado=valor,
         num_cartoes=cartoes,
         responsavel=f.get("responsavel", "").strip() or None,
@@ -805,7 +805,7 @@ def pipeline_index():
         FROM oportunidades o
         JOIN empresas e ON o.empresa_id = e.id
         WHERE o.tenant_id = ?
-          AND o.estagio NOT IN ('fechado_perdido')
+          AND o.etapa NOT IN ('fechado')
         ORDER BY o.criado_em DESC
     """, (tid,)).fetchall()
     conn.close()
@@ -3035,7 +3035,7 @@ def sdr_config_salvar():
             "tem_telefone", "tem_email", "score_minimo", "max_leads_por_execucao",
             "canal_primario", "canal_secundario", "horario_inicio", "horario_fim",
             "dias_semana", "intervalo_horas", "max_tentativas_por_empresa",
-            "dias_recontato", "excluir_ja_prospectados", "produto_foco", "ramos_selecionados", "ativo",
+            "dias_recontato", "excluir_ja_prospectados", "ramos_selecionados", "ativo",
             "funcionarios_min", "funcionarios_max", "idade_empresa_min",
             "idade_empresa_max", "max_cadencias_por_dia", "nome_campanha",
             "modo_busca", "estados_selecionados", "cidades_selecionadas",
@@ -3237,7 +3237,7 @@ def sdr_otimizar():
         contexto = (
             f"Histórico de execuções (últimas 5): {execucoes}\n"
             f"Config atual: estados={cfg.get('estados')}, score_min={cfg.get('score_minimo')}, "
-            f"max_leads={cfg.get('max_leads_por_execucao')}, produto_foco={cfg.get('produto_foco')}, "
+            f"max_leads={cfg.get('max_leads_por_execucao')}, "
             f"horário={cfg.get('horario_inicio')}h-{cfg.get('horario_fim')}h\n"
             f"Performance por UF/CNAE: {stats}"
         )
@@ -3806,6 +3806,13 @@ def cqa_dashboard():
     alertas = [dict(a) for a in conn.execute(
         "SELECT * FROM cqa_alertas WHERE resolvido=0 ORDER BY criado_em DESC LIMIT 20"
     ).fetchall()]
+    cfg_row = conn.execute(
+        "SELECT valor FROM cqa_config WHERE chave='modo_autonomo'"
+    ).fetchone()
+    autonomo_ativo = cfg_row["valor"].lower() == "true" if cfg_row else True
+    ultimo_repair = conn.execute(
+        "SELECT MAX(executado_em) AS t FROM cqa_resultados"
+    ).fetchone()
     conn.close()
     resultados = [dict(r) for r in rows]
     erros  = sum(1 for r in resultados if r["status"] == "erro")
@@ -3813,7 +3820,9 @@ def cqa_dashboard():
     oks    = sum(1 for r in resultados if r["status"] == "ok")
     return render_template("cqa_dashboard.html",
                            resultados=resultados, alertas=alertas,
-                           erros=erros, avisos=avisos, oks=oks)
+                           erros=erros, avisos=avisos, oks=oks,
+                           autonomo_ativo=autonomo_ativo,
+                           ultimo_repair=(ultimo_repair["t"] or "—")[:16] if ultimo_repair else "—")
 
 
 @app.route("/cqa/rodar", methods=["POST"])
@@ -3870,13 +3879,37 @@ def cqa_fix_all():
     return redirect(url_for("cqa_dashboard"))
 
 
-# ── Dev ping (usado pelo hot-reload do browser) ───────────────────────────────
-
-@app.route("/dev/ping")
-def dev_ping():
-    if not app.debug:
-        return "", 404
-    return jsonify({"t": _START_TIME})
+@app.route("/cqa/toggle-autonomo", methods=["POST"])
+@login_required
+@require_perfil("gerente")
+def cqa_toggle_autonomo():
+    try:
+        ativo = bool(request.json.get("ativo", True))
+        conn = database.get_connection()
+        if database._USE_PG:
+            conn.execute(
+                """INSERT INTO cqa_config (chave, valor)
+                   VALUES ('modo_autonomo', %s)
+                   ON CONFLICT (chave) DO UPDATE SET valor = %s, atualizado_em = NOW()""",
+                (str(ativo), str(ativo)),
+            )
+        else:
+            conn.execute(
+                "INSERT OR REPLACE INTO cqa_config (chave, valor) VALUES (?, ?)",
+                ("modo_autonomo", str(ativo)),
+            )
+        conn.commit()
+        conn.close()
+        try:
+            if ativo:
+                scheduler.resume_job("cqa_automatico")
+            else:
+                scheduler.pause_job("cqa_automatico")
+        except Exception:
+            pass
+        return jsonify({"ok": True, "autonomo": ativo})
+    except Exception as e:
+        return jsonify({"ok": False, "erro": str(e)})
 
 
 if __name__ == "__main__":

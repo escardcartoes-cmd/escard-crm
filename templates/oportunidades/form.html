@@ -33,10 +33,10 @@
         <div class="form-row">
           <div class="form-group">
             <label>Estágio</label>
-            <select name="estagio">
+            <select name="etapa">
               {% for est in estagios %}
-              <option value="{{ est }}" {% if editing and op.estagio == est %}selected
-                      {% elif not editing and est == 'lead' %}selected{% endif %}>
+              <option value="{{ est }}" {% if editing and op.etapa == est %}selected
+                      {% elif not editing and est == 'prospect' %}selected{% endif %}>
                 {{ labels[est] }}
               </option>
               {% endfor %}

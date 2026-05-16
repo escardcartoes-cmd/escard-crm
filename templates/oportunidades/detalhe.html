@@ -25,7 +25,7 @@
         </div>
         <div class="detail-field">
           <label>Estágio</label>
-          <p><span class="badge badge-{{ op.estagio }}">{{ labels.get(op.estagio, op.estagio) }}</span></p>
+          <p><span class="badge badge-{{ op.etapa }}">{{ labels.get(op.etapa, op.etapa) }}</span></p>
         </div>
         <div class="detail-field">
           <label>Valor Estimado</label>
@@ -59,8 +59,8 @@
       <p class="card-title">Mover estágio</p>
       <div style="display:flex;flex-wrap:wrap;gap:6px">
         {% for est in estagios %}
-        <button class="btn btn-sm {{ 'btn-blue' if op.estagio == est else 'btn-outline' }}"
-                {% if op.estagio != est %}onclick="moverEstagio({{ op.id }}, '{{ est }}')"{% endif %}>
+        <button class="btn btn-sm {{ 'btn-blue' if op.etapa == est else 'btn-outline' }}"
+                {% if op.etapa != est %}onclick="moverEstagio({{ op.id }}, '{{ est }}')"{% endif %}>
           {{ labels[est] }}
         </button>
         {% endfor %}

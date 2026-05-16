@@ -56,7 +56,6 @@ _SDR_DEFAULTS = {
     "dias_semana":                "seg,ter,qua,qui,sex",
     "max_leads_por_execucao":     20,
     "max_cadencias_por_dia":      50,
-    "produto_foco":               "todos",
     "ramos_selecionados":         "",
     "modo_busca":                 "cnae",
     "estados_selecionados":       "",
@@ -1337,7 +1336,7 @@ def _rodar_modo_importados(db, cfg: dict, sessao_id: str, stats: dict, max_leads
                  status="aprovado" if res_score["aprovado"] else "baixo_score",
                  capital=capital)
 
-            nome_produto = cfg.get("produto_foco") or "geral"
+            nome_produto = "geral"
             hoje_str = date.today().isoformat()
             try:
                 telefone, email = _salvar_empresa(

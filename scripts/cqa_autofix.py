@@ -179,6 +179,33 @@ def rodar_todos_os_fixes():
     return resultados
 
 
+def gerar_relatorio_repair(resultados: list) -> str:
+    from datetime import datetime
+    linhas = [
+        f"=== CQA Repair Report — {datetime.now().strftime('%Y-%m-%d %H:%M')} ===",
+        f"Total fixes: {len(resultados)}  |  "
+        f"OK: {sum(1 for r in resultados if r['corrigido'])}  |  "
+        f"Falha: {sum(1 for r in resultados if not r['corrigido'])}",
+        "",
+    ]
+    for r in resultados:
+        status = "OK" if r["corrigido"] else "FALHA"
+        linhas.append(f"  [{status}] {r['fix_nome']}: {r['mensagem']}")
+    linhas.append("")
+    return "\n".join(linhas)
+
+
+def rodar_auto_repair_completo() -> dict:
+    resultados = rodar_todos_os_fixes()
+    relatorio  = gerar_relatorio_repair(resultados)
+    print(relatorio)
+    return {
+        "resultados": resultados,
+        "relatorio": relatorio,
+        "ok": all(r["corrigido"] for r in resultados),
+    }
+
+
 if __name__ == "__main__":
     print("=== CQA Auto-Fix ===")
-    rodar_todos_os_fixes()
+    rodar_auto_repair_completo()
