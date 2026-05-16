@@ -1,0 +1,120 @@
+{% extends "base.html" %}
+{% block title %}Verificação em 2 Etapas{% endblock %}
+
+{% block content %}
+<div style="max-width:420px;margin:48px auto;padding:0 16px">
+  <div class="card" style="padding:36px 32px">
+
+    <div style="text-align:center;margin-bottom:28px">
+      <div style="font-size:44px;margin-bottom:12px">🔐</div>
+      <h2 style="font-size:20px;font-weight:800;color:var(--text-primary);margin-bottom:8px">
+        Verificação em 2 Etapas
+      </h2>
+      <p style="font-size:13px;color:var(--text-secondary)">
+        Código enviado por
+        <strong style="color:var(--color-primary)">
+          {{ 'WhatsApp' if canal == 'whatsapp' else 'email' }}
+        </strong>
+      </p>
+    </div>
+
+    {% if erro %}
+    <div class="alert alert-danger" style="margin-bottom:20px">{{ erro }}</div>
+    {% endif %}
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% for cat, msg in messages %}
+        <div class="alert alert-{{ cat }}" style="margin-bottom:16px">{{ msg }}</div>
+      {% endfor %}
+    {% endwith %}
+
+    <form method="post" action="{{ url_for('login_2fa') }}" id="form2fa">
+      <!-- 6 digit inputs -->
+      <div style="display:flex;gap:8px;justify-content:center;margin-bottom:28px">
+        {% for i in range(6) %}
+        <input type="text" maxlength="1" inputmode="numeric" pattern="[0-9]"
+               id="d{{ i }}"
+               style="width:46px;height:56px;text-align:center;font-size:24px;font-weight:700;
+                      border:2px solid var(--border-default);border-radius:10px;
+                      background:var(--glass-bg);color:var(--text-primary);outline:none;
+                      transition:border-color .15s"
+               autocomplete="off">
+        {% endfor %}
+        <input type="hidden" name="codigo" id="codigoHidden">
+      </div>
+
+      <button type="submit" class="btn btn-primary"
+              style="width:100%;padding:13px;font-size:14px;justify-content:center">
+        Verificar →
+      </button>
+    </form>
+
+    <div style="margin-top:20px;display:flex;justify-content:space-between;align-items:center">
+      <div style="font-size:12px;color:var(--text-muted)">
+        Expira em <span id="timerVal" style="font-weight:600">10:00</span>
+      </div>
+      <form method="post" action="{{ url_for('login_2fa_reenviar') }}" style="margin:0">
+        <button type="submit"
+                style="background:none;border:none;cursor:pointer;font-size:12px;
+                       color:var(--color-primary);font-weight:600;font-family:inherit">
+          Reenviar código
+        </button>
+      </form>
+    </div>
+
+    <div style="text-align:center;margin-top:20px">
+      <a href="{{ url_for('login') }}"
+         style="font-size:12px;color:var(--text-muted);text-decoration:none">
+        ← Voltar ao login
+      </a>
+    </div>
+
+  </div>
+</div>
+
+<script>
+(function () {
+  var inputs = Array.from(document.querySelectorAll('#form2fa input[type=text]'));
+
+  inputs.forEach(function (inp, idx) {
+    inp.addEventListener('keydown', function (e) {
+      if (e.key === 'Backspace' && !this.value && idx > 0) {
+        inputs[idx - 1].focus();
+      }
+    });
+    inp.addEventListener('input', function () {
+      this.value = this.value.replace(/\D/g, '').slice(-1);
+      this.style.borderColor = this.value ? 'var(--color-primary)' : 'var(--border-default)';
+      if (this.value && idx < inputs.length - 1) inputs[idx + 1].focus();
+    });
+    inp.addEventListener('paste', function (e) {
+      e.preventDefault();
+      var paste = (e.clipboardData || window.clipboardData).getData('text').replace(/\D/g, '');
+      if (paste.length === 6) {
+        inputs.forEach(function (i, n) { i.value = paste[n] || ''; });
+        inputs[5].focus();
+      }
+    });
+  });
+
+  document.getElementById('form2fa').addEventListener('submit', function () {
+    var code = inputs.map(function (i) { return i.value; }).join('');
+    document.getElementById('codigoHidden').value = code;
+  });
+
+  // Countdown 10 min
+  var secs = 600;
+  var el = document.getElementById('timerVal');
+  var iv = setInterval(function () {
+    secs--;
+    if (secs <= 0) { clearInterval(iv); el.textContent = 'Expirado'; el.style.color = 'var(--color-danger)'; return; }
+    var m = Math.floor(secs / 60), s = secs % 60;
+    el.textContent = m + ':' + (s < 10 ? '0' : '') + s;
+    if (secs <= 60) el.style.color = 'var(--color-danger)';
+  }, 1000);
+
+  // Focus first input
+  if (inputs[0]) inputs[0].focus();
+})();
+</script>
+{% endblock %}
