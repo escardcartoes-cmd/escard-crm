@@ -636,6 +636,7 @@ def run_migrations(conn) -> None:
         f"ALTER TABLE cadencias ADD COLUMN{_ifne} email_d14_at TEXT",
         f"ALTER TABLE sdr_config ADD COLUMN{_ifne} ramos_selecionados TEXT DEFAULT ''",
         f"ALTER TABLE sdr_config ADD COLUMN{_ifne} fonte_leads VARCHAR(20) DEFAULT 'busca'",
+        f"ALTER TABLE contatos ADD COLUMN{_ifne} tenant_id INTEGER DEFAULT 1",
         # cadencias — WhatsApp approval queue
         f"ALTER TABLE cadencias ADD COLUMN{_ifne} whatsapp_status TEXT DEFAULT 'pendente'",
         f"ALTER TABLE cadencias ADD COLUMN{_ifne} whatsapp_aprovado_em TEXT",

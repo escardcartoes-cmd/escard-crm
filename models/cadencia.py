@@ -443,28 +443,44 @@ def cancelar_por_empresa(empresa_id: int) -> None:
     conn.close()
 
 
-def listar_hoje() -> list:
+def listar_hoje(tenant_id=None) -> list:
     today = str(date.today())
     conn = get_connection()
-    rows = conn.execute(
-        """SELECT * FROM cadencias
-           WHERE data_acao = ? AND status='pendente'
-           ORDER BY empresa_nome ASC, etapa ASC""",
-        (today,),
-    ).fetchall()
+    if tenant_id is not None:
+        rows = conn.execute(
+            """SELECT * FROM cadencias
+               WHERE data_acao = ? AND status='pendente' AND tenant_id = ?
+               ORDER BY empresa_nome ASC, etapa ASC""",
+            (today, tenant_id),
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            """SELECT * FROM cadencias
+               WHERE data_acao = ? AND status='pendente'
+               ORDER BY empresa_nome ASC, etapa ASC""",
+            (today,),
+        ).fetchall()
     conn.close()
     return [dict(r) for r in rows]
 
 
-def listar_proximos_dias(n: int = 7) -> list:
+def listar_proximos_dias(n: int = 7, tenant_id=None) -> list:
     tomorrow = str(date.today() + timedelta(days=1))
     cutoff   = str(date.today() + timedelta(days=n))
     conn = get_connection()
-    rows = conn.execute(
-        """SELECT * FROM cadencias
-           WHERE data_acao >= ? AND data_acao <= ? AND status='pendente'
-           ORDER BY data_acao ASC, empresa_nome ASC""",
-        (tomorrow, cutoff),
+    if tenant_id is not None:
+        rows = conn.execute(
+            """SELECT * FROM cadencias
+               WHERE data_acao >= ? AND data_acao <= ? AND status='pendente' AND tenant_id = ?
+               ORDER BY data_acao ASC, empresa_nome ASC""",
+            (tomorrow, cutoff, tenant_id),
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            """SELECT * FROM cadencias
+               WHERE data_acao >= ? AND data_acao <= ? AND status='pendente'
+               ORDER BY data_acao ASC, empresa_nome ASC""",
+            (tomorrow, cutoff),
     ).fetchall()
     conn.close()
     return [dict(r) for r in rows]

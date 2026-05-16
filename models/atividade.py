@@ -4,9 +4,10 @@ TIPOS = ["ligação", "e-mail", "reunião", "visita", "proposta enviada", "outro
 
 
 def listar(
-    empresa_id: int | None = None,
-    oportunidade_id: int | None = None,
+    empresa_id=None,
+    oportunidade_id=None,
     limit: int = 50,
+    tenant_id=None,
 ) -> list:
     conn = get_connection()
     sql = """SELECT a.*,
@@ -16,7 +17,10 @@ def listar(
              LEFT JOIN empresas     e ON a.empresa_id      = e.id
              LEFT JOIN oportunidades o ON a.oportunidade_id = o.id
              WHERE 1=1"""
-    params: list = []
+    params = []
+    if tenant_id is not None:
+        sql += " AND a.tenant_id = ?"
+        params.append(tenant_id)
     if empresa_id:
         sql += " AND a.empresa_id = ?"
         params.append(empresa_id)
@@ -31,10 +35,11 @@ def listar(
 
 
 def criar(dados: dict) -> int:
+    dados = {**dados, "tenant_id": dados.get("tenant_id", 1)}
     conn = get_connection()
     cur = conn.execute(
-        """INSERT INTO atividades (empresa_id, oportunidade_id, tipo, descricao, data)
-           VALUES (:empresa_id, :oportunidade_id, :tipo, :descricao, :data)""",
+        """INSERT INTO atividades (empresa_id, oportunidade_id, tipo, descricao, data, tenant_id)
+           VALUES (:empresa_id, :oportunidade_id, :tipo, :descricao, :data, :tenant_id)""",
         dados,
     )
     conn.commit()

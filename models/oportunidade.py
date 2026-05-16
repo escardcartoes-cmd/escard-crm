@@ -12,12 +12,15 @@ ESTAGIO_LABELS = {
 }
 
 
-def listar(empresa_id: int | None = None, estagio: str | None = None) -> list:
+def listar(empresa_id=None, estagio=None, tenant_id=None) -> list:
     conn = get_connection()
     sql = """SELECT o.*, e.nome AS empresa_nome
              FROM oportunidades o JOIN empresas e ON o.empresa_id = e.id
              WHERE 1=1"""
-    params: list = []
+    params = []
+    if tenant_id is not None:
+        sql += " AND o.tenant_id = ?"
+        params.append(tenant_id)
     if empresa_id:
         sql += " AND o.empresa_id = ?"
         params.append(empresa_id)
@@ -30,27 +33,30 @@ def listar(empresa_id: int | None = None, estagio: str | None = None) -> list:
     return rows
 
 
-def buscar_por_id(id_: int):
+def buscar_por_id(id_: int, tenant_id=None):
     conn = get_connection()
-    row = conn.execute(
-        """SELECT o.*, e.nome AS empresa_nome
-           FROM oportunidades o JOIN empresas e ON o.empresa_id = e.id
-           WHERE o.id = ?""",
-        (id_,),
-    ).fetchone()
+    sql = """SELECT o.*, e.nome AS empresa_nome
+             FROM oportunidades o JOIN empresas e ON o.empresa_id = e.id
+             WHERE o.id = ?"""
+    params = [id_]
+    if tenant_id is not None:
+        sql += " AND o.tenant_id = ?"
+        params.append(tenant_id)
+    row = conn.execute(sql, params).fetchone()
     conn.close()
     return row
 
 
 def criar(dados: dict) -> int:
+    dados = {**dados, "tenant_id": dados.get("tenant_id", 1)}
     conn = get_connection()
     cur = conn.execute(
         """INSERT INTO oportunidades
                (empresa_id, titulo, estagio, valor_estimado, num_cartoes,
-                responsavel, previsao_fechamento, notas)
+                responsavel, previsao_fechamento, notas, tenant_id)
            VALUES
                (:empresa_id, :titulo, :estagio, :valor_estimado, :num_cartoes,
-                :responsavel, :previsao_fechamento, :notas)""",
+                :responsavel, :previsao_fechamento, :notas, :tenant_id)""",
         dados,
     )
     conn.commit()
@@ -80,13 +86,16 @@ def excluir(id_: int) -> None:
     conn.close()
 
 
-def valor_total_pipeline() -> float:
+def valor_total_pipeline(tenant_id=None) -> float:
     conn = get_connection()
-    row = conn.execute(
-        """SELECT COALESCE(SUM(valor_estimado), 0) AS total
-           FROM oportunidades
-           WHERE estagio NOT IN ('fechado_ganho', 'fechado_perdido')"""
-    ).fetchone()
+    sql = """SELECT COALESCE(SUM(valor_estimado), 0) AS total
+             FROM oportunidades
+             WHERE estagio NOT IN ('fechado_ganho', 'fechado_perdido')"""
+    params = []
+    if tenant_id is not None:
+        sql += " AND tenant_id = ?"
+        params.append(tenant_id)
+    row = conn.execute(sql, params).fetchone()
     conn.close()
     return row["total"]
 
@@ -134,10 +143,10 @@ def _proxima_acao(score: int, dias: int, teve_reuniao: bool) -> str:
     return "Manter acompanhamento"
 
 
-def listar_radar() -> list:
+def listar_radar(tenant_id=None) -> list:
     sete_dias_atras = str(date.today() - timedelta(days=7))
     conn = get_connection()
-    rows = conn.execute("""
+    sql = """
         SELECT o.id, o.titulo, o.estagio, o.valor_estimado,
                o.score_fechamento, o.data_ultimo_contato, o.num_interacoes,
                e.nome AS empresa_nome,
@@ -151,10 +160,17 @@ def listar_radar() -> list:
         JOIN empresas e ON o.empresa_id = e.id
         LEFT JOIN atividades a ON a.oportunidade_id = o.id
         WHERE o.estagio NOT IN ('fechado_ganho', 'fechado_perdido')
+    """
+    params = [sete_dias_atras, "reunião"]
+    if tenant_id is not None:
+        sql += " AND o.tenant_id = ?"
+        params.append(tenant_id)
+    sql += """
         GROUP BY o.id, o.titulo, o.estagio, o.valor_estimado, o.score_fechamento,
                  o.data_ultimo_contato, o.num_interacoes, e.nome
         ORDER BY o.criado_em DESC
-    """, (sete_dias_atras, "reunião")).fetchall()
+    """
+    rows = conn.execute(sql, params).fetchall()
     conn.close()
 
     resultado = []
@@ -193,10 +209,16 @@ def salvar_scores_radar(scores: list) -> None:
     conn.close()
 
 
-def contar_por_estagio() -> dict:
+def contar_por_estagio(tenant_id=None) -> dict:
     conn = get_connection()
-    rows = conn.execute(
-        "SELECT estagio, COUNT(*) AS total FROM oportunidades GROUP BY estagio"
-    ).fetchall()
+    if tenant_id is not None:
+        rows = conn.execute(
+            "SELECT estagio, COUNT(*) AS total FROM oportunidades WHERE tenant_id=? GROUP BY estagio",
+            (tenant_id,),
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            "SELECT estagio, COUNT(*) AS total FROM oportunidades GROUP BY estagio"
+        ).fetchall()
     conn.close()
     return {r["estagio"]: r["total"] for r in rows}

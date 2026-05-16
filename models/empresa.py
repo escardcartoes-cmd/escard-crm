@@ -4,36 +4,46 @@ STATUS = ["prospect", "cliente", "inativo"]
 PORTES = ["micro", "pequena", "média", "grande"]
 
 
-def listar(status: str | None = None) -> list:
+def listar(status=None, tenant_id=None) -> list:
     conn = get_connection()
+    sql = "SELECT * FROM empresas WHERE 1=1"
+    params = []
+    if tenant_id is not None:
+        sql += " AND tenant_id = ?"
+        params.append(tenant_id)
     if status:
-        rows = conn.execute(
-            "SELECT * FROM empresas WHERE status = ? ORDER BY nome", (status,)
-        ).fetchall()
-    else:
-        rows = conn.execute("SELECT * FROM empresas ORDER BY nome").fetchall()
+        sql += " AND status = ?"
+        params.append(status)
+    sql += " ORDER BY nome"
+    rows = conn.execute(sql, params).fetchall()
     conn.close()
     return rows
 
 
-def buscar_por_id(id_: int):
+def buscar_por_id(id_: int, tenant_id=None):
     conn = get_connection()
-    row = conn.execute("SELECT * FROM empresas WHERE id = ?", (id_,)).fetchone()
+    sql = "SELECT * FROM empresas WHERE id = ?"
+    params = [id_]
+    if tenant_id is not None:
+        sql += " AND tenant_id = ?"
+        params.append(tenant_id)
+    row = conn.execute(sql, params).fetchone()
     conn.close()
     return row
 
 
 def criar(dados: dict) -> int:
+    dados = {**dados, "tenant_id": dados.get("tenant_id", 1)}
     conn = get_connection()
     cur = conn.execute(
         """INSERT INTO empresas
                (nome, cnpj, segmento, porte, status, telefone, email, cidade, estado,
                 produtos_ativos, num_funcionarios, cliente_ativo, valor_mensal,
-                tipo_cartao, nome_private_label)
+                tipo_cartao, nome_private_label, tenant_id)
            VALUES
                (:nome, :cnpj, :segmento, :porte, :status, :telefone, :email, :cidade, :estado,
                 :produtos_ativos, :num_funcionarios, :cliente_ativo, :valor_mensal,
-                :tipo_cartao, :nome_private_label)""",
+                :tipo_cartao, :nome_private_label, :tenant_id)""",
         dados,
     )
     conn.commit()
@@ -65,10 +75,16 @@ def excluir(id_: int) -> None:
     conn.close()
 
 
-def contar_por_status() -> dict:
+def contar_por_status(tenant_id=None) -> dict:
     conn = get_connection()
-    rows = conn.execute(
-        "SELECT status, COUNT(*) as total FROM empresas GROUP BY status"
-    ).fetchall()
+    if tenant_id is not None:
+        rows = conn.execute(
+            "SELECT status, COUNT(*) AS total FROM empresas WHERE tenant_id=? GROUP BY status",
+            (tenant_id,),
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            "SELECT status, COUNT(*) AS total FROM empresas GROUP BY status"
+        ).fetchall()
     conn.close()
     return {r["status"]: r["total"] for r in rows}
