@@ -498,16 +498,41 @@ def dashboard():
         _meta_fim    = _meta_inicio + _td2(days=90)
         _hoje_d      = _d2.today()
         dias_restantes = max(0, (_meta_fim - _hoje_d).days)
+        meta_valor = 100_000
+        meta_nome  = "Meta Principal"
         try:
             conn_m = database.get_connection()
+            # Busca meta ativa no banco
+            try:
+                _meta_row = conn_m.execute(
+                    "SELECT valor_meta, data_inicio, data_fim, nome FROM metas"
+                    " WHERE tenant_id=? AND ativo=1 ORDER BY criado_em DESC LIMIT 1",
+                    (tid,)
+                ).fetchone()
+                if _meta_row:
+                    meta_valor = float(_meta_row["valor_meta"] or 100_000)
+                    meta_nome  = _meta_row["nome"] or "Meta Principal"
+                    if _meta_row["data_fim"]:
+                        try:
+                            _meta_fim = _d2.fromisoformat(str(_meta_row["data_fim"])[:10])
+                            dias_restantes = max(0, (_meta_fim - _hoje_d).days)
+                        except Exception:
+                            pass
+                    if _meta_row["data_inicio"]:
+                        try:
+                            _meta_inicio = _d2.fromisoformat(str(_meta_row["data_inicio"])[:10])
+                        except Exception:
+                            pass
+            except Exception:
+                pass
             _row90 = conn_m.execute(
                 "SELECT COALESCE(SUM(valor_estimado),0) AS total FROM oportunidades"
                 " WHERE etapa='fechado_ganho' AND criado_em >= ? AND tenant_id = ?",
                 (_meta_inicio.isoformat(), tid)
             ).fetchone()
             faturado_90d = float(_row90["total"] if _row90 else 0)
-            pct_90d = round(min(faturado_90d / 100_000 * 100, 100), 1)
-            ritmo_diario = round((100_000 - faturado_90d) / max(dias_restantes, 1), 2)
+            pct_90d = round(min(faturado_90d / meta_valor * 100, 100), 1)
+            ritmo_diario = round((meta_valor - faturado_90d) / max(dias_restantes, 1), 2)
             # Funil comercial
             try:
                 _f = conn_m.execute("""
@@ -585,6 +610,8 @@ def dashboard():
             funil=funil,
             cad_hoje=cad_hoje,
             ops_paradas=ops_paradas,
+            meta_valor=meta_valor,
+            meta_nome=meta_nome,
         )
     except Exception as e:
         import traceback
@@ -603,6 +630,7 @@ def dashboard():
                 dias_restantes=90, faturado_90d=0, pct_90d=0, ritmo_diario=0,
                 funil={"sdr_novos": 0, "em_cadencia": 0, "props_abertas": 0, "fechados_mes": 0},
                 cad_hoje=[], ops_paradas=[],
+                meta_valor=100000, meta_nome="Meta Principal",
             )
         except Exception:
             return redirect(url_for("login"))
@@ -651,6 +679,51 @@ def erro_geral(e):
         return redirect(url_for("dashboard"))
     except Exception:
         return redirect("/")
+
+
+# ── Metas ─────────────────────────────────────────────────────────────────────
+
+@app.route("/metas/configurar", methods=["GET", "POST"])
+@login_required
+def metas_configurar():
+    try:
+        tenant = tenant_model.get_tenant_atual()
+        tid    = tenant["id"]
+        conn   = database.get_connection()
+
+        if request.method == "POST":
+            valor_meta  = float(request.form.get("valor_meta", 100000) or 100000)
+            data_inicio = request.form.get("data_inicio") or None
+            data_fim    = request.form.get("data_fim") or None
+            nome        = request.form.get("nome") or "Meta Principal"
+
+            conn.execute(
+                "UPDATE metas SET ativo=0 WHERE tenant_id=?", (tid,)
+            )
+            conn.execute(
+                """INSERT INTO metas (tenant_id, nome, valor_meta, data_inicio, data_fim, ativo)
+                   VALUES (?, ?, ?, ?, ?, 1)""",
+                (tid, nome, valor_meta, data_inicio, data_fim),
+            )
+            conn.commit()
+            conn.close()
+            return jsonify({"ok": True, "mensagem": "Meta salva!"})
+
+        meta = conn.execute(
+            """SELECT * FROM metas WHERE tenant_id=? AND ativo=1
+               ORDER BY criado_em DESC LIMIT 1""",
+            (tid,)
+        ).fetchone()
+        conn.close()
+
+        return render_template(
+            "metas_configurar.html",
+            meta=dict(meta) if meta else {},
+            tenant=tenant,
+        )
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        return jsonify({"ok": False, "erro": str(e)})
 
 
 # ── Empresas ──────────────────────────────────────────────────────────────────
