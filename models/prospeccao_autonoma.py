@@ -638,11 +638,12 @@ def buscar_empresas_por_cnae(cnae: str, uf: str, limit: int = 10) -> list:
         except Exception:
             pass
 
-    # ESTRATÉGIA 2: Fallback para API externa
-    print(f'[API EXTERNA] Base local vazia para {cnae}/{uf_upper}')
-    empresas = _buscar_api_externa(cnae, uf_upper, limit)
-    _cache_set(cnae, uf_upper, empresas)
-    return empresas
+    # Base local vazia: não tenta geração aleatória de CNPJs via API (ineficiente)
+    print(f'[SDR] Base local vazia para CNAE {cnae} / {uf_upper}.')
+    print(f'[SDR] Importe leads via CSV em /leads/importar')
+    print(f'[SDR] Ou aguarde importacao da Receita Federal em /admin/importar-rf')
+    _cache_set(cnae, uf_upper, [])
+    return []
 
 
 # ── Scoring ───────────────────────────────────────────────────────────────────

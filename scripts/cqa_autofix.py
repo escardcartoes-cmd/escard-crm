@@ -17,22 +17,57 @@ def _r(nome, corrigido, mensagem):
 def fix_encoding_templates():
     templates_dir = os.path.join(_root, "templates")
     bad = re.compile(r'[ÃÂ][\x80-\xBF]')
-    problemas = []
+    corrigidos = []
+    sem_charset = []
+    erros = []
+
     try:
         for dirpath, _, files in os.walk(templates_dir):
             for fname in files:
                 if not fname.endswith(".html"):
                     continue
+                caminho = os.path.join(dirpath, fname)
                 try:
-                    with open(os.path.join(dirpath, fname), encoding="utf-8") as f:
-                        if bad.search(f.read()):
-                            problemas.append(fname)
-                except Exception:
-                    pass
-        if problemas:
-            return _r("fix_encoding_templates", False,
-                      f"Encoding corrompido (edição manual necessária): {problemas}")
-        return _r("fix_encoding_templates", True, "Nenhum template com encoding corrompido")
+                    with open(caminho, encoding="utf-8", errors="replace") as f:
+                        conteudo = f.read()
+
+                    modificado = False
+                    novo = conteudo
+
+                    # Tenta corrigir double-encoding latin1→utf8 inline
+                    if bad.search(novo):
+                        try:
+                            novo = novo.encode("latin1").decode("utf-8")
+                            modificado = True
+                        except Exception:
+                            pass
+
+                    # Adiciona <meta charset> em arquivos com <head> próprio
+                    if "<head>" in novo and "<meta charset" not in novo.lower():
+                        novo = novo.replace(
+                            "<head>",
+                            '<head>\n    <meta charset="UTF-8">',
+                            1,
+                        )
+                        modificado = True
+                        sem_charset.append(fname)
+
+                    if modificado:
+                        with open(caminho, "w", encoding="utf-8") as f:
+                            f.write(novo)
+                        corrigidos.append(fname)
+
+                except Exception as e:
+                    erros.append(f"{fname}: {str(e)[:60]}")
+
+        partes = [f"Templates corrigidos: {len(corrigidos)}"]
+        if sem_charset:
+            partes.append(f"charset adicionado: {len(sem_charset)}")
+        if erros:
+            partes.append(f"erros: {len(erros)}")
+        ok = len(erros) == 0
+        return _r("fix_encoding_templates", ok, " | ".join(partes))
+
     except Exception as e:
         return _r("fix_encoding_templates", False, f"Erro: {e}")
 
@@ -72,14 +107,14 @@ def fix_cadencias_travadas():
         conn = database.get_connection()
         if database._USE_PG:
             conn.execute(
-                "UPDATE cadencias SET status='cancelado' "
+                "UPDATE cadencias SET status='cancelada' "
                 "WHERE status='pendente' "
                 "AND data_acao > '' "
                 "AND data_acao::date < NOW() - INTERVAL '30 days'"
             )
         else:
             conn.execute(
-                "UPDATE cadencias SET status='cancelado' "
+                "UPDATE cadencias SET status='cancelada' "
                 "WHERE status='pendente' AND data_acao < date('now','-30 days')"
             )
         conn.commit()

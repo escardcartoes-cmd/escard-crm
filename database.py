@@ -44,7 +44,7 @@ _SQLITE_DDL = """
         id                  INTEGER PRIMARY KEY AUTOINCREMENT,
         empresa_id          INTEGER NOT NULL,
         titulo              TEXT    NOT NULL,
-        estagio             TEXT    NOT NULL DEFAULT 'lead',
+        etapa               VARCHAR(30) DEFAULT 'prospect',
         valor_estimado      REAL,
         num_cartoes         INTEGER,
         responsavel         TEXT,
@@ -649,6 +649,9 @@ def run_migrations(conn) -> None:
         f"ALTER TABLE oportunidades ADD COLUMN{_ifne} valor_mensal REAL DEFAULT 0",
         f"ALTER TABLE oportunidades ADD COLUMN{_ifne} dias_etapa INTEGER DEFAULT 0",
         f"ALTER TABLE oportunidades ADD COLUMN{_ifne} ultima_acao_em TEXT",
+        # Remove coluna legada estagio (substituída por etapa)
+        "ALTER TABLE oportunidades DROP COLUMN IF EXISTS estagio" if _USE_PG
+        else "ALTER TABLE oportunidades DROP COLUMN estagio",
     ]
 
     _CREATE = [

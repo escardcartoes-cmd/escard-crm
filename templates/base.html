@@ -210,6 +210,19 @@
         📈 Motor de Expansão
       </a>
 
+      {# ══ FINANCEIRO ══ #}
+      <div class="nav-sep"></div>
+      <p class="nav-section-label">Financeiro</p>
+
+      <a href="{{ url_for('financeiro_index') }}"
+         class="nav-link {% if request.endpoint in ['financeiro_index','cobranca_index','recebiveis_index'] or 'cobranca' in (request.endpoint or '') or 'recebivel' in (request.endpoint or '') %}active{% endif %}">
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+        </svg>
+        💰 Financeiro
+      </a>
+
       {% endif %}{# _is_manager #}
 
       {# ══ EM BREVE ══ #}
