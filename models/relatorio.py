@@ -108,44 +108,48 @@ def coletar_semanal() -> dict:
 
 
 def coletar_dashboard_extra(mes_atual: str) -> dict:
-    conn = get_connection()
-    semana_atras = str(date.today() - timedelta(days=7))
+    try:
+        conn = get_connection()
+        semana_atras = str(date.today() - timedelta(days=7))
 
-    row = conn.execute("SELECT COUNT(*) AS cnt FROM portal_acessos WHERE ativo=1").fetchone()
-    portais_ativos = int((row["cnt"] if row else 0) or 0)
+        row = conn.execute("SELECT COUNT(*) AS cnt FROM portal_acessos WHERE ativo=1").fetchone()
+        portais_ativos = int((row["cnt"] if row else 0) or 0)
 
-    row = conn.execute(
-        "SELECT COUNT(*) AS cnt FROM recebiveis_krylo WHERE status='atrasado'"
-    ).fetchone()
-    rec_atrasados_count = int((row["cnt"] if row else 0) or 0)
+        row = conn.execute(
+            "SELECT COUNT(*) AS cnt FROM recebiveis_krylo WHERE status='atrasado'"
+        ).fetchone()
+        rec_atrasados_count = int((row["cnt"] if row else 0) or 0)
 
-    row = conn.execute(
-        "SELECT COUNT(*) AS cnt FROM oportunidades WHERE estagio='fechado_ganho' AND criado_em >= ?",
-        (semana_atras,)
-    ).fetchone()
-    deals_fechados_semana = int((row["cnt"] if row else 0) or 0)
+        row = conn.execute(
+            "SELECT COUNT(*) AS cnt FROM oportunidades WHERE etapa='fechado_ganho' AND criado_em >= ?",
+            (semana_atras,)
+        ).fetchone()
+        deals_fechados_semana = int((row["cnt"] if row else 0) or 0)
 
-    row = conn.execute(
-        "SELECT COALESCE(SUM(valor_estimado), 0) AS total FROM oportunidades"
-        " WHERE estagio='fechado_ganho' AND criado_em LIKE ?",
-        (mes_atual + "%",)
-    ).fetchone()
-    receita_mes = float((row["total"] if row else 0.0) or 0.0)
+        row = conn.execute(
+            "SELECT COALESCE(SUM(valor_estimado), 0) AS total FROM oportunidades"
+            " WHERE etapa='fechado_ganho' AND criado_em LIKE ?",
+            (mes_atual + "%",)
+        ).fetchone()
+        receita_mes = float((row["total"] if row else 0.0) or 0.0)
 
-    row = conn.execute(
-        "SELECT COUNT(*) AS cnt FROM cadencias WHERE status='pendente'"
-    ).fetchone()
-    cadencias_ativas_count = int((row["cnt"] if row else 0) or 0)
+        row = conn.execute(
+            "SELECT COUNT(*) AS cnt FROM cadencias WHERE status='pendente'"
+        ).fetchone()
+        cadencias_ativas_count = int((row["cnt"] if row else 0) or 0)
 
-    conn.close()
+        conn.close()
 
-    pct_meta = round(min(receita_mes / 100_000 * 100, 100), 1) if receita_mes else 0.0
+        pct_meta = round(min(receita_mes / 100_000 * 100, 100), 1) if receita_mes else 0.0
 
-    return {
-        "portais_ativos": portais_ativos,
-        "rec_atrasados_count": rec_atrasados_count,
-        "deals_fechados_semana": deals_fechados_semana,
-        "receita_mes": receita_mes,
-        "pct_meta": pct_meta,
-        "cadencias_ativas_count": cadencias_ativas_count,
-    }
+        return {
+            "portais_ativos": portais_ativos,
+            "rec_atrasados_count": rec_atrasados_count,
+            "deals_fechados_semana": deals_fechados_semana,
+            "receita_mes": receita_mes,
+            "pct_meta": pct_meta,
+            "cadencias_ativas_count": cadencias_ativas_count,
+        }
+    except Exception as e:
+        print(f'[RELATORIO] Erro em coletar_dashboard_extra: {e}')
+        return {}
