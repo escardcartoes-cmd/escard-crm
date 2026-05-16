@@ -130,7 +130,7 @@
           <td style="font-weight:600">{{ op.titulo }}</td>
           <td class="text-muted">{{ op.empresa_nome }}</td>
           <td style="font-weight:600;color:#16A34A">R$&nbsp;{{ '{:,.0f}'.format(op.valor_estimado or 0) }}</td>
-          <td><span class="badge badge-{{ op.estagio }}">{{ op.estagio }}</span></td>
+          <td><span class="badge badge-{{ op.etapa }}">{{ op.etapa }}</span></td>
           <td class="text-muted text-sm">{{ op.proxima_acao_sugerida or '—' }}</td>
         </tr>
         {% endfor %}

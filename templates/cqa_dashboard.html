@@ -72,6 +72,42 @@
   </div>
 </div>
 
+<!-- Modo autônomo -->
+<div class="card" style="margin-bottom:20px">
+  <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
+    <div>
+      <p class="card-title" style="margin:0 0 4px">🤖 Modo Autônomo</p>
+      <p class="text-muted text-sm" style="margin:0">
+        Quando ativo, o CQA roda e corrige automaticamente a cada 24h.
+        Último repair: <strong>{{ ultimo_repair }}</strong>
+      </p>
+    </div>
+    <div style="display:flex;align-items:center;gap:16px">
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none">
+        <div style="position:relative">
+          <input type="checkbox" id="toggleAutonomo" style="opacity:0;width:0;height:0;position:absolute"
+                 {% if autonomo_ativo %}checked{% endif %}>
+          <div id="toggleTrack" onclick="toggleAutonomo()"
+               style="width:44px;height:24px;border-radius:12px;cursor:pointer;transition:background .2s;
+                      background:{% if autonomo_ativo %}#10B981{% else %}#CBD5E1{% endif %}">
+            <div id="toggleThumb"
+                 style="width:20px;height:20px;border-radius:50%;background:#fff;
+                        position:absolute;top:2px;transition:left .2s;
+                        left:{% if autonomo_ativo %}22px{% else %}2px{% endif %};
+                        box-shadow:0 1px 4px rgba(0,0,0,.2)"></div>
+          </div>
+        </div>
+        <span id="toggleLabel" style="font-size:13px;font-weight:600">
+          {% if autonomo_ativo %}Ativo{% else %}Pausado{% endif %}
+        </span>
+      </label>
+      <form method="post" action="{{ url_for('cqa_fix_all') }}" style="display:inline">
+        <button type="submit" class="btn btn-outline btn-sm">🔧 Repair agora</button>
+      </form>
+    </div>
+  </div>
+</div>
+
 <!-- Resultados dos testes -->
 <div class="card" style="margin-bottom:20px">
   <p class="card-title">Resultados dos Checks</p>
@@ -152,6 +188,33 @@
 
 {% block scripts %}
 <script>
+async function toggleAutonomo() {
+  const cb    = document.getElementById('toggleAutonomo');
+  const track = document.getElementById('toggleTrack');
+  const thumb = document.getElementById('toggleThumb');
+  const lbl   = document.getElementById('toggleLabel');
+  const ativo = !cb.checked;
+  cb.checked  = ativo;
+  track.style.background = ativo ? '#10B981' : '#CBD5E1';
+  thumb.style.left       = ativo ? '22px' : '2px';
+  lbl.textContent        = ativo ? 'Ativo' : 'Pausado';
+  try {
+    const r = await fetch('/cqa/toggle-autonomo', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ativo})
+    });
+    const d = await r.json();
+    if (!d.ok) throw new Error(d.erro || 'Erro');
+  } catch(e) {
+    cb.checked = !ativo;
+    track.style.background = !ativo ? '#10B981' : '#CBD5E1';
+    thumb.style.left       = !ativo ? '22px' : '2px';
+    lbl.textContent        = !ativo ? 'Ativo' : 'Pausado';
+    alert('Erro ao salvar: ' + e.message);
+  }
+}
+
 async function resolverAlerta(id, btn) {
   btn.disabled = true;
   btn.textContent = '…';

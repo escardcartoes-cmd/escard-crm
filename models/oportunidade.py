@@ -1,14 +1,13 @@
 from datetime import date, datetime, timedelta
 from database import get_connection
 
-ESTAGIOS = ["lead", "qualificado", "proposta", "negociacao", "fechado_ganho", "fechado_perdido"]
+ESTAGIOS = ["prospect", "contato", "proposta", "negociacao", "fechado"]
 ESTAGIO_LABELS = {
-    "lead": "Lead",
-    "qualificado": "Qualificado",
-    "proposta": "Proposta",
-    "negociacao": "Negociação",
-    "fechado_ganho": "Fechado (Ganho)",
-    "fechado_perdido": "Fechado (Perdido)",
+    "prospect":   "Prospect",
+    "contato":    "Contato Feito",
+    "proposta":   "Proposta Enviada",
+    "negociacao": "Em Negociação",
+    "fechado":    "Fechado",
 }
 
 
@@ -25,7 +24,7 @@ def listar(empresa_id=None, estagio=None, tenant_id=None) -> list:
         sql += " AND o.empresa_id = ?"
         params.append(empresa_id)
     if estagio:
-        sql += " AND o.estagio = ?"
+        sql += " AND o.etapa = ?"
         params.append(estagio)
     sql += " ORDER BY o.criado_em DESC"
     rows = conn.execute(sql, params).fetchall()
@@ -49,13 +48,19 @@ def buscar_por_id(id_: int, tenant_id=None):
 
 def criar(dados: dict) -> int:
     dados = {**dados, "tenant_id": dados.get("tenant_id", 1)}
+    # Map legacy 'estagio' key to 'etapa' if needed
+    if "estagio" in dados and "etapa" not in dados:
+        dados["etapa"] = dados.pop("estagio")
+    elif "estagio" in dados:
+        dados.pop("estagio")
+    dados.setdefault("etapa", "prospect")
     conn = get_connection()
     cur = conn.execute(
         """INSERT INTO oportunidades
-               (empresa_id, titulo, estagio, valor_estimado, num_cartoes,
+               (empresa_id, titulo, etapa, valor_estimado, num_cartoes,
                 responsavel, previsao_fechamento, notas, tenant_id)
            VALUES
-               (:empresa_id, :titulo, :estagio, :valor_estimado, :num_cartoes,
+               (:empresa_id, :titulo, :etapa, :valor_estimado, :num_cartoes,
                 :responsavel, :previsao_fechamento, :notas, :tenant_id)""",
         dados,
     )
@@ -66,10 +71,15 @@ def criar(dados: dict) -> int:
 
 
 def atualizar(id_: int, dados: dict) -> None:
+    # Map legacy 'estagio' key to 'etapa' if needed
+    if "estagio" in dados and "etapa" not in dados:
+        dados = {**dados, "etapa": dados.pop("estagio")}
+    elif "estagio" in dados:
+        dados = {k: v for k, v in dados.items() if k != "estagio"}
     conn = get_connection()
     conn.execute(
         """UPDATE oportunidades
-           SET empresa_id=:empresa_id, titulo=:titulo, estagio=:estagio,
+           SET empresa_id=:empresa_id, titulo=:titulo, etapa=:etapa,
                valor_estimado=:valor_estimado, num_cartoes=:num_cartoes,
                responsavel=:responsavel, previsao_fechamento=:previsao_fechamento, notas=:notas
            WHERE id=:id""",
@@ -90,7 +100,7 @@ def valor_total_pipeline(tenant_id=None) -> float:
     conn = get_connection()
     sql = """SELECT COALESCE(SUM(valor_estimado), 0) AS total
              FROM oportunidades
-             WHERE estagio NOT IN ('fechado_ganho', 'fechado_perdido')"""
+             WHERE etapa != 'fechado'"""
     params = []
     if tenant_id is not None:
         sql += " AND tenant_id = ?"
@@ -112,11 +122,11 @@ def _dias_sem_contato(data_str) -> int:
         return 999
 
 
-def _calcular_score(estagio: str, dias: int, valor, teve_reuniao: bool) -> int:
+def _calcular_score(etapa: str, dias: int, valor, teve_reuniao: bool) -> int:
     score = 50
     if teve_reuniao:
         score += 20
-    if estagio == "proposta":
+    if etapa == "proposta":
         score += 15
     if valor and valor > 5000:
         score += 10
@@ -147,7 +157,7 @@ def listar_radar(tenant_id=None) -> list:
     sete_dias_atras = str(date.today() - timedelta(days=7))
     conn = get_connection()
     sql = """
-        SELECT o.id, o.titulo, o.estagio, o.valor_estimado,
+        SELECT o.id, o.titulo, o.etapa, o.valor_estimado,
                o.score_fechamento, o.data_ultimo_contato, o.num_interacoes,
                e.nome AS empresa_nome,
                COUNT(a.id) AS interacoes_reais,
@@ -159,14 +169,14 @@ def listar_radar(tenant_id=None) -> list:
         FROM oportunidades o
         JOIN empresas e ON o.empresa_id = e.id
         LEFT JOIN atividades a ON a.oportunidade_id = o.id
-        WHERE o.estagio NOT IN ('fechado_ganho', 'fechado_perdido')
+        WHERE o.etapa != 'fechado'
     """
     params = [sete_dias_atras, "reunião"]
     if tenant_id is not None:
         sql += " AND o.tenant_id = ?"
         params.append(tenant_id)
     sql += """
-        GROUP BY o.id, o.titulo, o.estagio, o.valor_estimado, o.score_fechamento,
+        GROUP BY o.id, o.titulo, o.etapa, o.valor_estimado, o.score_fechamento,
                  o.data_ultimo_contato, o.num_interacoes, e.nome
         ORDER BY o.criado_em DESC
     """
@@ -179,13 +189,13 @@ def listar_radar(tenant_id=None) -> list:
         ultimo = r["ultimo_contato_real"] or r["data_ultimo_contato"]
         dias = _dias_sem_contato(ultimo)
         teve_reuniao = int(r.get("reunioes_recentes") or 0) > 0
-        score = _calcular_score(r["estagio"], dias, r["valor_estimado"], teve_reuniao)
+        score = _calcular_score(r["etapa"], dias, r["valor_estimado"], teve_reuniao)
         proxima = _proxima_acao(score, dias, teve_reuniao)
         r.update({
             "score_calc": score,
             "dias_sem_contato": None if dias >= 999 else dias,
             "proxima_acao": proxima,
-            "estagio_label": ESTAGIO_LABELS.get(r["estagio"], r["estagio"]),
+            "estagio_label": ESTAGIO_LABELS.get(r["etapa"], r["etapa"]),
             "teve_reuniao": teve_reuniao,
         })
         resultado.append(r)
@@ -213,12 +223,12 @@ def contar_por_estagio(tenant_id=None) -> dict:
     conn = get_connection()
     if tenant_id is not None:
         rows = conn.execute(
-            "SELECT estagio, COUNT(*) AS total FROM oportunidades WHERE tenant_id=? GROUP BY estagio",
+            "SELECT etapa, COUNT(*) AS total FROM oportunidades WHERE tenant_id=? GROUP BY etapa",
             (tenant_id,),
         ).fetchall()
     else:
         rows = conn.execute(
-            "SELECT estagio, COUNT(*) AS total FROM oportunidades GROUP BY estagio"
+            "SELECT etapa, COUNT(*) AS total FROM oportunidades GROUP BY etapa"
         ).fetchall()
     conn.close()
-    return {r["estagio"]: r["total"] for r in rows}
+    return {r["etapa"]: r["total"] for r in rows}

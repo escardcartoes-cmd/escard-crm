@@ -68,7 +68,7 @@
             <tr>
               <td><a href="{{ url_for('oportunidades_detalhe', id=o.id) }}"
                      style="color:var(--blue);font-weight:600;text-decoration:none">{{ o.titulo }}</a></td>
-              <td><span class="badge badge-{{ o.estagio }}">{{ labels.get(o.estagio, o.estagio) }}</span></td>
+              <td><span class="badge badge-{{ o.etapa }}">{{ labels.get(o.etapa, o.etapa) }}</span></td>
               <td>{% if o.valor_estimado %}R$ {{ '{:,.2f}'.format(o.valor_estimado) }}{% else %}—{% endif %}</td>
             </tr>
             {% endfor %}

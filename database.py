@@ -300,7 +300,6 @@ _SQLITE_DDL = """
         dias_semana                TEXT    DEFAULT 'seg,ter,qua,qui,sex',
         max_leads_por_execucao     INTEGER DEFAULT 20,
         max_cadencias_por_dia      INTEGER DEFAULT 50,
-        produto_foco               TEXT    DEFAULT 'todos',
         sem_restricao_horario      INTEGER DEFAULT 0,
         atualizado_em              TIMESTAMP DEFAULT (datetime('now', 'localtime'))
     );
@@ -843,8 +842,7 @@ def run_migrations(conn) -> None:
             dias_semana                TEXT    DEFAULT 'seg,ter,qua,qui,sex',
             max_leads_por_execucao     INTEGER DEFAULT 20,
             max_cadencias_por_dia      INTEGER DEFAULT 50,
-            produto_foco               TEXT    DEFAULT 'todos',
-            sem_restricao_horario      INTEGER DEFAULT 0,
+                sem_restricao_horario      INTEGER DEFAULT 0,
             atualizado_em              TIMESTAMP DEFAULT (datetime('now', 'localtime'))
         )""",
         """CREATE TABLE IF NOT EXISTS sdr_execucoes (
@@ -993,6 +991,11 @@ def run_migrations(conn) -> None:
         "CREATE INDEX IF NOT EXISTS idx_rf_uf ON rf_empresas(uf)",
         "CREATE INDEX IF NOT EXISTS idx_rf_cnae_uf ON rf_empresas(cnae_principal, uf)",
         "CREATE INDEX IF NOT EXISTS idx_rf_situacao ON rf_empresas(situacao)",
+        """CREATE TABLE IF NOT EXISTS cqa_config (
+            chave       VARCHAR(50) PRIMARY KEY,
+            valor       TEXT,
+            atualizado_em TIMESTAMP DEFAULT (datetime('now', 'localtime'))
+        )""",
     ]
 
     for sql in _ALTER + _CREATE:

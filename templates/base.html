@@ -133,19 +133,6 @@
         {% endif %}
       </a>
 
-      <a href="{{ url_for('radar_index') }}"
-         class="nav-link {% if 'radar' in (request.endpoint or '') %}active{% endif %}">
-        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <circle cx="12" cy="12" r="3" stroke-width="2"/>
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-            d="M6.343 6.343a8 8 0 000 11.314m11.314 0a8 8 0 000-11.314M4.222 4.222a12 12 0 000 15.556m15.556 0a12 12 0 000-15.556"/>
-        </svg>
-        📡 Radar de Mercado
-        {% if radar_nao_lidos and radar_nao_lidos.total > 0 %}
-        <span class="menu-badge">{{ radar_nao_lidos.total }}</span>
-        {% endif %}
-      </a>
-
       {# ══ VENDAS ══ #}
       <div class="nav-sep"></div>
       <p class="nav-section-label">Vendas</p>
@@ -223,28 +210,32 @@
         📈 Motor de Expansão
       </a>
 
-      <a href="{{ url_for('empresas_lista') }}?filter=cliente"
-         class="nav-link {% if 'portal' in (request.endpoint or '') %}active{% endif %}">
+      {% endif %}{# _is_manager #}
+
+      {# ══ EM BREVE ══ #}
+      {% if _is_manager %}
+      <div class="nav-sep"></div>
+      <p class="nav-section-label">Em breve</p>
+
+      <span class="nav-link nav-link-disabled" style="opacity:.5;cursor:default">
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="3" stroke-width="2"/>
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M6.343 6.343a8 8 0 000 11.314m11.314 0a8 8 0 000-11.314M4.222 4.222a12 12 0 000 15.556m15.556 0a12 12 0 000-15.556"/>
+        </svg>
+        📡 Radar de Mercado
+        <span class="menu-badge" style="background:#94A3B8;margin-left:auto">em breve</span>
+      </span>
+
+      <span class="nav-link nav-link-disabled" style="opacity:.5;cursor:default">
         <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
             d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"/>
         </svg>
         🚀 Portal do Cliente
-      </a>
-
-      {# ══ FINANCEIRO ══ #}
-      <div class="nav-sep"></div>
-      <p class="nav-section-label">Financeiro</p>
-
-      <a href="{{ url_for('financeiro_index') }}"
-         class="nav-link {% if request.endpoint in ['financeiro_index','cobranca_index','recebiveis_index'] or 'cobranca' in (request.endpoint or '') or 'recebivel' in (request.endpoint or '') %}active{% endif %}">
-        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-            d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-        </svg>
-        💰 Financeiro
-      </a>
-      {% endif %}{# _is_manager #}
+        <span class="menu-badge" style="background:#94A3B8;margin-left:auto">em breve</span>
+      </span>
+      {% endif %}
 
       {# ══ SISTEMA ══ #}
       <div class="nav-sep"></div>
