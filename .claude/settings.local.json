@@ -11,7 +11,11 @@
       "Bash(git add *)",
       "Bash(git push *)",
       "Bash(git commit -m ' *)",
-      "Bash(git commit *)"
+      "Bash(git commit *)",
+      "Bash(railway logs *)",
+      "Bash(chmod +x /c/escard-crm/.git/hooks/pre-push)",
+      "Bash(chmod +x /c/escard-crm/scripts/hooks/pre-push)",
+      "Bash(git config *)"
     ]
   }
 }

@@ -166,10 +166,11 @@ def salvar_setup(tenant_id: int, dados: dict):
     # Atualiza tenant
     conn.execute(
         """UPDATE tenants SET nome_empresa=?, nome_plataforma=?,
-           cor_primaria=?, logo_url=?, configurado=1 WHERE id=?""",
+           cor_primaria=?, cor_secundaria=?, logo_url=?, configurado=1 WHERE id=?""",
         (dados.get("nome_empresa", ""),
          dados.get("nome_plataforma", "CRM"),
          dados.get("cor_primaria", "#4A90D9"),
+         dados.get("cor_secundaria", "#8B6914"),
          dados.get("logo_url") or None,
          tenant_id),
     )
@@ -180,11 +181,15 @@ def salvar_setup(tenant_id: int, dados: dict):
     )
     conn.execute(
         """UPDATE tenant_config SET ramo_principal=?, produtos_texto=?,
-           diferenciais=?, tom_ia=?, whatsapp=?, email_contato=?,
+           diferenciais=?, historico=?, concorrentes=?, personalidade_ia=?,
+           tom_ia=?, whatsapp=?, email_contato=?,
            site=?, configurado_em=? WHERE tenant_id=?""",
         (dados.get("ramo_principal", ""),
          dados.get("produtos_texto", ""),
          dados.get("diferenciais", ""),
+         dados.get("historico", ""),
+         dados.get("concorrentes", ""),
+         dados.get("personalidade_ia", ""),
          dados.get("tom_ia", "profissional"),
          dados.get("whatsapp", ""),
          dados.get("email_contato", ""),
@@ -193,10 +198,12 @@ def salvar_setup(tenant_id: int, dados: dict):
          tenant_id),
     )
 
-    # Atualiza usuário admin se fornecido
+    # Atualiza usuário admin se fornecido (sem LIMIT — não suportado em PostgreSQL)
     if dados.get("admin_nome"):
         conn.execute(
-            "UPDATE usuarios SET nome=? WHERE tenant_id=? AND perfil='admin' LIMIT 1",
+            """UPDATE usuarios SET nome=? WHERE id=(
+                SELECT id FROM usuarios WHERE tenant_id=? AND perfil='admin' LIMIT 1
+            )""",
             (dados["admin_nome"], tenant_id),
         )
 
