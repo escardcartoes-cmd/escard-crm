@@ -230,15 +230,18 @@
       <div class="nav-sep"></div>
       <p class="nav-section-label">Em breve</p>
 
-      <span class="nav-link nav-link-disabled" style="opacity:.5;cursor:default">
+      <a href="{{ url_for('radar') }}"
+         class="nav-link {% if request.endpoint == 'radar' %}active{% endif %}">
         <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <circle cx="12" cy="12" r="3" stroke-width="2"/>
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
             d="M6.343 6.343a8 8 0 000 11.314m11.314 0a8 8 0 000-11.314M4.222 4.222a12 12 0 000 15.556m15.556 0a12 12 0 000-15.556"/>
         </svg>
         📡 Radar de Mercado
-        <span class="menu-badge" style="background:#94A3B8;margin-left:auto">em breve</span>
-      </span>
+        {% if radar_nao_lidos and radar_nao_lidos.total > 0 %}
+        <span class="menu-badge" style="margin-left:auto">{{ radar_nao_lidos.total }}</span>
+        {% endif %}
+      </a>
 
       <span class="nav-link nav-link-disabled" style="opacity:.5;cursor:default">
         <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
