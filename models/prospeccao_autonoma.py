@@ -1408,6 +1408,22 @@ def rodar_prospeccao_autonoma(db=None, config_override: dict = None) -> dict:
         fonte = (cfg.get("fonte_leads") or "busca").strip()
         modo  = (cfg.get("modo_busca")  or "cnae").strip()
 
+        # Verifica base rf_empresas quando o modo depende dela
+        if fonte in ("busca", "ambos") or fonte == "busca":
+            try:
+                rf_count = db.execute("SELECT COUNT(*) AS n FROM rf_empresas").fetchone()
+                rf_total = int((rf_count["n"] if rf_count else 0) or 0)
+                if rf_total == 0:
+                    msg = ("[SDR] Base local vazia. Use /admin/importar-rf "
+                           "ou importe leads via CSV em /leads/importar")
+                    print(msg)
+                    _log(db, sessao_id, "info", msg)
+                    finalizar_sessao(db, sessao_id, stats)
+                    return {"status": "base_vazia", "sessao_id": sessao_id,
+                            **stats, "salvos": 0}
+            except Exception as _e:
+                print(f"[SDR] Aviso ao checar rf_empresas: {_e}")
+
         def _rodar_busca(max_l):
             """Executa busca automática respeitando modo_busca."""
             if modo == "sem_cnae":
