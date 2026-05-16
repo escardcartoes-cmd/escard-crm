@@ -28,12 +28,13 @@ TICKET_MEDIO = {
 }
 
 
-def _carregar_produtos_db() -> tuple:
+def _carregar_produtos_db(tenant_id: int = 1) -> tuple:
     """Retorna (lista_nomes, ticket_medio_dict) do banco ou fallback."""
     try:
         conn = get_connection()
         rows = conn.execute(
-            "SELECT nome, valor_por_funcionario FROM produtos_krylo WHERE ativo=1 ORDER BY nome"
+            "SELECT nome, valor_por_funcionario FROM produtos_krylo WHERE ativo=1 AND tenant_id=%s ORDER BY nome",
+            (tenant_id,)
         ).fetchall()
         conn.close()
         if rows:

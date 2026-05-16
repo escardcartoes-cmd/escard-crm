@@ -340,9 +340,10 @@ def criar_etapa(dados: dict) -> int:
         if produto_nome:
             try:
                 _c = get_connection()
+                _tenant = dados.get("tenant_id", 1)
                 _p = _c.execute(
-                    "SELECT pitch_whatsapp FROM produtos_krylo WHERE nome=? AND ativo=1",
-                    (produto_nome,),
+                    "SELECT pitch_whatsapp FROM produtos_krylo WHERE nome=%s AND ativo=1 AND tenant_id=%s",
+                    (produto_nome, _tenant),
                 ).fetchone()
                 _c.close()
                 if _p and (_p["pitch_whatsapp"] or "").strip():

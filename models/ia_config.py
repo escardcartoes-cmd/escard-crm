@@ -21,10 +21,12 @@ _DEFAULTS = {
 }
 
 
-def get_empresa_config(db) -> dict:
-    """Retorna configuração da empresa proprietária do banco."""
+def get_empresa_config(db, tenant_id: int = 1) -> dict:
+    """Retorna configuração da empresa para o tenant dado."""
     try:
-        row = db.execute("SELECT * FROM empresa_config WHERE id=1").fetchone()
+        row = db.execute(
+            "SELECT * FROM empresa_config WHERE tenant_id=%s LIMIT 1", (tenant_id,)
+        ).fetchone()
         if row:
             return dict(row)
     except Exception:
@@ -32,10 +34,12 @@ def get_empresa_config(db) -> dict:
     return {}
 
 
-def get_ia_config(db) -> dict:
-    """Retorna configuração da IA do banco. db deve ser um objeto de conexão."""
+def get_ia_config(db, tenant_id: int = 1) -> dict:
+    """Retorna configuração da IA para o tenant dado."""
     try:
-        row = db.execute("SELECT * FROM ia_config WHERE id=1").fetchone()
+        row = db.execute(
+            "SELECT * FROM ia_config WHERE tenant_id=%s LIMIT 1", (tenant_id,)
+        ).fetchone()
         if row:
             return {**_DEFAULTS, **{k: v for k, v in dict(row).items() if v is not None}}
     except Exception:
@@ -43,9 +47,9 @@ def get_ia_config(db) -> dict:
     return dict(_DEFAULTS)
 
 
-def get_system_prompt(db, contexto_adicional: str = "") -> str:
+def get_system_prompt(db, contexto_adicional: str = "", tenant_id: int = 1) -> str:
     """Monta o system prompt completo com as configurações da IA."""
-    cfg = get_ia_config(db)
+    cfg = get_ia_config(db, tenant_id)
     prompt = f"""Você é {cfg['nome_assistente']}, assistente de vendas da Krylo.
 
 PERSONALIDADE:
@@ -69,7 +73,7 @@ OBJETIVO PRINCIPAL:
 RESTRIÇÕES ABSOLUTAS:
 {cfg['restricoes']}"""
 
-    empresa = get_empresa_config(db)
+    empresa = get_empresa_config(db, tenant_id)
     if empresa.get("nome"):
         prompt += f"""
 
@@ -97,7 +101,7 @@ USE SEMPRE o nome "{empresa.get('nome', 'Krylo')}" ao se referir à empresa."""
     return prompt
 
 
-def get_system_prompt_cached(contexto_adicional: str = "") -> str:
+def get_system_prompt_cached(contexto_adicional: str = "", tenant_id: int = 1) -> str:
     """
     Versão sem parâmetro db — abre e fecha sua própria conexão.
     Use em models/ que não recebem db como argumento.
@@ -105,7 +109,7 @@ def get_system_prompt_cached(contexto_adicional: str = "") -> str:
     from database import get_connection
     conn = get_connection()
     try:
-        return get_system_prompt(conn, contexto_adicional)
+        return get_system_prompt(conn, contexto_adicional, tenant_id)
     except Exception:
         return _fallback_prompt(contexto_adicional)
     finally:
@@ -124,14 +128,14 @@ def get_system_prompt_tenant(db, tenant_id: int, contexto_adicional: str = "") -
     """System prompt adaptado ao contexto do tenant específico."""
     try:
         tc = db.execute(
-            "SELECT * FROM tenant_config WHERE tenant_id = ?", (tenant_id,)
+            "SELECT * FROM tenant_config WHERE tenant_id = %s", (tenant_id,)
         ).fetchone()
-        t = db.execute("SELECT * FROM tenants WHERE id = ?", (tenant_id,)).fetchone()
+        t = db.execute("SELECT * FROM tenants WHERE id = %s", (tenant_id,)).fetchone()
     except Exception:
-        return get_system_prompt(db, contexto_adicional)
+        return get_system_prompt(db, contexto_adicional, tenant_id)
 
     if not tc and not t:
-        return get_system_prompt(db, contexto_adicional)
+        return get_system_prompt(db, contexto_adicional, tenant_id)
 
     tc = dict(tc) if tc else {}
     t = dict(t) if t else {}
@@ -161,10 +165,11 @@ TOM DE VOZ: {tc.get('tom_ia') or 'profissional e consultivo'}
     return prompt
 
 
-def chat_com_ia(db, mensagem: str, historico: list = None, contexto: str = "") -> str:
+def chat_com_ia(db, mensagem: str, historico: list = None, contexto: str = "",
+                tenant_id: int = 1) -> str:
     """Envia mensagem para Claude com o system prompt configurado. Retorna texto da resposta."""
     client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY", ""))
-    system = get_system_prompt(db, contexto)
+    system = get_system_prompt(db, contexto, tenant_id)
     msgs = []
     for h in (historico or [])[-20:]:
         role = h.get("role")

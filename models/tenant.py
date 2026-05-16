@@ -131,6 +131,13 @@ def criar_tenant(dados: dict) -> int:
         conn.execute(
             "INSERT OR IGNORE INTO tenant_config (tenant_id) VALUES (?)", (tenant_id,)
         )
+        # Seed ia_config e empresa_config para o novo tenant
+        conn.execute(
+            "INSERT OR IGNORE INTO ia_config (tenant_id) VALUES (?)", (tenant_id,)
+        )
+        conn.execute(
+            "INSERT OR IGNORE INTO empresa_config (tenant_id) VALUES (?)", (tenant_id,)
+        )
         conn.commit()
 
         # Usuário admin inicial
