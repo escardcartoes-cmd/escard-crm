@@ -10,7 +10,7 @@ STATUS_LABELS = {
 }
 
 
-def listar(score_min=None, score_max=None, status=None):
+def listar(score_min=None, score_max=None, status=None, tenant_id=1):
     conn = get_connection()
     sql = """
         SELECT p.*,
@@ -24,9 +24,9 @@ def listar(score_min=None, score_max=None, status=None):
         FROM prospeccao p
         JOIN contatos c ON p.contato_id = c.id
         JOIN empresas e ON p.empresa_id  = e.id
-        WHERE 1=1
+        WHERE p.tenant_id = ?
     """
-    params = []
+    params = [tenant_id]
     if score_min is not None:
         sql += " AND p.score >= ?"
         params.append(score_min)
@@ -62,10 +62,11 @@ def buscar_por_id(id_):
     return row
 
 
-def buscar_por_contato(contato_id):
+def buscar_por_contato(contato_id, tenant_id=1):
     conn = get_connection()
     row = conn.execute(
-        "SELECT * FROM prospeccao WHERE contato_id = ?", (contato_id,)
+        "SELECT * FROM prospeccao WHERE contato_id = ? AND tenant_id = ?",
+        (contato_id, tenant_id)
     ).fetchone()
     conn.close()
     return row
@@ -74,15 +75,16 @@ def buscar_por_contato(contato_id):
 def criar(dados: dict) -> int:
     conn = get_connection()
     cur = conn.execute(
-        """INSERT OR IGNORE INTO prospeccao (contato_id, empresa_id, status)
-           VALUES (:contato_id, :empresa_id, :status)""",
+        """INSERT OR IGNORE INTO prospeccao (contato_id, empresa_id, status, tenant_id)
+           VALUES (:contato_id, :empresa_id, :status, :tenant_id)""",
         dados,
     )
     conn.commit()
     last = cur.lastrowid
     if not last:
         row = conn.execute(
-            "SELECT id FROM prospeccao WHERE contato_id = ?", (dados["contato_id"],)
+            "SELECT id FROM prospeccao WHERE contato_id = ? AND tenant_id = ?",
+            (dados["contato_id"], dados.get("tenant_id", 1))
         ).fetchone()
         last = row["id"] if row else 0
     conn.close()
@@ -141,16 +143,17 @@ def excluir(id_: int):
     conn.close()
 
 
-def contar_por_status() -> dict:
+def contar_por_status(tenant_id=1) -> dict:
     conn = get_connection()
     rows = conn.execute(
-        "SELECT status, COUNT(*) AS total FROM prospeccao GROUP BY status"
+        "SELECT status, COUNT(*) AS total FROM prospeccao WHERE tenant_id = ? GROUP BY status",
+        (tenant_id,)
     ).fetchall()
     conn.close()
     return {r["status"]: r["total"] for r in rows}
 
 
-def listar_ids_para_exportacao(ids: list) -> list:
+def listar_ids_para_exportacao(ids: list, tenant_id=1) -> list:
     if not ids:
         return []
     placeholders = ",".join("?" * len(ids))
@@ -165,9 +168,9 @@ def listar_ids_para_exportacao(ids: list) -> list:
             FROM prospeccao p
             JOIN contatos c ON p.contato_id = c.id
             JOIN empresas e ON p.empresa_id  = e.id
-            WHERE p.id IN ({placeholders})
+            WHERE p.id IN ({placeholders}) AND p.tenant_id = ?
             ORDER BY p.score DESC, p.criado_em DESC""",
-        ids,
+        ids + [tenant_id],
     ).fetchall()
     conn.close()
     return rows

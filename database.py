@@ -652,6 +652,12 @@ def run_migrations(conn) -> None:
         # Remove coluna legada estagio (substituída por etapa)
         "ALTER TABLE oportunidades DROP COLUMN IF EXISTS estagio" if _USE_PG
         else "ALTER TABLE oportunidades DROP COLUMN estagio",
+        # Multi-tenant: cobranca, recebiveis, portal
+        f"ALTER TABLE clientes_cobranca ADD COLUMN{_ifne} tenant_id INTEGER DEFAULT 1",
+        f"ALTER TABLE recebiveis_krylo ADD COLUMN{_ifne} tenant_id INTEGER DEFAULT 1",
+        f"ALTER TABLE relatorios_cobranca ADD COLUMN{_ifne} tenant_id INTEGER DEFAULT 1",
+        f"ALTER TABLE portal_acessos ADD COLUMN{_ifne} tenant_id INTEGER DEFAULT 1",
+        f"ALTER TABLE prospeccao ADD COLUMN{_ifne} tenant_id INTEGER DEFAULT 1",
     ]
 
     _CREATE = [

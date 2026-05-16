@@ -62,7 +62,7 @@ def coletar_semanal() -> dict:
         portais_ativos = int((row["cnt"] if row else 0) or 0)
 
         row = conn.execute(
-            "SELECT COUNT(*) AS cnt FROM radar_mercado WHERE lido=0"
+            "SELECT COUNT(*) AS cnt FROM radar_alertas WHERE lido=0 AND arquivado=0"
         ).fetchone()
         radar_nao_lidos = int((row["cnt"] if row else 0) or 0)
 
