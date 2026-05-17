@@ -3969,8 +3969,6 @@ def admin_importar_rf_status():
 @login_required
 def setup_wizard():
     t = tenant_model.get_tenant_atual()
-    if t and t.get("configurado"):
-        return redirect(url_for("dashboard"))
     tc = tenant_model.get_tenant_config(t["id"]) if t else {}
     return render_template("setup_wizard.html", tenant=t, tc=tc)
 
@@ -4009,6 +4007,22 @@ def setup_salvar():
     except Exception as e:
         flash(f"Erro ao salvar configuração: {e}", "danger")
     return redirect(url_for("dashboard"))
+
+
+@app.route("/planos")
+@login_required
+@require_perfil("admin")
+def planos_index():
+    from models.planos import PLANOS, verificar_limite
+    t = tenant_model.get_tenant_atual()
+    tid = _tid()
+    plano_atual = (t or {}).get("plano", "starter")
+    uso = {
+        "empresas": verificar_limite(tid, "empresas"),
+        "usuarios": verificar_limite(tid, "usuarios"),
+        "sdr_leads": verificar_limite(tid, "sdr_leads"),
+    }
+    return render_template("planos.html", planos=PLANOS, plano_atual=plano_atual, uso=uso, tenant=t)
 
 
 # ── Ajuda e KIA ────────────────────────────────────────────────────────────────
