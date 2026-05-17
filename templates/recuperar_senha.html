@@ -18,7 +18,7 @@
     {% if sucesso %}
     <div class="alert alert-success" style="margin-bottom:20px">{{ sucesso }}</div>
     <div style="text-align:center;margin-top:8px">
-      <a href="{{ url_for('nova_senha') }}" class="btn btn-primary"
+      <a href="{{ url_for('auth.nova_senha') }}" class="btn btn-primary"
          style="justify-content:center;width:100%;padding:13px;font-size:14px">
         Inserir código →
       </a>
@@ -31,7 +31,6 @@
     {% endif %}
 
     <form method="post" action="{{ url_for('recuperar_senha') }}">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <div class="form-group">
         <label>Email ou Telefone</label>
         <input type="text" name="contato" required autofocus
