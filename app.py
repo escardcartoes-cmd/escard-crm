@@ -63,7 +63,8 @@ def _inject_cadencias_badge():
         row = conn.execute(
             """SELECT COUNT(*) AS cnt FROM cadencias
                WHERE tenant_id = ? AND canal_whatsapp = 1
-                 AND (whatsapp_status IS NULL OR whatsapp_status = 'pendente')
+                 AND (whatsapp_status IS NULL OR whatsapp_status = 'pendente'
+                      OR whatsapp_status = 'aguardando_aprovacao')
                  AND mensagem_whatsapp IS NOT NULL AND mensagem_whatsapp != ''""",
             (tid,)
         ).fetchone()
@@ -3725,7 +3726,8 @@ def sdr_fila_aprovacao():
             """SELECT * FROM cadencias
                WHERE tenant_id = ?
                  AND canal_whatsapp = 1
-                 AND (whatsapp_status IS NULL OR whatsapp_status = 'pendente')
+                 AND (whatsapp_status IS NULL OR whatsapp_status = 'pendente'
+                      OR whatsapp_status = 'aguardando_aprovacao')
                  AND mensagem_whatsapp IS NOT NULL AND mensagem_whatsapp != ''
                ORDER BY data_acao ASC LIMIT 100""",
             (tid,)
