@@ -3756,9 +3756,10 @@ def sdr_aprovar_whatsapp(cad_id):
         if not row:
             conn.close()
             return jsonify({"ok": False, "erro": "Cadência não encontrada"}), 404
+        import datetime as _dt_fix
         conn.execute(
             "UPDATE cadencias SET whatsapp_status = 'aprovado', whatsapp_aprovado_em = ? WHERE id = ? AND tenant_id = ?",
-            (datetime.utcnow().isoformat(), cad_id, tid)
+            (_dt_fix.datetime.utcnow().isoformat(), cad_id, tid)
         )
         conn.commit()
         fone = re.sub(r'\D', '', str(row["contato_whatsapp"] or ""))
