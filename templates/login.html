@@ -102,7 +102,6 @@
 
     <form method="post" action="{{ url_for('login') }}">
       {% if tenant_login %}<input type="hidden" name="t_slug" value="{{ tenant_login.slug }}">{% endif %}
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <div class="form-group">
         <label for="usuario">Usuário</label>
         <input type="text" id="usuario" name="usuario" placeholder="admin"
@@ -117,7 +116,7 @@
     </form>
 
     <div style="text-align:center;margin-top:14px">
-      <a href="/recuperar-senha"
+      <a href="{{ url_for('auth.recuperar_senha') }}"
          style="font-size:12px;color:#94a3b8;text-decoration:none;transition:color .15s"
          onmouseover="this.style.color='var(--primary)'"
          onmouseout="this.style.color='#94a3b8'">

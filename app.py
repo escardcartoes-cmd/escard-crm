@@ -39,6 +39,9 @@ import models.planos as planos_model
 from models.usuario import require_perfil, PERFIS, PERFIL_LABELS
 import ai
 
+from routes.auth import auth_bp
+from routes.empresas import empresas_bp
+from routes.contatos import contatos_bp
 from routes.sdr_evolutivo import sdr_evolutivo_bp
 
 app = Flask(__name__)
@@ -60,10 +63,13 @@ limiter = Limiter(
 )
 
 login_manager = LoginManager(app)
-login_manager.login_view = "login"
+login_manager.login_view = "auth.login"
 login_manager.login_message = "Faça login para acessar o CRM."
 login_manager.login_message_category = "danger"
 
+app.register_blueprint(auth_bp)
+app.register_blueprint(empresas_bp)
+app.register_blueprint(contatos_bp)
 app.register_blueprint(sdr_evolutivo_bp)
 
 @app.context_processor
