@@ -50,6 +50,8 @@ login_manager.login_view = "login"
 login_manager.login_message = "Faça login para acessar o CRM."
 login_manager.login_message_category = "danger"
 
+# TEMP: auto-login admin para desenvolvimento
+
 @app.context_processor
 def _inject_cadencias_badge():
     try:
@@ -127,6 +129,17 @@ def inject_tenant():
     except Exception:
         plano_info = {"nome": "Enterprise"}
     return {"tenant": t, "plano_info": plano_info}
+
+
+@app.before_request
+def _auto_login_admin():
+    """TEMPORÁRIO — remove após corrigir login."""
+    if not current_user.is_authenticated:
+        from models.usuario import buscar_por_id
+        u = buscar_por_id(1)
+        if u:
+            login_user(u, remember=True)
+            session["tenant_id"] = 1
 
 
 @app.before_request
