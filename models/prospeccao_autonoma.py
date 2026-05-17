@@ -242,10 +242,10 @@ def _cache_set(cnae: str, estado: str, resultado: list):
     _cache_cnae[(cnae, estado)] = (time.time(), list(resultado))
 
 
-def _carregar_regras_do_banco() -> list:
+def _carregar_regras_do_banco(tenant_id: int = 1) -> list:
     try:
         conn = get_connection()
-        rows = conn.execute("SELECT * FROM ramos_atividade WHERE ativo=1").fetchall()
+        rows = conn.execute("SELECT * FROM ramos_atividade WHERE ativo=1 AND tenant_id=%s", (tenant_id,)).fetchall()
         conn.close()
         regras = []
         for r in rows:
@@ -873,15 +873,16 @@ def atualizar_progresso(db, sessao_id: str, **kwargs):
 
 def _log(db, sessao_id: str, tipo: str, mensagem: str,
          empresa: str = "", uf: str = "", score: int = 0,
-         produto: str = "", status: str = "", capital: float = 0):
+         produto: str = "", status: str = "", capital: float = 0,
+         tenant_id: int = 1):
     if not sessao_id:
         return
     try:
         db.execute("""
             INSERT INTO sdr_log_ao_vivo
-            (sessao_id, tipo, mensagem, empresa, uf, score, produto, status, capital)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (sessao_id, tipo, str(mensagem)[:300], str(empresa)[:100],
+            (tenant_id, sessao_id, tipo, mensagem, empresa, uf, score, produto, status, capital)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (tenant_id, sessao_id, tipo, str(mensagem)[:300], str(empresa)[:100],
               str(uf)[:5], int(score or 0), str(produto)[:50],
               str(status)[:20], float(capital or 0)))
         db.commit()
