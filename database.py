@@ -144,6 +144,7 @@ _SQLITE_DDL = """
 
     CREATE TABLE IF NOT EXISTS documentos_ia (
         id              INTEGER PRIMARY KEY AUTOINCREMENT,
+        tenant_id       INTEGER   NOT NULL DEFAULT 1,
         nome            TEXT    NOT NULL,
         tipo            TEXT    NOT NULL,
         conteudo_texto  TEXT,
@@ -308,6 +309,7 @@ _SQLITE_DDL = """
 
     CREATE TABLE IF NOT EXISTS sdr_execucoes (
         id           INTEGER PRIMARY KEY AUTOINCREMENT,
+        tenant_id    INTEGER   NOT NULL DEFAULT 1,
         encontrados  INTEGER DEFAULT 0,
         salvos       INTEGER DEFAULT 0,
         cadencias    INTEGER DEFAULT 0,
@@ -340,6 +342,7 @@ _SQLITE_DDL = """
 
     CREATE TABLE IF NOT EXISTS sdr_sessoes (
         id             INTEGER PRIMARY KEY AUTOINCREMENT,
+        tenant_id      INTEGER   NOT NULL DEFAULT 1,
         sessao_id      TEXT    UNIQUE,
         status         TEXT    DEFAULT 'rodando',
         encontrados    INTEGER DEFAULT 0,
@@ -690,6 +693,13 @@ def run_migrations(conn) -> None:
         "CREATE UNIQUE INDEX IF NOT EXISTS idx_ia_config_tenant ON ia_config (tenant_id)",
         "CREATE UNIQUE INDEX IF NOT EXISTS idx_empresa_config_tenant ON empresa_config (tenant_id)",
         "CREATE INDEX IF NOT EXISTS idx_produtos_krylo_tenant ON produtos_krylo (tenant_id)",
+        # Bloco 1 — sdr e documentos_ia
+        f"ALTER TABLE sdr_sessoes ADD COLUMN{_ifne} tenant_id INTEGER DEFAULT 1",
+        f"ALTER TABLE sdr_execucoes ADD COLUMN{_ifne} tenant_id INTEGER DEFAULT 1",
+        f"ALTER TABLE documentos_ia ADD COLUMN{_ifne} tenant_id INTEGER DEFAULT 1",
+        "CREATE INDEX IF NOT EXISTS idx_sdr_sessoes_tenant ON sdr_sessoes (tenant_id)",
+        "CREATE INDEX IF NOT EXISTS idx_sdr_execucoes_tenant ON sdr_execucoes (tenant_id)",
+        "CREATE INDEX IF NOT EXISTS idx_documentos_ia_tenant ON documentos_ia (tenant_id)",
     ]
 
     _CREATE = [
@@ -732,6 +742,7 @@ def run_migrations(conn) -> None:
         )""",
         """CREATE TABLE IF NOT EXISTS documentos_ia (
             id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            tenant_id       INTEGER   NOT NULL DEFAULT 1,
             nome            TEXT    NOT NULL,
             tipo            TEXT    NOT NULL,
             conteudo_texto  TEXT,
@@ -890,6 +901,7 @@ def run_migrations(conn) -> None:
         )""",
         """CREATE TABLE IF NOT EXISTS sdr_execucoes (
             id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            tenant_id    INTEGER   NOT NULL DEFAULT 1,
             encontrados  INTEGER DEFAULT 0,
             salvos       INTEGER DEFAULT 0,
             cadencias    INTEGER DEFAULT 0,
@@ -920,6 +932,7 @@ def run_migrations(conn) -> None:
         )""",
         """CREATE TABLE IF NOT EXISTS sdr_sessoes (
             id             INTEGER PRIMARY KEY AUTOINCREMENT,
+            tenant_id      INTEGER   NOT NULL DEFAULT 1,
             sessao_id      TEXT    UNIQUE,
             status         TEXT    DEFAULT 'rodando',
             encontrados    INTEGER DEFAULT 0,
@@ -1130,7 +1143,8 @@ def run_migrations(conn) -> None:
     # Ensure tenant_id=1 for all existing rows (idempotent)
     for _tab_tenant in ["empresas", "cadencias", "oportunidades", "atividades",
                          "prospeccao_automatica", "usuarios",
-                         "ia_config", "empresa_config", "produtos_krylo"]:
+                         "ia_config", "empresa_config", "produtos_krylo",
+                         "sdr_sessoes", "sdr_execucoes", "documentos_ia"]:
         try:
             conn.execute(f"UPDATE {_tab_tenant} SET tenant_id=1 WHERE tenant_id IS NULL")
             conn.commit()

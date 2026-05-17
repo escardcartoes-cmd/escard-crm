@@ -186,7 +186,7 @@ def _job_prospeccao_autonoma():
     try:
         _c = database.get_connection()
         _cfg = _c.execute(
-            "SELECT ativo, horario_inicio, horario_fim FROM sdr_config WHERE id=1"
+            "SELECT ativo, horario_inicio, horario_fim FROM sdr_config WHERE tenant_id=1 LIMIT 1"
         ).fetchone()
         _c.close()
         if _cfg:
@@ -224,7 +224,7 @@ def _job_prospeccao_autonoma():
 try:
     _conn_sched = database.get_connection()
     _sdr_row = _conn_sched.execute(
-        "SELECT intervalo_horas FROM sdr_config WHERE id=1"
+        "SELECT intervalo_horas FROM sdr_config WHERE tenant_id=1 LIMIT 1"
     ).fetchone()
     _conn_sched.close()
     _sdr_interval = int(_sdr_row["intervalo_horas"]) if _sdr_row else 6
@@ -3047,7 +3047,8 @@ _IA_SYSTEM_PROMPT = (
 def _central_ia_context() -> str:
     """Return text from all knowledge-base documents, trimmed to ~8000 chars."""
     conn = database.get_connection()
-    cur  = conn.execute("SELECT nome, tipo, conteudo_texto FROM documentos_ia WHERE conteudo_texto IS NOT NULL AND conteudo_texto != ''")
+    tid  = int(session.get("tenant_id") or 1)
+    cur  = conn.execute("SELECT nome, tipo, conteudo_texto FROM documentos_ia WHERE tenant_id=? AND conteudo_texto IS NOT NULL AND conteudo_texto != ''", (tid,))
     docs = cur.fetchall()
     conn.close()
     if not docs:
@@ -3100,7 +3101,7 @@ def _extrair_texto(raw: bytes, nome: str, mimetype: str) -> str:
 @login_required
 def central_ia():
     conn  = database.get_connection()
-    cur   = conn.execute("SELECT id, nome, tipo, data_upload, tamanho FROM documentos_ia ORDER BY data_upload DESC")
+    cur   = conn.execute("SELECT id, nome, tipo, data_upload, tamanho FROM documentos_ia WHERE tenant_id=? ORDER BY data_upload DESC", (_tid(),))
     docs  = cur.fetchall()
     conn.close()
     return render_template("central_ia.html", documentos=docs, total_docs=len(docs))
@@ -3158,8 +3159,8 @@ def central_ia_upload():
     conteudo = _extrair_texto(raw, arquivo.filename, arquivo.content_type or "")
     conn = database.get_connection()
     cur  = conn.execute(
-        "INSERT INTO documentos_ia (nome, tipo, conteudo_texto, tamanho) VALUES (?, ?, ?, ?)",
-        (arquivo.filename, ext.upper(), conteudo, tamanho),
+        "INSERT INTO documentos_ia (tenant_id, nome, tipo, conteudo_texto, tamanho) VALUES (?, ?, ?, ?, ?)",
+        (_tid(), arquivo.filename, ext.upper(), conteudo, tamanho),
     )
     doc_id = cur.lastrowid
     conn.commit()
@@ -3171,7 +3172,7 @@ def central_ia_upload():
 @login_required
 def central_ia_documentos():
     conn = database.get_connection()
-    cur  = conn.execute("SELECT id, nome, tipo, data_upload, tamanho FROM documentos_ia ORDER BY data_upload DESC")
+    cur  = conn.execute("SELECT id, nome, tipo, data_upload, tamanho FROM documentos_ia WHERE tenant_id=? ORDER BY data_upload DESC", (_tid(),))
     docs = [dict(d) for d in cur.fetchall()]
     conn.close()
     return jsonify(docs)
@@ -3182,7 +3183,7 @@ def central_ia_documentos():
 @require_perfil('vendedor')
 def central_ia_doc_excluir(id):
     conn = database.get_connection()
-    conn.execute("DELETE FROM documentos_ia WHERE id = ?", (id,))
+    conn.execute("DELETE FROM documentos_ia WHERE id = ? AND tenant_id = ?", (id, _tid()))
     conn.commit()
     conn.close()
     return jsonify({"ok": True})
@@ -3307,12 +3308,12 @@ def sdr_painel():
     from models.prospeccao_autonoma import get_sdr_config
     from models.cnaes import CNAES_POR_CATEGORIA
     conn = database.get_connection()
-    config = get_sdr_config(conn)
+    config = get_sdr_config(conn, _tid())
     pipeline = [dict(r) for r in conn.execute(
         "SELECT * FROM prospeccao_automatica ORDER BY importado_em DESC LIMIT 20"
     ).fetchall()]
     execucoes = [dict(r) for r in conn.execute(
-        "SELECT * FROM sdr_execucoes ORDER BY executado_em DESC LIMIT 10"
+        "SELECT * FROM sdr_execucoes WHERE tenant_id=%s ORDER BY executado_em DESC LIMIT 10", (_tid(),)
     ).fetchall()]
     stats_row = conn.execute("""
         SELECT
@@ -3377,8 +3378,8 @@ def sdr_config_salvar():
         for campo in campos:
             if campo in f:
                 conn.execute(
-                    f"UPDATE sdr_config SET {campo}=:v, atualizado_em=:t WHERE id=1",
-                    {"v": f[campo], "t": _agora},
+                    f"UPDATE sdr_config SET {campo}=:v, atualizado_em=:t WHERE tenant_id=:tid",
+                    {"v": f[campo], "t": _agora, "tid": _tid()},
                 )
         conn.commit()
         conn.close()
@@ -3394,13 +3395,13 @@ def sdr_config_toggle():
     try:
         import datetime as _dt
         conn = database.get_connection()
-        row = conn.execute("SELECT ativo FROM sdr_config WHERE id=1").fetchone()
+        row = conn.execute("SELECT ativo FROM sdr_config WHERE tenant_id=? LIMIT 1", (_tid(),)).fetchone()
         atual = bool(row["ativo"]) if row else True
         novo = 0 if atual else 1
         _agora = _dt.datetime.now().isoformat(sep=" ", timespec="seconds")
         conn.execute(
-            "UPDATE sdr_config SET ativo=:v, atualizado_em=:t WHERE id=1",
-            {"v": novo, "t": _agora},
+            "UPDATE sdr_config SET ativo=:v, atualizado_em=:t WHERE tenant_id=:tid",
+            {"v": novo, "t": _agora, "tid": _tid()},
         )
         conn.commit()
         conn.close()
@@ -3414,7 +3415,7 @@ def sdr_config_toggle():
 def sdr_execucoes_json():
     conn = database.get_connection()
     rows = [dict(r) for r in conn.execute(
-        "SELECT * FROM sdr_execucoes ORDER BY executado_em DESC LIMIT 10"
+        "SELECT * FROM sdr_execucoes WHERE tenant_id=? ORDER BY executado_em DESC LIMIT 10", (_tid(),)
     ).fetchall()]
     conn.close()
     return jsonify(rows)
@@ -3556,7 +3557,7 @@ def sdr_otimizar():
             "SELECT encontrados, salvos, cadencias, descartados, executado_em "
             "FROM sdr_execucoes ORDER BY executado_em DESC LIMIT 5"
         ).fetchall()]
-        config_row = conn.execute("SELECT * FROM sdr_config WHERE id=1").fetchone()
+        config_row = conn.execute("SELECT * FROM sdr_config WHERE tenant_id=? LIMIT 1", (_tid(),)).fetchone()
         cfg = dict(config_row) if config_row else {}
         stats = [dict(r) for r in conn.execute("""
             SELECT uf, cnae_descricao, COUNT(*) AS total,
@@ -3592,7 +3593,7 @@ def sdr_log_ao_vivo():
     try:
         conn = database.get_connection()
         sessao = conn.execute(
-            "SELECT * FROM sdr_sessoes ORDER BY iniciado_em DESC LIMIT 1"
+            "SELECT * FROM sdr_sessoes WHERE tenant_id=? ORDER BY iniciado_em DESC LIMIT 1", (_tid(),)
         ).fetchone()
         if not sessao:
             conn.close()
@@ -3644,7 +3645,7 @@ def sdr_pausar():
     try:
         conn = database.get_connection()
         sessao = conn.execute(
-            "SELECT sessao_id FROM sdr_sessoes WHERE status='rodando' ORDER BY iniciado_em DESC LIMIT 1"
+            "SELECT sessao_id FROM sdr_sessoes WHERE tenant_id=? AND status='rodando' ORDER BY iniciado_em DESC LIMIT 1", (_tid(),)
         ).fetchone()
         if sessao:
             conn.execute(
@@ -3698,7 +3699,7 @@ def sdr_sessoes_lista():
     try:
         conn = database.get_connection()
         sessoes = [dict(r) for r in conn.execute(
-            "SELECT * FROM sdr_sessoes ORDER BY iniciado_em DESC LIMIT 20"
+            "SELECT * FROM sdr_sessoes WHERE tenant_id=? ORDER BY iniciado_em DESC LIMIT 20", (_tid(),)
         ).fetchall()]
         conn.close()
         for s in sessoes:

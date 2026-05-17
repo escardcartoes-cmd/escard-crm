@@ -65,9 +65,9 @@ _SDR_DEFAULTS = {
 }
 
 
-def get_sdr_config(db) -> dict:
+def get_sdr_config(db, tenant_id: int = 1) -> dict:
     try:
-        row = db.execute("SELECT * FROM sdr_config WHERE id=1").fetchone()
+        row = db.execute("SELECT * FROM sdr_config WHERE tenant_id=%s LIMIT 1", (tenant_id,)).fetchone()
         if row:
             return {**_SDR_DEFAULTS, **{k: v for k, v in dict(row).items() if v is not None}}
     except Exception:
@@ -824,9 +824,9 @@ def criar_sessao(db, config: dict) -> str:
     _sessao_global["pausado"] = False
     try:
         db.execute("""
-            INSERT OR IGNORE INTO sdr_sessoes (sessao_id, status, config_snapshot)
-            VALUES (?, 'rodando', ?)
-        """, (sessao_id, json.dumps(config, default=str)[:500]))
+            INSERT OR IGNORE INTO sdr_sessoes (tenant_id, sessao_id, status, config_snapshot)
+            VALUES (?, ?, 'rodando', ?)
+        """, (config.get("tenant_id", 1), sessao_id, json.dumps(config, default=str)[:500]))
         db.commit()
     except Exception:
         pass
@@ -1459,10 +1459,10 @@ def rodar_prospeccao_autonoma(db=None, config_override: dict = None) -> dict:
 
         try:
             db.execute("""
-                INSERT INTO sdr_execucoes (encontrados, salvos, cadencias, descartados, log)
-                VALUES (?, ?, ?, ?, ?)
-            """, (stats["encontrados"], stats["importados"], stats["cadencias"],
-                  stats["descartados"], json.dumps({"sessao_id": sessao_id})))
+                INSERT INTO sdr_execucoes (tenant_id, encontrados, salvos, cadencias, descartados, log)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, (config.get("tenant_id", 1), stats["encontrados"], stats["importados"],
+                  stats["cadencias"], stats["descartados"], json.dumps({"sessao_id": sessao_id})))
             db.commit()
         except Exception:
             pass
