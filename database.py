@@ -393,6 +393,7 @@ _SQLITE_DDL = """
 
     CREATE TABLE IF NOT EXISTS cqa_alertas (
         id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        tenant_id  INTEGER NOT NULL DEFAULT 1,
         tipo       TEXT    NOT NULL,
         check_nome TEXT    NOT NULL,
         mensagem   TEXT,
@@ -707,6 +708,11 @@ def run_migrations(conn) -> None:
         f"ALTER TABLE sdr_log_ao_vivo ADD COLUMN{_ifne} tenant_id INTEGER DEFAULT 1",
         "CREATE INDEX IF NOT EXISTS idx_ramos_atividade_tenant ON ramos_atividade (tenant_id)",
         "CREATE INDEX IF NOT EXISTS idx_sdr_log_ao_vivo_tenant ON sdr_log_ao_vivo (tenant_id)",
+        # Bloco 3 — cqa_alertas e cqa_config
+        f"ALTER TABLE cqa_alertas ADD COLUMN{_ifne} tenant_id INTEGER DEFAULT 1",
+        f"ALTER TABLE cqa_config ADD COLUMN{_ifne} tenant_id INTEGER DEFAULT 1",
+        "CREATE INDEX IF NOT EXISTS idx_cqa_alertas_tenant ON cqa_alertas (tenant_id)",
+        "CREATE INDEX IF NOT EXISTS idx_cqa_config_tenant ON cqa_config (tenant_id)",
     ]
 
     _CREATE = [
@@ -986,6 +992,7 @@ def run_migrations(conn) -> None:
         )""",
         """CREATE TABLE IF NOT EXISTS cqa_alertas (
             id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            tenant_id  INTEGER NOT NULL DEFAULT 1,
             tipo       TEXT    NOT NULL,
             check_nome TEXT    NOT NULL,
             mensagem   TEXT,
@@ -1069,9 +1076,12 @@ def run_migrations(conn) -> None:
         "CREATE INDEX IF NOT EXISTS idx_rf_cnae_uf ON rf_empresas(cnae_principal, uf)",
         "CREATE INDEX IF NOT EXISTS idx_rf_situacao ON rf_empresas(situacao)",
         """CREATE TABLE IF NOT EXISTS cqa_config (
-            chave       VARCHAR(50) PRIMARY KEY,
-            valor       TEXT,
-            atualizado_em TIMESTAMP DEFAULT (datetime('now', 'localtime'))
+            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            tenant_id     INTEGER NOT NULL DEFAULT 1,
+            chave         VARCHAR(50) NOT NULL,
+            valor         TEXT,
+            atualizado_em TIMESTAMP DEFAULT (datetime('now', 'localtime')),
+            UNIQUE (tenant_id, chave)
         )""",
         """CREATE TABLE IF NOT EXISTS radar_alertas (
             id              INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1154,7 +1164,8 @@ def run_migrations(conn) -> None:
                          "prospeccao_automatica", "usuarios",
                          "ia_config", "empresa_config", "produtos_krylo",
                          "sdr_sessoes", "sdr_execucoes", "documentos_ia",
-                         "ramos_atividade", "sdr_log_ao_vivo"]:
+                         "ramos_atividade", "sdr_log_ao_vivo",
+                         "cqa_alertas", "cqa_config"]:
         try:
             conn.execute(f"UPDATE {_tab_tenant} SET tenant_id=1 WHERE tenant_id IS NULL")
             conn.commit()
