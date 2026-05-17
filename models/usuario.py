@@ -342,19 +342,47 @@ def verificar_recuperacao_e_trocar_senha(email, codigo, nova_senha):
 
 
 def criar_admin_se_necessario():
-    conn   = get_connection()
-    existe = conn.execute(
-        "SELECT id FROM usuarios WHERE usuario = ?", ("admin",)
-    ).fetchone()
-    if not existe:
-        conn.execute(
-            "INSERT INTO usuarios (nome, email, usuario, senha_hash, perfil, tenant_id) "
-            "VALUES (?, ?, ?, ?, ?, ?)",
-            ("Administrador", "admin@krylo.com.br", "admin", _hash("escard2024"), "super_admin", 1),
-        )
-    else:
-        conn.execute(
-            "UPDATE usuarios SET perfil = 'super_admin', tenant_id = 1 WHERE usuario = 'admin'"
-        )
-    conn.commit()
-    conn.close()
+    """Garante admin com senha correta, desbloqueado, a cada startup."""
+    from database import _USE_PG
+    conn = get_connection()
+    ph   = _hash("escard2024")
+    try:
+        if _USE_PG:
+            conn.execute(
+                """INSERT INTO usuarios
+                       (nome, email, usuario, senha_hash, perfil, ativo, tenant_id,
+                        tentativas_login, bloqueado_ate)
+                   VALUES (%s,%s,%s,%s,'super_admin',TRUE,1,0,NULL)
+                   ON CONFLICT (usuario) DO UPDATE
+                   SET senha_hash       = EXCLUDED.senha_hash,
+                       perfil           = 'super_admin',
+                       ativo            = TRUE,
+                       tenant_id        = 1,
+                       tentativas_login = 0,
+                       bloqueado_ate    = NULL""",
+                ("Administrador", "admin@krylo.com.br", "admin", ph),
+            )
+        else:
+            existe = conn.execute(
+                "SELECT id FROM usuarios WHERE usuario=?", ("admin",)
+            ).fetchone()
+            if not existe:
+                conn.execute(
+                    "INSERT INTO usuarios "
+                    "(nome,email,usuario,senha_hash,perfil,ativo,tenant_id,tentativas_login) "
+                    "VALUES (?,?,?,?,'super_admin',1,1,0)",
+                    ("Administrador", "admin@krylo.com.br", "admin", ph),
+                )
+            else:
+                conn.execute(
+                    "UPDATE usuarios SET senha_hash=?,perfil='super_admin',ativo=1,"
+                    "tentativas_login=0,bloqueado_ate=NULL WHERE usuario='admin'",
+                    (ph,),
+                )
+        conn.commit()
+    except Exception as e:
+        print(f"[STARTUP] criar_admin erro: {e}")
+        try: conn.rollback()
+        except Exception: pass
+    finally:
+        conn.close()
