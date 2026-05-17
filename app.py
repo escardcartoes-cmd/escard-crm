@@ -3209,54 +3209,7 @@ def configuracoes_empresa_salvar():
 @login_required
 @require_perfil("gerente")
 def sdr_painel():
-    from models.prospeccao_autonoma import get_sdr_config
-    from models.cnaes import CNAES_POR_CATEGORIA
-    conn = database.get_connection()
-    config = get_sdr_config(conn, _tid())
-    pipeline = [dict(r) for r in conn.execute(
-        "SELECT * FROM prospeccao_automatica ORDER BY importado_em DESC LIMIT 20"
-    ).fetchall()]
-    execucoes = [dict(r) for r in conn.execute(
-        "SELECT * FROM sdr_execucoes WHERE tenant_id=%s ORDER BY executado_em DESC LIMIT 10", (_tid(),)
-    ).fetchall()]
-    stats_row = conn.execute("""
-        SELECT
-            COUNT(*) AS total,
-            COALESCE(SUM(CASE WHEN status='novo'       THEN 1 ELSE 0 END), 0) AS novos,
-            COALESCE(SUM(CASE WHEN status='importado'  THEN 1 ELSE 0 END), 0) AS importados,
-            COALESCE(SUM(CASE WHEN status='descartado' THEN 1 ELSE 0 END), 0) AS descartados
-        FROM prospeccao_automatica
-    """).fetchone()
-    try:
-        tenant_id = session.get("tenant_id", 1)
-        leads_imp_row = conn.execute("""
-            SELECT COUNT(*) AS cnt FROM empresas
-            WHERE tenant_id = ?
-            AND status IN ('prospect', 'importado')
-            AND id NOT IN (
-                SELECT empresa_id FROM cadencias
-                WHERE empresa_id IS NOT NULL
-            )
-        """, (tenant_id,)).fetchone()
-        leads_importados_pendentes = int(leads_imp_row["cnt"]) if leads_imp_row else 0
-    except Exception:
-        leads_importados_pendentes = 0
-    conn.close()
-    try:
-        job = scheduler.get_job("prospeccao_autonoma")
-        proxima = job.next_run_time.strftime("%d/%m/%Y %H:%M") if job and job.next_run_time else None
-    except Exception:
-        proxima = None
-    return render_template(
-        "sdr_painel.html",
-        config=config,
-        pipeline=pipeline,
-        execucoes=execucoes,
-        stats=dict(stats_row) if stats_row else {"total": 0, "novos": 0, "importados": 0, "descartados": 0},
-        proxima_execucao=proxima,
-        cnaes_por_categoria=CNAES_POR_CATEGORIA,
-        leads_importados_pendentes=leads_importados_pendentes,
-    )
+    return redirect(url_for("sdr_evolutivo.sdr_evolutivo_dashboard"))
 
 
 @app.route("/sdr/config/salvar", methods=["POST"])
