@@ -28,7 +28,8 @@
       {% endfor %}
     {% endwith %}
 
-    <form method="post" action="{{ url_for('_2fa') }}" id="form2fa">
+    <form method="post" action="{{ url_for('login_2fa') }}" id="form2fa">
+      <!-- 6 digit inputs -->
       <div style="display:flex;gap:8px;justify-content:center;margin-bottom:28px">
         {% for i in range(6) %}
         <input type="text" maxlength="1" inputmode="numeric" pattern="[0-9]"
@@ -52,8 +53,7 @@
       <div style="font-size:12px;color:var(--text-muted)">
         Expira em <span id="timerVal" style="font-weight:600">10:00</span>
       </div>
-      <form method="post" action="{{ url_for('auth.login_2fa_reenviar') }}" style="margin:0">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <form method="post" action="{{ url_for('login_2fa_reenviar') }}" style="margin:0">
         <button type="submit"
                 style="background:none;border:none;cursor:pointer;font-size:12px;
                        color:var(--color-primary);font-weight:600;font-family:inherit">
@@ -63,7 +63,7 @@
     </div>
 
     <div style="text-align:center;margin-top:20px">
-      <a href="{{ url_for('auth.login') }}"
+      <a href="{{ url_for('login') }}"
          style="font-size:12px;color:var(--text-muted);text-decoration:none">
         ← Voltar ao login
       </a>
@@ -117,6 +117,4 @@
   if (inputs[0]) inputs[0].focus();
 })();
 </script>
-{% endblock %}
-{% endblock %}
 {% endblock %}
