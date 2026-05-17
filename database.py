@@ -1125,7 +1125,30 @@ def run_migrations(conn) -> None:
             aplicado    INTEGER DEFAULT 0,
             criado_em   TEXT DEFAULT (datetime('now', 'localtime'))
         )""",
+        """CREATE TABLE IF NOT EXISTS sdr_evolutivo_config (
+            id                    INTEGER PRIMARY KEY AUTOINCREMENT,
+            tenant_id             INTEGER   DEFAULT 1,
+            score_prontidao_minimo INTEGER DEFAULT 8,
+            max_leads_por_execucao INTEGER DEFAULT 20,
+            usar_radar_intent     INTEGER DEFAULT 1,
+            usar_ecosistema       INTEGER DEFAULT 1,
+            pitch_adaptativo      INTEGER DEFAULT 1,
+            atualizado_em         TIMESTAMP DEFAULT (datetime('now', 'localtime'))
+        )""",
+        """CREATE TABLE IF NOT EXISTS radar_intent (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            tenant_id       INTEGER   DEFAULT 1,
+            fonte           TEXT,
+            titulo          TEXT,
+            link            TEXT,
+            data_evento     TEXT,
+            resumo          TEXT,
+            score_intent    INTEGER DEFAULT 8,
+            criado_em       TIMESTAMP DEFAULT (datetime('now', 'localtime'))
+        )""",
         "CREATE INDEX IF NOT EXISTS idx_radar_tenant_lido ON radar_alertas(tenant_id, lido, criado_em)",
+        "CREATE INDEX IF NOT EXISTS idx_sdr_evolutivo_config_tenant ON sdr_evolutivo_config(tenant_id)",
+        "CREATE INDEX IF NOT EXISTS idx_radar_intent_tenant ON radar_intent(tenant_id)",
     ]
 
     for sql in _ALTER + _CREATE:
@@ -1144,6 +1167,7 @@ def run_migrations(conn) -> None:
         "INSERT OR IGNORE INTO ia_config (id, tenant_id) VALUES (1, 1)",
         "INSERT OR IGNORE INTO empresa_config (id, tenant_id) VALUES (1, 1)",
         "INSERT OR IGNORE INTO sdr_config (id) VALUES (1)",
+        "INSERT OR IGNORE INTO sdr_evolutivo_config (id, tenant_id) VALUES (1, 1)",
         # Tenant padrão Escard (id=1 garantido na primeira execução)
         "INSERT OR IGNORE INTO tenants (slug, nome_empresa, nome_plataforma, cor_primaria, cor_secundaria, ativo, configurado) VALUES ('escard', 'Escard Cartões', 'Krylo', '#C5A089', '#8B6914', 1, 1)",
         "INSERT OR IGNORE INTO tenant_config (tenant_id) SELECT 1 WHERE EXISTS (SELECT 1 FROM tenants WHERE slug='escard')",
