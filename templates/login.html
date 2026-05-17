@@ -102,6 +102,7 @@
 
     <form method="post" action="{{ url_for('login') }}">
       {% if tenant_login %}<input type="hidden" name="t_slug" value="{{ tenant_login.slug }}">{% endif %}
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <div class="form-group">
         <label for="usuario">Usuário</label>
         <input type="text" id="usuario" name="usuario" placeholder="admin"
