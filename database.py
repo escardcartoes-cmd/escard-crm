@@ -687,6 +687,9 @@ def run_migrations(conn) -> None:
         f"ALTER TABLE ia_config ADD COLUMN{_ifne} tenant_id INTEGER DEFAULT 1",
         f"ALTER TABLE empresa_config ADD COLUMN{_ifne} tenant_id INTEGER DEFAULT 1",
         f"ALTER TABLE produtos_krylo ADD COLUMN{_ifne} tenant_id INTEGER DEFAULT 1",
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_ia_config_tenant ON ia_config (tenant_id)",
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_empresa_config_tenant ON empresa_config (tenant_id)",
+        "CREATE INDEX IF NOT EXISTS idx_produtos_krylo_tenant ON produtos_krylo (tenant_id)",
     ]
 
     _CREATE = [
@@ -1214,38 +1217,38 @@ def run_migrations(conn) -> None:
 
     # Seed produtos_krylo only if empty
     try:
-        _cnt2 = conn.execute("SELECT COUNT(*) AS cnt FROM produtos_krylo").fetchone()
+        _cnt2 = conn.execute("SELECT COUNT(*) AS cnt FROM produtos_krylo WHERE tenant_id=1").fetchone()
         if (_cnt2["cnt"] if _cnt2 else 0) == 0:
             _produtos_seed = [
-                ("Vale Refeição",    "Cartão para uso em restaurantes e lanchonetes credenciadas",
+                (1, "Vale Refeição",    "Cartão para uso em restaurantes e lanchonetes credenciadas",
                  "Olá {empresa}! A Krylo oferece Vale Refeição sem taxa de adesão. Posso apresentar?",
                  "4711302,5611201,5611203,4712100", "ES,SP,MG,RJ", 50000, 6, 550,
                  "VR,refeição,restaurante,alimentação"),
-                ("Vale Alimentação", "Cartão para compras em supermercados credenciados",
+                (1, "Vale Alimentação", "Cartão para compras em supermercados credenciados",
                  "Olá {empresa}! Nosso Vale Alimentação é aceito em +800 estabelecimentos. Quer conhecer?",
                  "4711302,8610101,4712100", "ES,SP,MG,RJ", 50000, 6, 400,
                  "VA,alimentação,supermercado,mercado"),
-                ("Combustível",      "Cartão para abastecimento em postos credenciados com controle por motorista",
+                (1, "Combustível",      "Cartão para abastecimento em postos credenciados com controle por motorista",
                  "Olá {empresa}! Reduza até 15% do custo com combustível usando o cartão Krylo.",
                  "4120400,4930201,4930202,5320201", "ES,SP,MG,RJ,BA", 50000, 6, 300,
                  "combustível,frota,posto,abastecimento"),
-                ("Premiação",        "Cartão de premiação para reconhecimento de metas e datas comemorativas",
+                (1, "Premiação",        "Cartão de premiação para reconhecimento de metas e datas comemorativas",
                  "Olá {empresa}! Reconheça sua equipe com o Cartão Premiação Krylo. Simples e rápido!",
                  "6202300,7490104,7020400", "ES,SP,MG,RJ", 50000, 6, 200,
                  "premiação,incentivo,reconhecimento,bonificação"),
-                ("Welhub",           "Plataforma de saúde e bem-estar para colaboradores",
+                (1, "Welhub",           "Plataforma de saúde e bem-estar para colaboradores",
                  "Olá {empresa}! O Welhub reduz absenteísmo em até 30%. Posso mostrar como funciona?",
                  "8599604,7020400,6202300", "ES,SP,MG,RJ", 50000, 6, 150,
                  "saúde,bem-estar,academia,terapia,welhub"),
-                ("Vidalink",         "Desconto de até 70% em medicamentos em +15.000 farmácias",
+                (1, "Vidalink",         "Desconto de até 70% em medicamentos em +15.000 farmácias",
                  "Olá {empresa}! Com o Vidalink seus funcionários têm desconto em farmácias. Implantação gratuita!",
                  "8610101,8630503,8650099", "ES,SP,MG,RJ", 50000, 6, 120,
                  "farmácia,medicamento,saúde,vidalink"),
-                ("Private Label",    "Cartão de benefícios com a marca da empresa cliente",
+                (1, "Private Label",    "Cartão de benefícios com a marca da empresa cliente",
                  "Olá {empresa}! Imagine um cartão de benefícios com a marca da sua empresa.",
                  "4711302,8610101,6202300,4120400", "ES,SP,MG,RJ", 100000, 7, 500,
                  "private label,marca própria,cartão personalizado"),
-                ("Cobrança",         "Serviço de recuperação de inadimplentes terceirizado",
+                (1, "Cobrança",         "Serviço de recuperação de inadimplentes terceirizado",
                  "Olá {empresa}! Recuperamos seus inadimplentes com taxa só sobre o recuperado.",
                  "6491300,6492100,7020400", "ES,SP,MG,RJ", 50000, 6, 0,
                  "cobrança,inadimplência,recuperação,crédito"),
@@ -1253,9 +1256,9 @@ def run_migrations(conn) -> None:
             for _p in _produtos_seed:
                 conn.execute(
                     """INSERT OR IGNORE INTO produtos_krylo
-                       (nome, descricao, pitch_whatsapp, cnaes_alvo, estados_alvo,
+                       (tenant_id, nome, descricao, pitch_whatsapp, cnaes_alvo, estados_alvo,
                         capital_min, score_min, valor_por_funcionario, palavras_chave)
-                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                     _p,
                 )
             conn.commit()
