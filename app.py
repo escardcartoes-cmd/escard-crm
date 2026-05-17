@@ -3197,7 +3197,7 @@ def central_ia_doc_excluir(id):
 def configuracoes_ramos():
     conn = database.get_connection()
     ramos = [dict(r) for r in conn.execute(
-        "SELECT * FROM ramos_atividade ORDER BY ativo DESC, nome ASC"
+        "SELECT * FROM ramos_atividade WHERE tenant_id=? ORDER BY ativo DESC, nome ASC", (_tid(),)
     ).fetchall()]
     conn.close()
     return render_template("configuracoes_ramos.html", ramos=ramos)
@@ -3216,9 +3216,10 @@ def configuracoes_ramos_novo():
         conn = database.get_connection()
         conn.execute(
             """INSERT INTO ramos_atividade
-                   (nome, descricao, cnaes, pitch, score_min, estados, capital_min, ativo)
-               VALUES (:nome, :descricao, :cnaes, :pitch, :score_min, :estados, :capital_min, 1)""",
+                   (tenant_id, nome, descricao, cnaes, pitch, score_min, estados, capital_min, ativo)
+               VALUES (:tid, :nome, :descricao, :cnaes, :pitch, :score_min, :estados, :capital_min, 1)""",
             {
+                "tid":         _tid(),
                 "nome":        nome,
                 "descricao":   f.get("descricao", ""),
                 "cnaes":       f.get("cnaes", ""),
@@ -3240,12 +3241,12 @@ def configuracoes_ramos_novo():
 @require_perfil("gerente")
 def configuracoes_ramos_toggle(id):
     conn = database.get_connection()
-    row = conn.execute("SELECT ativo FROM ramos_atividade WHERE id=?", (id,)).fetchone()
+    row = conn.execute("SELECT ativo FROM ramos_atividade WHERE id=? AND tenant_id=?", (id, _tid())).fetchone()
     if not row:
         conn.close()
         return jsonify({"error": "Não encontrado"}), 404
     novo = 0 if row["ativo"] else 1
-    conn.execute("UPDATE ramos_atividade SET ativo=? WHERE id=?", (novo, id))
+    conn.execute("UPDATE ramos_atividade SET ativo=? WHERE id=? AND tenant_id=?", (novo, id, _tid()))
     conn.commit()
     conn.close()
     return jsonify({"ok": True, "ativo": novo})

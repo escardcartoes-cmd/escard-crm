@@ -218,6 +218,7 @@ _SQLITE_DDL = """
 
     CREATE TABLE IF NOT EXISTS ramos_atividade (
         id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        tenant_id   INTEGER NOT NULL DEFAULT 1,
         nome        TEXT    NOT NULL,
         descricao   TEXT,
         cnaes       TEXT,
@@ -362,6 +363,7 @@ _SQLITE_DDL = """
 
     CREATE TABLE IF NOT EXISTS sdr_log_ao_vivo (
         id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        tenant_id  INTEGER NOT NULL DEFAULT 1,
         sessao_id  TEXT,
         tipo       TEXT,
         mensagem   TEXT,
@@ -700,6 +702,11 @@ def run_migrations(conn) -> None:
         "CREATE INDEX IF NOT EXISTS idx_sdr_sessoes_tenant ON sdr_sessoes (tenant_id)",
         "CREATE INDEX IF NOT EXISTS idx_sdr_execucoes_tenant ON sdr_execucoes (tenant_id)",
         "CREATE INDEX IF NOT EXISTS idx_documentos_ia_tenant ON documentos_ia (tenant_id)",
+        # Bloco 2 — ramos_atividade e sdr_log_ao_vivo
+        f"ALTER TABLE ramos_atividade ADD COLUMN{_ifne} tenant_id INTEGER DEFAULT 1",
+        f"ALTER TABLE sdr_log_ao_vivo ADD COLUMN{_ifne} tenant_id INTEGER DEFAULT 1",
+        "CREATE INDEX IF NOT EXISTS idx_ramos_atividade_tenant ON ramos_atividade (tenant_id)",
+        "CREATE INDEX IF NOT EXISTS idx_sdr_log_ao_vivo_tenant ON sdr_log_ao_vivo (tenant_id)",
     ]
 
     _CREATE = [
@@ -811,6 +818,7 @@ def run_migrations(conn) -> None:
         )""",
         """CREATE TABLE IF NOT EXISTS ramos_atividade (
             id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            tenant_id   INTEGER NOT NULL DEFAULT 1,
             nome        TEXT    NOT NULL,
             descricao   TEXT,
             cnaes       TEXT,
@@ -951,6 +959,7 @@ def run_migrations(conn) -> None:
         )""",
         """CREATE TABLE IF NOT EXISTS sdr_log_ao_vivo (
             id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            tenant_id  INTEGER NOT NULL DEFAULT 1,
             sessao_id  TEXT,
             tipo       TEXT,
             mensagem   TEXT,
@@ -1144,7 +1153,8 @@ def run_migrations(conn) -> None:
     for _tab_tenant in ["empresas", "cadencias", "oportunidades", "atividades",
                          "prospeccao_automatica", "usuarios",
                          "ia_config", "empresa_config", "produtos_krylo",
-                         "sdr_sessoes", "sdr_execucoes", "documentos_ia"]:
+                         "sdr_sessoes", "sdr_execucoes", "documentos_ia",
+                         "ramos_atividade", "sdr_log_ao_vivo"]:
         try:
             conn.execute(f"UPDATE {_tab_tenant} SET tenant_id=1 WHERE tenant_id IS NULL")
             conn.commit()
@@ -1202,7 +1212,7 @@ def run_migrations(conn) -> None:
 
     # Seed ramos_atividade only if empty
     try:
-        _cnt = conn.execute("SELECT COUNT(*) AS cnt FROM ramos_atividade").fetchone()
+        _cnt = conn.execute("SELECT COUNT(*) AS cnt FROM ramos_atividade WHERE tenant_id=1").fetchone()
         if (_cnt["cnt"] if _cnt else 0) == 0:
             for _r in [
                 ("Benefícios Corporativos",
@@ -1217,7 +1227,7 @@ def run_migrations(conn) -> None:
                  7, "ES,SP,MG,RJ"),
             ]:
                 conn.execute(
-                    "INSERT INTO ramos_atividade (nome, descricao, cnaes, pitch, score_min, estados) VALUES (?, ?, ?, ?, ?, ?)",
+                    "INSERT INTO ramos_atividade (tenant_id, nome, descricao, cnaes, pitch, score_min, estados) VALUES (1, ?, ?, ?, ?, ?, ?)",
                     _r,
                 )
             conn.commit()
