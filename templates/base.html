@@ -1063,6 +1063,18 @@ tbody tr:hover { background: var(--color-primary-subtle); }
           {% if cadencias_hoje_count > 0 %}<span class="nav-badge">{{ cadencias_hoje_count }}</span>{% endif %}
         </a>
 
+        <a href="{{ url_for('central_ia') }}"
+           class="nav-item {% if 'central_ia' in (request.endpoint or '') %}active{% endif %}">
+          <span class="nav-item-icon">🧠</span>
+          Central de IA
+        </a>
+
+        <a href="{{ url_for('ajuda_index') }}"
+           class="nav-item {% if request.endpoint == 'ajuda_index' %}active{% endif %}">
+          <span class="nav-item-icon">❓</span>
+          Central de Ajuda
+        </a>
+
         {% if _is_manager %}
         <a href="{{ url_for('radar') }}"
            class="nav-item {% if request.endpoint == 'radar' %}active{% endif %}">
