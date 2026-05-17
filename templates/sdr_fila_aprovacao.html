@@ -65,34 +65,49 @@
 
 <script>
 async function aprovar(id, btn) {
+  const card = document.getElementById(`card-${id}`);
   btn.disabled = true;
   btn.textContent = 'Aprovando…';
   try {
     const res = await fetch(`/sdr/aprovar/${id}`, { method: 'POST' });
     const data = await res.json();
     if (data.ok) {
-      document.getElementById(`card-${id}`).remove();
-      if (data.wa_url) window.open(data.wa_url, '_blank');
+      card.style.transition = 'opacity 0.4s';
+      card.style.opacity = '0';
+      setTimeout(() => card.remove(), 400);
+      const badge = document.querySelector('.badge.bg-warning');
+      if (badge) {
+        const n = parseInt(badge.textContent) - 1;
+        badge.textContent = n > 0 ? `${n} pendente${n !== 1 ? 's' : ''}` : '0 pendentes';
+      }
     } else {
       alert('Erro: ' + (data.erro || 'desconhecido'));
       btn.disabled = false;
-      btn.textContent = '✅ Aprovar';
+      btn.textContent = '✅ Aprovar e abrir WhatsApp';
     }
   } catch (e) {
     alert('Erro de rede');
     btn.disabled = false;
-    btn.textContent = '✅ Aprovar';
+    btn.textContent = '✅ Aprovar e abrir WhatsApp';
   }
 }
 
 async function rejeitar(id, btn) {
+  const card = document.getElementById(`card-${id}`);
   btn.disabled = true;
   btn.textContent = 'Rejeitando…';
   try {
     const res = await fetch(`/sdr/rejeitar/${id}`, { method: 'POST' });
     const data = await res.json();
     if (data.ok) {
-      document.getElementById(`card-${id}`).remove();
+      card.style.transition = 'opacity 0.4s';
+      card.style.opacity = '0';
+      setTimeout(() => card.remove(), 400);
+      const badge = document.querySelector('.badge.bg-warning');
+      if (badge) {
+        const n = parseInt(badge.textContent) - 1;
+        badge.textContent = n > 0 ? `${n} pendente${n !== 1 ? 's' : ''}` : '0 pendentes';
+      }
     } else {
       alert('Erro: ' + (data.erro || 'desconhecido'));
       btn.disabled = false;
