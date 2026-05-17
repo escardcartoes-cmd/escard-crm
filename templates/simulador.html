@@ -64,25 +64,17 @@
       <label style="display:block;font-size:12px;font-weight:600;color:var(--text);margin-bottom:8px">
         Produtos
       </label>
-      <div style="display:flex;flex-direction:column;gap:8px">
-        {% for prod in produtos %}
-        <label style="display:flex;align-items:center;gap:10px;cursor:pointer;
-                       padding:8px 10px;border:1px solid var(--border);border-radius:6px;
-                       transition:background .15s,border-color .15s"
-               onmouseover="this.style.background='#FDF6F0';this.style.borderColor='#C5A089'"
-               onmouseout="this.style.background='';this.style.borderColor='var(--border)'">
-          <input type="checkbox" name="produtos" value="{{ prod }}"
-                 onchange="calcularEstimativa()"
-                 style="width:15px;height:15px;accent-color:#C5A089;cursor:pointer;flex-shrink:0">
-          <span style="font-size:13px;font-weight:500;color:var(--text);flex:1">{{ prod }}</span>
-          {% if ticket_medio.get(prod) %}
-          <span class="text-muted text-sm" style="flex-shrink:0">
-            R$&nbsp;{{ ticket_medio[prod] }}/func/mês
-          </span>
-          {% endif %}
-        </label>
-        {% endfor %}
+      <div style="display:grid;grid-template-columns:4fr 2fr 3fr 2fr 1fr;gap:4px;margin-bottom:4px">
+        <span style="font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;padding:0 2px">Produto</span>
+        <span style="font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;padding:0 2px">Qtd func.</span>
+        <span style="font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;padding:0 2px">R$/func/mês</span>
+        <span style="font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;padding:0 2px">Total/mês</span>
+        <span></span>
       </div>
+      <div id="produtosContainer"></div>
+      <button type="button" class="btn btn-outline-primary btn-sm mt-2" onclick="adicionarLinha()">
+        + Adicionar produto
+      </button>
     </div>
 
     <!-- Tipo -->
@@ -194,40 +186,89 @@
 
 {% block scripts %}
 <script>
-/* ── Ticket médio embedded from Flask ── */
-var TICKET_MEDIO = {{ ticket_medio | tojson }};
+/* ── Escape HTML helper ── */
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
 
 /* ── Bidirectional slider/number sync ── */
 function sincFuncRange(val) {
   document.getElementById('sim_func_num').value = val;
-  calcularEstimativa();
+  atualizarTotalGeral();
 }
 
 function sincFuncNum(val) {
   var v = Math.min(Math.max(parseInt(val) || 1, 1), 20000);
   document.getElementById('sim_func_range').value = v;
-  calcularEstimativa();
+  atualizarTotalGeral();
 }
 
-/* ── Real-time estimate ── */
-function calcularEstimativa() {
-  var numFunc = parseInt(document.getElementById('sim_func_num').value) || 0;
-  var checkboxes = document.querySelectorAll('input[name="produtos"]:checked');
-  var total = 0;
-  checkboxes.forEach(function(cb) {
-    var ticket = TICKET_MEDIO[cb.value] || 0;
-    total += ticket * numFunc;
-  });
+/* ── Dynamic product lines ── */
+function _criarLinha() {
+  var div = document.createElement('div');
+  div.className = 'linha-produto row g-2 align-items-center mb-2';
+  div.innerHTML =
+    '<div class="col-4"><input type="text" name="produto_nome[]" class="form-control form-control-sm" placeholder="Ex: Vale Refeição"></div>' +
+    '<div class="col-2"><input type="number" name="produto_qtd[]" class="form-control form-control-sm" placeholder="Qtd" min="1" oninput="calcularLinha(this)"></div>' +
+    '<div class="col-3"><input type="number" name="produto_valor[]" class="form-control form-control-sm" placeholder="R$/func" min="0" step="0.01" oninput="calcularLinha(this)"></div>' +
+    '<div class="col-2"><input type="text" class="form-control form-control-sm bg-light total-linha" readonly placeholder="Total"></div>' +
+    '<div class="col-1"><button type="button" class="btn btn-sm btn-outline-danger" onclick="removerLinha(this)">×</button></div>';
+  return div;
+}
 
+function adicionarLinha() {
+  var container = document.getElementById('produtosContainer');
+  var linha = _criarLinha();
+  container.appendChild(linha);
+  linha.querySelector('input[name="produto_nome[]"]').focus();
+}
+
+function removerLinha(btn) {
+  btn.closest('.linha-produto').remove();
+  atualizarTotalGeral();
+}
+
+function calcularLinha(input) {
+  var linha = input.closest('.linha-produto');
+  var qtd = parseFloat(linha.querySelector('[name="produto_qtd[]"]').value) || 0;
+  var val = parseFloat(linha.querySelector('[name="produto_valor[]"]').value) || 0;
+  linha.querySelector('.total-linha').value = (qtd && val)
+    ? 'R$ ' + (qtd * val).toLocaleString('pt-BR', {minimumFractionDigits: 2})
+    : '';
+  atualizarTotalGeral();
+}
+
+function atualizarTotalGeral() {
+  var total = 0;
+  document.querySelectorAll('.linha-produto').forEach(function(linha) {
+    var qtd = parseFloat(linha.querySelector('[name="produto_qtd[]"]').value) || 0;
+    var val = parseFloat(linha.querySelector('[name="produto_valor[]"]').value) || 0;
+    total += qtd * val;
+  });
   var estimativaDiv = document.getElementById('sim_estimativa');
   var estimativaVal = document.getElementById('sim_estimativa_val');
-
-  if (total > 0 && checkboxes.length > 0) {
+  if (total > 0) {
     estimativaDiv.style.display = 'block';
     estimativaVal.textContent = 'R$ ' + total.toLocaleString('pt-BR', {minimumFractionDigits: 0, maximumFractionDigits: 0});
   } else {
     estimativaDiv.style.display = 'none';
   }
+}
+
+function calcularEstimativa() { atualizarTotalGeral(); }
+
+/* ── Coletar linhas válidas ── */
+function _coletarLinhas() {
+  var linhas = [];
+  document.querySelectorAll('.linha-produto').forEach(function(linha) {
+    var nome = linha.querySelector('[name="produto_nome[]"]').value.trim();
+    var qtd  = parseFloat(linha.querySelector('[name="produto_qtd[]"]').value) || 0;
+    var val  = parseFloat(linha.querySelector('[name="produto_valor[]"]').value) || 0;
+    if (nome && qtd > 0 && val > 0) {
+      linhas.push({nome: nome, qtd: qtd, valor: val, total: qtd * val});
+    }
+  });
+  return linhas;
 }
 
 /* ── Gerar proposta via backend ── */
@@ -239,27 +280,21 @@ async function gerarProposta() {
     return;
   }
 
-  var numFunc = parseInt(document.getElementById('sim_func_num').value) || 1;
-  var produtosSel = [];
-  document.querySelectorAll('input[name="produtos"]:checked').forEach(function(cb) {
-    produtosSel.push(cb.value);
-  });
-  if (produtosSel.length === 0) {
-    alert('Selecione ao menos um produto.');
+  var linhas = _coletarLinhas();
+  if (linhas.length === 0) {
+    alert('Adicione ao menos um produto com quantidade e valor.');
     return;
   }
 
+  var numFunc = parseInt(document.getElementById('sim_func_num').value) || 1;
   var tipo = document.querySelector('input[name="sim_tipo"]:checked').value;
 
-  /* Show result panel with loading state */
-  var resultDiv = document.getElementById('sim_resultado');
+  var resultDiv  = document.getElementById('sim_resultado');
   var loadingDiv = document.getElementById('sim_loading');
   var contentDiv = document.getElementById('sim_content');
-  resultDiv.style.display = 'block';
+  resultDiv.style.display  = 'block';
   loadingDiv.style.display = 'block';
   contentDiv.style.display = 'none';
-
-  /* Scroll result into view */
   resultDiv.scrollIntoView({behavior: 'smooth', block: 'start'});
 
   try {
@@ -267,57 +302,46 @@ async function gerarProposta() {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({
-        empresa: empresa,
+        empresa:         empresa,
         num_funcionarios: numFunc,
-        produtos: produtosSel,
-        tipo: tipo
+        produtos:        linhas.map(function(l) { return l.nome; }),
+        produtos_linhas: linhas,
+        tipo:            tipo
       })
     });
 
-    if (!resp.ok) {
-      throw new Error('Erro HTTP ' + resp.status);
-    }
-
+    if (!resp.ok) throw new Error('Erro HTTP ' + resp.status);
     var data = await resp.json();
-
     if (data.error) {
       alert('Erro ao gerar proposta: ' + data.error);
       loadingDiv.style.display = 'none';
       return;
     }
 
-    /* Build breakdown table */
+    /* Build breakdown table from local data */
     var tbody = document.getElementById('sim_table_body');
     tbody.innerHTML = '';
     var grandTotal = 0;
-
-    produtosSel.forEach(function(prod) {
-      var ticket = TICKET_MEDIO[prod] || 0;
-      var total = ticket * numFunc;
-      grandTotal += total;
+    linhas.forEach(function(l) {
+      grandTotal += l.total;
       var tr = document.createElement('tr');
       tr.style.borderBottom = '1px solid var(--border)';
       tr.innerHTML =
-        '<td style="padding:8px 10px;font-weight:500">' + escHtml(prod) + '</td>' +
-        '<td style="padding:8px 10px;text-align:right;color:var(--muted)">R$&nbsp;' + ticket.toLocaleString('pt-BR') + '</td>' +
-        '<td style="padding:8px 10px;text-align:right;color:var(--muted)">' + numFunc.toLocaleString('pt-BR') + '</td>' +
-        '<td style="padding:8px 10px;text-align:right;font-weight:700;color:#16A34A">R$&nbsp;' + total.toLocaleString('pt-BR', {minimumFractionDigits: 0}) + '</td>';
+        '<td style="padding:8px 10px;font-weight:500">'                                                        + escHtml(l.nome) + '</td>' +
+        '<td style="padding:8px 10px;text-align:right;color:var(--muted)">R$&nbsp;'                            + l.valor.toLocaleString('pt-BR', {minimumFractionDigits: 2}) + '</td>' +
+        '<td style="padding:8px 10px;text-align:right;color:var(--muted)">'                                    + l.qtd.toLocaleString('pt-BR') + '</td>' +
+        '<td style="padding:8px 10px;text-align:right;font-weight:700;color:#16A34A">R$&nbsp;'                 + l.total.toLocaleString('pt-BR', {minimumFractionDigits: 0}) + '</td>';
       tbody.appendChild(tr);
     });
 
-    /* Grand total */
     document.getElementById('sim_total_val').textContent =
       'R$ ' + grandTotal.toLocaleString('pt-BR', {minimumFractionDigits: 0, maximumFractionDigits: 0}) + '/mês';
 
-    /* Proposal text */
     var texto = data.proposta || data.texto || data.mensagem || '';
     document.getElementById('sim_proposta_texto').textContent = texto;
 
-    /* WhatsApp button (blank number — user pastes/types) */
-    var waTxt = texto;
     document.getElementById('sim_wa_btn').onclick = function() {
-      var waUrl = 'https://wa.me/?text=' + encodeURIComponent(waTxt);
-      window.open(waUrl, '_blank');
+      window.open('https://wa.me/?text=' + encodeURIComponent(texto), '_blank');
     };
 
     loadingDiv.style.display = 'none';
@@ -357,7 +381,9 @@ function copiarProposta() {
   }
 }
 
-/* ── Init ── */
-document.addEventListener('DOMContentLoaded', calcularEstimativa);
+/* ── Init: 1 linha vazia ── */
+document.addEventListener('DOMContentLoaded', function() {
+  adicionarLinha();
+});
 </script>
 {% endblock %}
