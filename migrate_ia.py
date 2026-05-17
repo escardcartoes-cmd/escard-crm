@@ -22,23 +22,50 @@ if DATABASE_URL:
     cur.execute("""
         CREATE TABLE IF NOT EXISTS ia_config (
           id                 SERIAL PRIMARY KEY,
+          tenant_id          INTEGER   NOT NULL DEFAULT 1,
           nome_assistente    VARCHAR(100) DEFAULT 'Bia',
-          personalidade      TEXT DEFAULT 'Profissional, direta e empática. Fala de forma natural e consultiva, nunca como vendedora agressiva.',
+          personalidade      TEXT DEFAULT 'Profissional, direta e empática.',
           tom                VARCHAR(50)  DEFAULT 'consultivo',
-          estrategia         TEXT DEFAULT 'Foco em entender a dor do cliente antes de apresentar solução. Perguntar antes de propor.',
-          estilo_escrita     TEXT DEFAULT 'Mensagens curtas no WhatsApp (máximo 2 frases). E-mails formais mas acessíveis. Sem jargões técnicos.',
-          contexto_empresa   TEXT DEFAULT 'Krylo é uma empresa de cartão de benefícios B2B oferecendo VR, VA, combustível, premiação, Welhub e Vidalink.',
+          estrategia         TEXT DEFAULT 'Foco em entender a dor do cliente antes de apresentar solução.',
+          estilo_escrita     TEXT DEFAULT 'Mensagens curtas no WhatsApp (máximo 2 frases).',
+          contexto_empresa   TEXT DEFAULT 'Krylo é uma empresa de cartão de benefícios B2B.',
           objetivo_principal TEXT DEFAULT 'Qualificar leads e agendar reuniões com decisores de RH.',
-          restricoes         TEXT DEFAULT 'Nunca mencionar concorrentes. Nunca prometer preços sem consultar o time. Nunca ser insistente após 3 tentativas.',
+          restricoes         TEXT DEFAULT 'Nunca mencionar concorrentes.',
           saudacao_whatsapp  TEXT DEFAULT 'Olá {nome}! Tudo bem? Sou a Bia da Krylo.',
           saudacao_email     TEXT DEFAULT 'Prezado(a) {nome},',
-          assinatura_email   TEXT DEFAULT 'Atenciosamente,\nBia | Consultora Krylo\ncontato@krylo.com.br',
+          assinatura_email   TEXT DEFAULT 'Atenciosamente,\nBia | Consultora Krylo',
           modo_chat          BOOLEAN   DEFAULT TRUE,
           ativo              BOOLEAN   DEFAULT TRUE,
-          atualizado_em      TIMESTAMP DEFAULT NOW()
+          atualizado_em      TIMESTAMP DEFAULT NOW(),
+          UNIQUE (tenant_id)
         )
     """)
-    cur.execute("INSERT INTO ia_config (id) VALUES (1) ON CONFLICT DO NOTHING")
+
+    cur.execute("""
+        DO $$
+        BEGIN
+            IF NOT EXISTS (
+                SELECT 1 FROM information_schema.columns
+                WHERE table_name='ia_config' AND column_name='tenant_id'
+            ) THEN
+                ALTER TABLE ia_config ADD COLUMN tenant_id INTEGER NOT NULL DEFAULT 1;
+            END IF;
+        END$$;
+    """)
+
+    cur.execute("""
+        DO $$
+        BEGIN
+            IF NOT EXISTS (
+                SELECT 1 FROM pg_indexes
+                WHERE tablename='ia_config' AND indexname='idx_ia_config_tenant'
+            ) THEN
+                CREATE UNIQUE INDEX idx_ia_config_tenant ON ia_config (tenant_id);
+            END IF;
+        END$$;
+    """)
+
+    cur.execute("INSERT INTO ia_config (id, tenant_id) VALUES (1, 1) ON CONFLICT DO NOTHING")
     conn.commit()
     cur.close()
     conn.close()
