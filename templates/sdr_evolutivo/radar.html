@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+
+{% block title %}Radar de Intent | Krylo CRM{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h1 class="h2 mb-0">Radar de Intent</h1>
+                    <p class="text-muted mb-0">Monitoramento de triggers que indicam prontidão para comprar</p>
+                </div>
+                <a href="{{ url_for('sdr_evolutivo.sdr_evolutivo_dashboard') }}" class="btn btn-outline-secondary">
+                    <i class="bi bi-arrow-left"></i> Voltar
+                </a>
+            </div>
+        </div>
+    </div>
+
+    {% if eventos %}
+        <div class="row g-4">
+            {% for evento in eventos %}
+                <div class="col-xl-6 col-lg-12">
+                    <div class="card h-100">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between align-items-start mb-3">
+                                <div>
+                                    <span class="badge bg-primary-subtle text-primary mb-2">
+                                        {{ evento.fonte|capitalize }}
+                                    </span>
+                                    <h5 class="card-title mb-1">{{ evento.titulo }}</h5>
+                                    <p class="text-muted small mb-0">
+                                        {{ evento.data_evento or evento.criado_em }}
+                                    </p>
+                                </div>
+                                <div class="text-end">
+                                    <div class="h3 text-primary mb-0">
+                                        {{ evento.score_intent }}
+                                    </div>
+                                    <p class="text-muted small mb-0">Score</p>
+                                </div>
+                            </div>
+                            <p class="card-text text-muted">
+                                {{ evento.resumo }}
+                            </p>
+                            {% if evento.link %}
+                                <a href="{{ evento.link }}" target="_blank" rel="noopener noreferrer"
+                                   class="btn btn-outline-primary btn-sm">
+                                    <i class="bi bi-box-arrow-up-right"></i> Ver Original
+                                </a>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        <div class="card">
+            <div class="card-body text-center py-8">
+                <div class="avatar avatar-xl bg-primary-subtle text-primary mx-auto mb-4">
+                    <i class="bi bi-radar fs-1"></i>
+                </div>
+                <h4 class="mb-2">Nenhum evento detectado ainda</h4>
+                <p class="text-muted mb-4">
+                    O Radar de Intent ainda não encontrou nenhum evento. Execute o SDR Evolutivo para começar a monitorar!
+                </p>
+                <a href="{{ url_for('sdr_evolutivo.sdr_evolutivo_dashboard') }}" class="btn btn-primary">
+                    <i class="bi bi-play-fill"></i> Ir para o SDR Evolutivo
+                </a>
+            </div>
+        </div>
+    {% endif %}
+</div>
+{% endblock %}

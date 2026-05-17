@@ -15,6 +15,9 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from datetime import date
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, Response, session
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
+from flask_wtf.csrf import CSRFProtect
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 import database
 import models.empresa as emp_model
 import models.contato as cont_model
@@ -36,6 +39,11 @@ import models.planos as planos_model
 from models.usuario import require_perfil, PERFIS, PERFIL_LABELS
 import ai
 
+from routes.auth import auth_bp
+from routes.empresas import empresas_bp
+from routes.contatos import contatos_bp
+from routes.sdr_evolutivo import sdr_evolutivo_bp
+
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY")
 if not app.secret_key:
@@ -44,11 +52,25 @@ if not app.secret_key:
     print("[AVISO] SECRET_KEY nao configurada - usando chave temporaria")
 app.permanent_session_lifetime = timedelta(hours=8)
 app.config["JSON_AS_ASCII"] = False
+app.config["WTF_CSRF_ENABLED"] = True
+
+csrf = CSRFProtect(app)
+
+limiter = Limiter(
+    get_remote_address,
+    app=app,
+    default_limits=["200 per day", "50 per hour"]
+)
 
 login_manager = LoginManager(app)
-login_manager.login_view = "login"
+login_manager.login_view = "auth.login"
 login_manager.login_message = "Faça login para acessar o CRM."
 login_manager.login_message_category = "danger"
+
+app.register_blueprint(auth_bp)
+app.register_blueprint(empresas_bp)
+app.register_blueprint(contatos_bp)
+app.register_blueprint(sdr_evolutivo_bp)
 
 @app.context_processor
 def _inject_cadencias_badge():
