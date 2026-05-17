@@ -1191,6 +1191,19 @@ tbody tr:hover { background: var(--color-primary-subtle); }
           Minha Empresa
         </a>
 
+        {% if _is_admin %}
+        <a href="{{ url_for('setup_wizard') }}"
+           class="nav-item {% if request.endpoint == 'setup_wizard' %}active{% endif %}">
+          <span class="nav-item-icon">🚀</span>
+          Setup da Conta
+        </a>
+        <a href="{{ url_for('planos_index') }}"
+           class="nav-item {% if request.endpoint == 'planos_index' %}active{% endif %}">
+          <span class="nav-item-icon">💎</span>
+          Planos
+        </a>
+        {% endif %}
+
         <a href="{{ url_for('metas_configurar') }}"
            class="nav-item {% if request.endpoint == 'metas_configurar' %}active{% endif %}">
           <span class="nav-item-icon">🎯</span>
