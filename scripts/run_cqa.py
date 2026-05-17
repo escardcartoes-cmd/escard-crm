@@ -39,8 +39,8 @@ def salvar_resultado(resultados_testes, resultados_fixes):
             if r["status"] in ("erro", "aviso"):
                 try:
                     conn.execute(
-                        "INSERT INTO cqa_alertas (tipo, check_nome, mensagem, resolvido, criado_em)"
-                        " VALUES (?, ?, ?, 0, ?)",
+                        "INSERT INTO cqa_alertas (tenant_id, tipo, check_nome, mensagem, resolvido, criado_em)"
+                        " VALUES (1, ?, ?, ?, 0, ?)",
                         (r["status"], r["check_nome"], (r["mensagem"] or "")[:500], agora),
                     )
                 except Exception as e:

@@ -4141,10 +4141,10 @@ def cqa_dashboard():
             FROM cqa_resultados GROUP BY check_nome ORDER BY check_nome
         """).fetchall()
     alertas = [dict(a) for a in conn.execute(
-        "SELECT * FROM cqa_alertas WHERE resolvido=0 ORDER BY criado_em DESC LIMIT 20"
+        "SELECT * FROM cqa_alertas WHERE tenant_id=? AND resolvido=0 ORDER BY criado_em DESC LIMIT 20", (_tid(),)
     ).fetchall()]
     cfg_row = conn.execute(
-        "SELECT valor FROM cqa_config WHERE chave='modo_autonomo'"
+        "SELECT valor FROM cqa_config WHERE chave='modo_autonomo' AND tenant_id=?", (_tid(),)
     ).fetchone()
     autonomo_ativo = cfg_row["valor"].lower() == "true" if cfg_row else True
     ultimo_repair = conn.execute(
@@ -4188,7 +4188,7 @@ def cqa_rodar():
 def cqa_alerta_resolver(alerta_id):
     try:
         conn = database.get_connection()
-        conn.execute("UPDATE cqa_alertas SET resolvido=1 WHERE id=?", (alerta_id,))
+        conn.execute("UPDATE cqa_alertas SET resolvido=1 WHERE id=? AND tenant_id=?", (alerta_id, _tid()))
         conn.commit()
         conn.close()
         return jsonify({"ok": True})
@@ -4225,15 +4225,15 @@ def cqa_toggle_autonomo():
         conn = database.get_connection()
         if database._USE_PG:
             conn.execute(
-                """INSERT INTO cqa_config (chave, valor)
-                   VALUES ('modo_autonomo', %s)
-                   ON CONFLICT (chave) DO UPDATE SET valor = %s, atualizado_em = NOW()""",
-                (str(ativo), str(ativo)),
+                """INSERT INTO cqa_config (tenant_id, chave, valor)
+                   VALUES (%s, 'modo_autonomo', %s)
+                   ON CONFLICT (tenant_id, chave) DO UPDATE SET valor = %s, atualizado_em = NOW()""",
+                (_tid(), str(ativo), str(ativo)),
             )
         else:
             conn.execute(
-                "INSERT OR REPLACE INTO cqa_config (chave, valor) VALUES (?, ?)",
-                ("modo_autonomo", str(ativo)),
+                "INSERT OR REPLACE INTO cqa_config (tenant_id, chave, valor) VALUES (?, ?, ?)",
+                (_tid(), "modo_autonomo", str(ativo)),
             )
         conn.commit()
         conn.close()
