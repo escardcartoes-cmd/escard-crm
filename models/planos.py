@@ -5,8 +5,8 @@ PLANOS = {
     "starter": {
         "nome": "Starter",
         "preco": 97,
-        "limite_empresas": 500,
-        "limite_usuarios": 2,
+        "limite_empresas": 1000,
+        "limite_usuarios": 5,
         "limite_sdr_leads": 50,
         "tem_radar": False,
         "tem_portal_cliente": False,
@@ -15,8 +15,8 @@ PLANOS = {
     "profissional": {
         "nome": "Profissional",
         "preco": 197,
-        "limite_empresas": 5000,
-        "limite_usuarios": 10,
+        "limite_empresas": 10000,
+        "limite_usuarios": 20,
         "limite_sdr_leads": 500,
         "tem_radar": True,
         "tem_portal_cliente": True,
