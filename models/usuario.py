@@ -1,3 +1,4 @@
+import os
 import bcrypt
 import secrets
 from datetime import datetime, timedelta
