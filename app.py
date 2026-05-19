@@ -3752,6 +3752,32 @@ def admin_tenant_toggle(tenant_id):
     return redirect(url_for("admin_tenants"))
 
 
+@app.route("/admin/tenant/<int:tenant_id>/excluir", methods=["POST"])
+@login_required
+@require_perfil("admin")
+def admin_tenant_excluir(tenant_id):
+    if tenant_id == 1:
+        flash("Não é possível excluir o tenant padrão.", "danger")
+        return redirect(url_for("admin_tenants"))
+    conn = database.get_connection()
+    row = conn.execute("SELECT ativo FROM tenants WHERE id=?", (tenant_id,)).fetchone()
+    if not row:
+        flash("Tenant não encontrado.", "danger")
+        conn.close()
+        return redirect(url_for("admin_tenants"))
+    if row["ativo"]:
+        flash("Desative o tenant antes de excluir.", "danger")
+        conn.close()
+        return redirect(url_for("admin_tenants"))
+    conn.execute("DELETE FROM tenants WHERE id=?", (tenant_id,))
+    conn.execute("DELETE FROM usuarios WHERE tenant_id=?", (tenant_id,))
+    conn.execute("DELETE FROM tenant_config WHERE tenant_id=?", (tenant_id,))
+    conn.commit()
+    conn.close()
+    flash(f"Tenant #{tenant_id} excluído.", "success")
+    return redirect(url_for("admin_tenants"))
+
+
 @app.route("/admin/importar-rf", methods=["GET", "POST"])
 @login_required
 @require_perfil("admin")
