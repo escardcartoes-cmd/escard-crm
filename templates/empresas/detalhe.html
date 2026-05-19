@@ -187,20 +187,6 @@ function aiScore(id, nome) {
     }).catch(e => showError(e.message));
 }
 
-function aiWhatsapp(id, nome) {
-  openModal('Mensagem WhatsApp — ' + nome, true);
-  fetch('/ai/whatsapp/' + id, { method: 'POST' })
-    .then(r => r.json())
-    .then(d => {
-      if (d.error) { showError(d.error); return; }
-      const msg = d.mensagem || '';
-      document.getElementById('modalBody').innerHTML = `
-        <p class="text-muted text-sm mb-3">Revise a mensagem antes de enviar.</p>
-        <div class="copy-box" id="waMsgBox">${escHtml(msg)}</div>
-        <button class="btn btn-primary btn-sm" onclick="copyText(document.getElementById('waMsgBox').textContent, this)">
-          Copiar mensagem
-        </button>`;
-    }).catch(e => showError(e.message));
-}
+
 </script>
 {% endblock %}
