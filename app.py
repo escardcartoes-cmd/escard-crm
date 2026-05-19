@@ -315,8 +315,9 @@ scheduler.add_job(
     id="radar_diario",
     replace_existing=True,
 )
-scheduler.start()
-atexit.register(lambda: scheduler.shutdown(wait=False))
+if not os.environ.get('SCHEDULER_OFF'):
+    scheduler.start()
+    atexit.register(lambda: scheduler.shutdown(wait=False))
 
 
 # ── Tenant helper ─────────────────────────────────────────────────────────────
