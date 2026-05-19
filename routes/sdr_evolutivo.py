@@ -61,7 +61,9 @@ def sdr_evolutivo_configurar():
                 VALUES (?, ?, ?, ?, ?, ?)
             """, (_tid(), score_min, max_leads, usar_radar, usar_ecosistema, pitch_adaptativo))
             db.commit()
+            db.close()
             flash("Configurações salvas com sucesso!", "success")
+            return redirect(url_for("sdr_evolutivo.sdr_evolutivo_configurar"))
         except Exception as e:
             flash(f"Erro ao salvar configurações: {str(e)}", "danger")
 
