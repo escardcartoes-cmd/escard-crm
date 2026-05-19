@@ -32,31 +32,34 @@
     <!-- Step 1: Empresa -->
     <div class="wizard-step" data-step="1">
       <div class="card border-0 shadow-sm">
-        <div class="card-body p-4">
-          <h5 class="fw-bold mb-3">Sobre sua Empresa</h5>
-          <div class="mb-3">
+        <div class="card-body p-4 p-md-5">
+          <h5 class="fw-bold mb-1">Sobre sua Empresa</h5>
+          <p class="text-muted small mb-4">Essas informações ajudam a IA a entender seu negócio.</p>
+          <div class="mb-4">
             <label class="form-label fw-semibold">Nome da Empresa *</label>
-            <input type="text" name="nome_empresa" class="form-control" required
-                   value="{{ tenant.nome_empresa or '' }}">
+            <input type="text" name="nome_empresa" class="form-control form-control-lg" required
+                   value="{{ tenant.nome_empresa or '' }}"
+                   placeholder="Ex: Escard Cartões Benefícios">
           </div>
-          <div class="mb-3">
+          <div class="mb-4">
             <label class="form-label fw-semibold">Ramo / Segmento</label>
             <input type="text" name="ramo_principal" class="form-control"
-                   placeholder="Ex: Benefícios B2B, SaaS, E-commerce...">
+                   placeholder="Ex: Benefícios B2B, SaaS, E-commerce, Fintech...">
           </div>
-          <div class="mb-3">
+          <div class="mb-4">
             <label class="form-label fw-semibold">Histórico / Descrição da Empresa</label>
             <textarea name="historico" class="form-control" rows="3"
-                      placeholder="Conte um pouco sobre a sua empresa, quando foi fundada, missão..."></textarea>
+                      placeholder="Ex: Fundada em 2018, somos uma empresa de benefícios corporativos com foco em PMEs do interior paulista..."></textarea>
+            <div class="form-text">Quanto mais detalhado, melhores serão as mensagens geradas pela IA.</div>
           </div>
           <div class="row g-3">
             <div class="col-md-6">
               <label class="form-label fw-semibold">Site</label>
-              <input type="url" name="site" class="form-control" placeholder="https://minhaempresa.com">
+              <input type="url" name="site" class="form-control" placeholder="https://minhaempresa.com.br">
             </div>
             <div class="col-md-6">
               <label class="form-label fw-semibold">WhatsApp Comercial</label>
-              <input type="text" name="whatsapp" class="form-control" placeholder="11999999999">
+              <input type="text" name="whatsapp" class="form-control" placeholder="(11) 99999-9999">
             </div>
           </div>
         </div>
@@ -66,22 +69,23 @@
     <!-- Step 2: Produtos -->
     <div class="wizard-step d-none" data-step="2">
       <div class="card border-0 shadow-sm">
-        <div class="card-body p-4">
-          <h5 class="fw-bold mb-3">Produtos e Diferenciais</h5>
-          <div class="mb-3">
+        <div class="card-body p-4 p-md-5">
+          <h5 class="fw-bold mb-1">Produtos e Diferenciais</h5>
+          <p class="text-muted small mb-4">A IA usará isso para criar pitches e mensagens personalizadas.</p>
+          <div class="mb-4">
             <label class="form-label fw-semibold">Produtos / Serviços oferecidos</label>
             <textarea name="produtos_texto" class="form-control" rows="4"
-                      placeholder="Liste seus principais produtos e serviços. Ex: Cartão VR, VA, Combustível, Premiação..."></textarea>
+                      placeholder="Ex: Cartão Alimentação (VR), Cartão Refeição (VA), Cartão Combustível, Premiação e Incentivo, Cartão Multibenefícios..."></textarea>
           </div>
-          <div class="mb-3">
+          <div class="mb-4">
             <label class="form-label fw-semibold">Diferenciais competitivos</label>
             <textarea name="diferenciais" class="form-control" rows="3"
-                      placeholder="O que faz sua empresa se destacar da concorrência?"></textarea>
+                      placeholder="Ex: Implantação em 48h, sem taxa de adesão, suporte dedicado, aceito em 50 mil estabelecimentos..."></textarea>
           </div>
-          <div class="mb-3">
+          <div class="mb-4">
             <label class="form-label fw-semibold">Principais concorrentes (opcional)</label>
             <input type="text" name="concorrentes" class="form-control"
-                   placeholder="Ex: Sodexo, Alelo, VR...">
+                   placeholder="Ex: Sodexo, Alelo, VR Benefícios, Flash, Swile...">
           </div>
         </div>
       </div>
@@ -90,12 +94,12 @@
     <!-- Step 3: IA -->
     <div class="wizard-step d-none" data-step="3">
       <div class="card border-0 shadow-sm">
-        <div class="card-body p-4">
-          <h5 class="fw-bold mb-3">Configurar a IA Comercial</h5>
-          <p class="text-muted small mb-3">
+        <div class="card-body p-4 p-md-5">
+          <h5 class="fw-bold mb-1">Configurar a IA Comercial</h5>
+          <p class="text-muted small mb-4">
             A IA vai gerar mensagens, pitches e responder dúvidas com o tom da sua empresa.
           </p>
-          <div class="mb-3">
+          <div class="mb-4">
             <label class="form-label fw-semibold">Tom de voz da marca</label>
             <select name="tom_ia" class="form-select">
               <option value="profissional">Profissional e consultivo</option>
@@ -104,15 +108,16 @@
               <option value="energico">Energético e motivador</option>
             </select>
           </div>
-          <div class="mb-3">
+          <div class="mb-4">
             <label class="form-label fw-semibold">Personalidade da IA</label>
             <textarea name="personalidade_ia" class="form-control" rows="3"
-                      placeholder="Descreva como a IA deve se comportar. Ex: Direta, empática, nunca agressiva, foca em entender o problema antes de propor solução..."></textarea>
+                      placeholder="Ex: Direta e consultiva, nunca agressiva. Faz perguntas antes de propor solução. Usa linguagem simples, evita jargões técnicos..."></textarea>
           </div>
-          <div class="mb-3">
-            <label class="form-label fw-semibold">Email de contato da IA</label>
+          <div class="mb-4">
+            <label class="form-label fw-semibold">Email de contato</label>
             <input type="email" name="email_contato" class="form-control"
-                   placeholder="contato@minhaempresa.com">
+                   placeholder="contato@minhaempresa.com.br">
+            <div class="form-text">Email usado nas assinaturas geradas pela IA.</div>
           </div>
         </div>
       </div>
