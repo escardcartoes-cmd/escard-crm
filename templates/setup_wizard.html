@@ -27,6 +27,7 @@
   </div>
 
   <form method="post" action="{{ url_for('setup_salvar') }}" id="wizardForm">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
     <!-- Step 1: Empresa -->
     <div class="wizard-step" data-step="1">

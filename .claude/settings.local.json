@@ -15,7 +15,13 @@
       "Bash(railway logs *)",
       "Bash(chmod +x /c/escard-crm/.git/hooks/pre-push)",
       "Bash(chmod +x /c/escard-crm/scripts/hooks/pre-push)",
-      "Bash(git config *)"
+      "Bash(git config *)",
+      "Bash(Get-ChildItem -Recurse -Force)",
+      "Bash(Select-Object -Property FullName)",
+      "Bash(ConvertTo-Csv -NoTypeInformation)",
+      "Bash(Out-String)",
+      "Bash(xargs wc -l)",
+      "Bash(curl *)"
     ]
   }
 }

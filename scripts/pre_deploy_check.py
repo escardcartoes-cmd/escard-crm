@@ -101,12 +101,12 @@ def check_colunas_criticas():
                     (tabela, coluna)
                 ).fetchone()[0]
                 if result == 0:
-                    erros.append(f"Coluna {tabela}.{coluna} nao existe")
+                    erros.append(f"Coluna {tabela}.{coluna} não existe")
             else:
                 info = db.execute(f"PRAGMA table_info({tabela})").fetchall()
                 cols = [r["name"] for r in info]
                 if coluna not in cols:
-                    erros.append(f"Coluna {tabela}.{coluna} nao existe")
+                    erros.append(f"Coluna {tabela}.{coluna} não existe")
         except Exception as e:
             erros.append(f"Verificacao {tabela}.{coluna}: {e}")
 
@@ -123,7 +123,7 @@ if __name__ == "__main__":
     checks = [
         ("Templates Jinja2",   check_templates),
         ("Import app.py",      check_imports),
-        ("Queries criticas",   check_queries_criticas),
+        ("Queries críticas",   check_queries_criticas),
         ("Colunas obrigatorias", check_colunas_criticas),
     ]
 
@@ -141,7 +141,7 @@ if __name__ == "__main__":
 
     if todos_erros:
         print(f"FALHOU: {len(todos_erros)} problemas encontrados")
-        print("NAO faca git push ate corrigir.")
+        print("NÃO faça git push até corrigir.")
         sys.exit(1)
     else:
         print("APROVADO: sistema pronto para deploy")

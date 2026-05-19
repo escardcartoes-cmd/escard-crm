@@ -671,8 +671,7 @@ def run_migrations(conn) -> None:
         f"ALTER TABLE oportunidades ADD COLUMN{_ifne} dias_etapa INTEGER DEFAULT 0",
         f"ALTER TABLE oportunidades ADD COLUMN{_ifne} ultima_acao_em TEXT",
         # Remove coluna legada estagio (substituída por etapa)
-        "ALTER TABLE oportunidades DROP COLUMN IF EXISTS estagio" if _USE_PG
-        else "ALTER TABLE oportunidades DROP COLUMN estagio",
+        "ALTER TABLE oportunidades DROP COLUMN IF EXISTS estagio" if _USE_PG else "",
         # Multi-tenant: cobranca, recebiveis, portal
         f"ALTER TABLE clientes_cobranca ADD COLUMN{_ifne} tenant_id INTEGER DEFAULT 1",
         f"ALTER TABLE recebiveis_krylo ADD COLUMN{_ifne} tenant_id INTEGER DEFAULT 1",
@@ -1151,12 +1150,28 @@ def run_migrations(conn) -> None:
         "CREATE INDEX IF NOT EXISTS idx_radar_intent_tenant ON radar_intent(tenant_id)",
     ]
 
+    _seen = set()
     for sql in _ALTER + _CREATE:
+        if not sql or not str(sql).strip():
+            continue
         try:
             conn.execute(sql)
             conn.commit()
         except Exception as e:
-            print(f"Migration aviso (normal se coluna já existe): {e}")
+            msg = str(e).lower()
+            benign = (
+                "duplicate column" in msg
+                or "already exists" in msg
+                or "duplicate table" in msg
+                or "duplicate index" in msg
+                or "no such column" in msg
+                or "cannot drop" in msg
+            )
+            if not benign:
+                k = f"{msg}|{sql[:80]}"
+                if k not in _seen:
+                    _seen.add(k)
+                    print(f"Migration aviso: {e}")
             try:
                 conn.rollback()
             except Exception:

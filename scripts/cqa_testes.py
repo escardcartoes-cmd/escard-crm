@@ -207,7 +207,7 @@ def teste_multi_tenant():
         n_tenants = int(t_row["cnt"] if t_row else 0)
         if n_tenants == 0:
             conn.close()
-            return _r("multi_tenant", "aviso", "Tabela tenants vazia — seed nao rodou?")
+            return _r("multi_tenant", "aviso", "Tabela tenants vazia — seed não rodou?")
 
         # Check tenant_config table
         tc_row = conn.execute("SELECT COUNT(*) AS cnt FROM tenant_config").fetchone()

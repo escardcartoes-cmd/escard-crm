@@ -35,7 +35,7 @@ def enviar_email_boas_vindas(tenant, email_destino, nome_responsavel,
 
     <div style="background:{cor};padding:40px;text-align:center;">
       <h1 style="color:white;margin:0;font-size:28px;">
-        {plataforma} esta pronto!
+        {plataforma} está pronto!
       </h1>
       <p style="color:rgba(255,255,255,0.9);margin:10px 0 0 0;">
         Sua plataforma de CRM inteligente foi configurada
@@ -47,7 +47,7 @@ def enviar_email_boas_vindas(tenant, email_destino, nome_responsavel,
         Ola, <strong>{nome_responsavel}</strong>!
       </p>
       <p style="color:#555;line-height:1.6;">
-        Sua plataforma <strong>{plataforma}</strong> esta pronta.
+        Sua plataforma <strong>{plataforma}</strong> está pronta.
         Complete o setup em 10 minutos e seu SDR ja pode prospectar hoje mesmo.
       </p>
 
@@ -100,7 +100,7 @@ def enviar_email_boas_vindas(tenant, email_destino, nome_responsavel,
             send_smtp_email = sib_api_v3_sdk.SendSmtpEmail(
                 to=[{"email": email_destino, "name": nome_responsavel}],
                 sender={"email": EMAIL_ONBOARDING, "name": plataforma},
-                subject=f"Sua plataforma {plataforma} esta pronta!",
+                subject=f"Sua plataforma {plataforma} está pronta!",
                 html_content=html,
             )
             api.send_transac_email(send_smtp_email)
@@ -111,7 +111,7 @@ def enviar_email_boas_vindas(tenant, email_destino, nome_responsavel,
             safe = email_destino.replace("@", "_at_").replace(".", "_")
             with open(f"logs/email_boasvindas_{safe}.html", "w", encoding="utf-8") as f:
                 f.write(html)
-            print(f"[EMAIL] BREVO_API_KEY nao configurada — salvo em logs/")
+            print(f"[EMAIL] BREVO_API_KEY não configurada — salvo em logs/")
             return True
     except ApiException as e:
         print(f"[EMAIL] Erro Brevo: {e}")

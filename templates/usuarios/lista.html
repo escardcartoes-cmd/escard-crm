@@ -1,8 +1,15 @@
 {% extends 'base.html' %}
+{%- set _novo = (novo_endpoint if novo_endpoint is defined else 'usuarios_novo') -%}
+{%- set _editar = (editar_endpoint if editar_endpoint is defined else 'usuarios_editar') -%}
+{%- set _excluir = (excluir_endpoint if excluir_endpoint is defined else 'usuarios_excluir') -%}
 {% block title %}Usuários — Krylo CRM{% endblock %}
 {% block topbar_title %}Usuários{% endblock %}
 {% block topbar_actions %}
-  <a href="{{ url_for('usuarios_novo') }}" class="btn btn-primary">+ Novo Usuário</a>
+  {% if novo_url is defined and novo_url %}
+  <a href="{{ novo_url }}" class="btn btn-primary">+ Novo Usuário</a>
+  {% else %}
+  <a href="{{ url_for(_novo) }}" class="btn btn-primary">+ Novo Usuário</a>
+  {% endif %}
 {% endblock %}
 
 {% block content %}
@@ -32,6 +39,7 @@
         <th>Nome</th>
         <th>Email</th>
         <th>Usuário</th>
+        {% if show_tenant %}<th>Conta</th>{% endif %}
         <th>Perfil</th>
         <th>Status</th>
         <th>Criado em</th>
@@ -47,6 +55,11 @@
         </td>
         <td>{{ u.email or '—' }}</td>
         <td><code style="font-size:12px;background:#F9F5F1;padding:2px 6px;border-radius:4px">{{ u.usuario }}</code></td>
+        {% if show_tenant %}
+        <td style="font-size:12px;color:var(--muted)">
+          {{ (tenant_labels.get(u.tenant_id) if tenant_labels is defined else None) or (u.tenant_id or '—') }}
+        </td>
+        {% endif %}
         <td>
           <span class="badge-p badge-perfil-{{ u.perfil }}">
             {{ perfil_labels.get(u.perfil, u.perfil) }}
@@ -61,14 +74,15 @@
         <td>{{ (u.criado_em | string)[:10] if u.criado_em else '—' }}</td>
         <td>
           <div class="td-actions">
-            <a href="{{ url_for('usuarios_editar', id=u.id) }}" class="btn btn-outline btn-xs">Editar</a>
+            <a href="{{ url_for(_editar, id=u.id) }}" class="btn btn-outline btn-xs">Editar</a>
             {% if u.id != current_user.id %}
             <button class="toggle-btn" id="toggle-btn-{{ u.id }}"
                     onclick="toggleAtivo({{ u.id }}, {{ u.ativo | int }})">
               {{ 'Desativar' if u.ativo else 'Ativar' }}
             </button>
-            <form method="post" action="{{ url_for('usuarios_excluir', id=u.id) }}" style="display:inline"
-                 onsubmit="return confirm('Excluir {{ u.nome }}? Esta ação não pode ser desfeita.')"
+            <form method="post" action="{{ url_for(_excluir, id=u.id) }}" style="display:inline"
+                 onsubmit="return confirm('Excluir {{ u.nome }}? Esta ação não pode ser desfeita.')">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
               <button type="submit" class="btn btn-danger btn-xs">Excluir</button>
             </form>
             {% endif %}
@@ -77,10 +91,10 @@
       </tr>
       {% else %}
       <tr>
-        <td colspan="7">
+        <td colspan="{% if show_tenant %}8{% else %}7{% endif %}">
           <div class="empty-state">
             <p>Nenhum usuário cadastrado.</p>
-            <a href="{{ url_for('usuarios_novo') }}" class="btn btn-primary btn-sm" style="margin-top:10px">
+            <a href="{{ url_for(_novo) }}" class="btn btn-primary btn-sm" style="margin-top:10px">
               Adicionar usuário
             </a>
           </div>
@@ -98,7 +112,8 @@ function toggleAtivo(id, ativoAtual) {
   const acao = ativoAtual ? 'desativar' : 'ativar';
   if (!confirm('Deseja ' + acao + ' este usuário?')) return;
 
-  fetch('/usuarios/' + id + '/toggle', { method: 'POST' })
+  const prefix = "{{ toggle_path_prefix if toggle_path_prefix is defined else '/usuarios' }}";
+  fetch(prefix + '/' + id + '/toggle', { method: 'POST' })
     .then(r => r.json())
     .then(d => {
       if (d.error) { alert(d.error); return; }

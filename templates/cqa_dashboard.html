@@ -1,11 +1,15 @@
 {% extends 'base.html' %}
+{%- set _rodar = (cqa_rodar_endpoint if cqa_rodar_endpoint is defined else 'cqa_rodar') -%}
+{%- set _fixall = (cqa_fix_all_endpoint if cqa_fix_all_endpoint is defined else 'cqa_fix_all') -%}
 {% block title %}CQA — Krylo CRM{% endblock %}
 {% block topbar_title %}🛡️ Central de Qualidade Automática{% endblock %}
 {% block topbar_actions %}
-  <form method="post" action="{{ url_for('cqa_rodar') }}" style="display:inline">
+  <form method="post" action="{{ url_for(_rodar) }}" style="display:inline">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <button type="submit" class="btn btn-outline btn-sm">▶ Rodar testes</button>
   </form>
-  <form method="post" action="{{ url_for('cqa_fix_all') }}" style="display:inline;margin-left:8px">
+  <form method="post" action="{{ url_for(_fixall) }}" style="display:inline;margin-left:8px">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <button type="submit" class="btn btn-primary btn-sm">🔧 Rodar + Auto-Fix</button>
   </form>
 {% endblock %}
@@ -101,7 +105,8 @@
           {% if autonomo_ativo %}Ativo{% else %}Pausado{% endif %}
         </span>
       </label>
-      <form method="post" action="{{ url_for('cqa_fix_all') }}" style="display:inline">
+      <form method="post" action="{{ url_for(_fixall) }}" style="display:inline">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <button type="submit" class="btn btn-outline btn-sm">🔧 Repair agora</button>
       </form>
     </div>
@@ -151,7 +156,8 @@
         d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
     </svg>
     <p>Nenhum resultado ainda.</p>
-    <form method="post" action="{{ url_for('cqa_rodar') }}" style="margin-top:10px">
+    <form method="post" action="{{ url_for(_rodar) }}" style="margin-top:10px">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <button type="submit" class="btn btn-primary btn-sm">▶ Rodar primeiro check</button>
     </form>
   </div>
@@ -199,7 +205,8 @@ async function toggleAutonomo() {
   thumb.style.left       = ativo ? '22px' : '2px';
   lbl.textContent        = ativo ? 'Ativo' : 'Pausado';
   try {
-    const r = await fetch('/cqa/toggle-autonomo', {
+    const url = "{{ cqa_toggle_autonomo_path if cqa_toggle_autonomo_path is defined else '/cqa/toggle-autonomo' }}";
+    const r = await fetch(url, {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({ativo})
@@ -219,7 +226,8 @@ async function resolverAlerta(id, btn) {
   btn.disabled = true;
   btn.textContent = '…';
   try {
-    const res = await fetch('/cqa/alerta/' + id + '/resolver', {
+    const base = "{{ cqa_alerta_resolver_path_prefix if cqa_alerta_resolver_path_prefix is defined else '/cqa/alerta' }}";
+    const res = await fetch(base + '/' + id + '/resolver', {
       method: 'POST',
       credentials: 'same-origin',
       headers: {'X-Requested-With': 'XMLHttpRequest'}

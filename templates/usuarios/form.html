@@ -1,8 +1,9 @@
 {% extends 'base.html' %}
+{%- set _lista = (lista_endpoint if lista_endpoint is defined else 'usuarios_lista') -%}
 {% block title %}{{ 'Editar' if usuario else 'Novo' }} Usuário — Krylo CRM{% endblock %}
 {% block topbar_title %}{{ 'Editar Usuário' if usuario else 'Novo Usuário' }}{% endblock %}
 {% block topbar_actions %}
-  <a href="{{ url_for('usuarios_lista') }}" class="btn btn-outline btn-sm">← Voltar</a>
+  <a href="{{ url_for(_lista) }}" class="btn btn-outline btn-sm">← Voltar</a>
 {% endblock %}
 
 {% block content %}
@@ -14,6 +15,21 @@
     {% endif %}
 
     <form method="post" action="{{ action }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+      {% if show_tenant %}
+      <div class="detail-field" style="margin-bottom:16px">
+        <label style="display:block;font-size:12px;font-weight:600;color:#475569;margin-bottom:6px;text-transform:uppercase;letter-spacing:.3px">Cliente (tenant)</label>
+        {% set _tid = (tenant_id if tenant_id is defined and tenant_id else (usuario.tenant_id if usuario else 1)) %}
+        <select name="tenant_id" class="form-input" style="width:100%">
+          {% for t in (tenants or []) %}
+          <option value="{{ t.id }}" {% if t.id == _tid %}selected{% endif %}>
+            {{ t.nome_empresa }} ({{ t.id }})
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+      {% endif %}
 
       <div class="detail-field" style="margin-bottom:16px">
         <label style="display:block;font-size:12px;font-weight:600;color:#475569;margin-bottom:6px;text-transform:uppercase;letter-spacing:.3px">Nome completo *</label>
@@ -88,7 +104,7 @@
         <button type="submit" class="btn btn-primary">
           {{ 'Salvar alterações' if usuario else 'Criar usuário' }}
         </button>
-        <a href="{{ url_for('usuarios_lista') }}" class="btn btn-outline">Cancelar</a>
+        <a href="{{ url_for(_lista) }}" class="btn btn-outline">Cancelar</a>
       </div>
 
     </form>

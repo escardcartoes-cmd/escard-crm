@@ -49,7 +49,7 @@ app.secret_key = os.environ.get("SECRET_KEY")
 if not app.secret_key:
     import secrets as _sec
     app.secret_key = _sec.token_hex(32)
-    print("[AVISO] SECRET_KEY nao configurada - usando chave temporaria")
+    print("[AVISO] SECRET_KEY não configurada - usando chave temporária")
 app.permanent_session_lifetime = timedelta(hours=8)
 app.config["JSON_AS_ASCII"] = False
 app.config["WTF_CSRF_ENABLED"] = True
@@ -182,12 +182,17 @@ def load_user(user_id):
 
 @login_manager.unauthorized_handler
 def unauthorized():
+    _api_prefixes = ('/api/', '/ia/', '/central-ia/', '/ajuda/kia',
+                     '/ai/', '/sdr-evolutivo/', '/cqa/', '/pipeline/mover',
+                     '/pipeline/proxima-acao/', '/oportunidades/', '/cadencias/')
     if (
         request.is_json
         or request.headers.get('X-Requested-With') == 'XMLHttpRequest'
         or 'application/json' in request.headers.get('Accept', '')
+        or request.path.startswith(_api_prefixes)
     ):
-        return jsonify({"error": "Sessão expirada. Faça login novamente."}), 401
+        return jsonify({"error": "Sessão expirada. Faça login novamente.",
+                        "login_required": True}), 401
     return redirect(url_for('auth.login', next=request.url))
 
 _START_TIME = str(time.time())
@@ -551,6 +556,8 @@ def sdr_v2():
 def erro_500(e):
     import traceback
     print(f"[500] {traceback.format_exc()}")
+    if request.path.startswith('/api/') or request.is_json:
+        return jsonify({"error": "Erro interno do servidor"}), 500
     try:
         return redirect(url_for("dashboard"))
     except Exception:
@@ -574,6 +581,8 @@ def erro_500(e):
 
 @app.errorhandler(404)
 def erro_404(e):
+    if request.path.startswith('/api/') or request.is_json:
+        return jsonify({"error": "Rota não encontrada"}), 404
     try:
         return redirect(url_for("dashboard"))
     except Exception:
@@ -584,6 +593,8 @@ def erro_404(e):
 def erro_geral(e):
     import traceback
     print(f"[ERRO GERAL] {traceback.format_exc()}")
+    if request.path.startswith('/api/') or request.is_json:
+        return jsonify({"error": "Erro interno do servidor"}), 500
     try:
         return redirect(url_for("dashboard"))
     except Exception:
