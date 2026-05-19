@@ -30,9 +30,10 @@ def contatos_lista():
 def contatos_novo():
     tid = _tid()
     if request.method == "POST":
-        cont_model.criar(_form_contato(request.form))
+        dados = _form_contato(request.form)
+        cont_model.criar(dados)
         flash("Contato cadastrado.", "success")
-        return redirect(url_for("contatos.contatos_lista"))
+        return redirect(url_for("empresas.empresas_detalhe", id=dados["empresa_id"]))
     return render_template("contatos/form.html", contato=None,
                            empresas=emp_model.listar(tenant_id=tid),
                            action=url_for("contatos.contatos_novo"))
@@ -48,9 +49,10 @@ def contatos_editar(id):
         flash("Contato não encontrado.", "danger")
         return redirect(url_for("contatos.contatos_lista"))
     if request.method == "POST":
-        cont_model.atualizar(id, _form_contato(request.form))
+        dados = _form_contato(request.form)
+        cont_model.atualizar(id, dados)
         flash("Contato atualizado.", "success")
-        return redirect(url_for("contatos.contatos_lista"))
+        return redirect(url_for("empresas.empresas_detalhe", id=dados["empresa_id"]))
     return render_template("contatos/form.html", contato=c,
                            empresas=emp_model.listar(tenant_id=tid),
                            action=url_for("contatos.contatos_editar", id=id))

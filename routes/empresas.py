@@ -34,9 +34,9 @@ def empresas_lista():
 @require_perfil('gerente')
 def empresas_nova():
     if request.method == "POST":
-        emp_model.criar({**_form_empresa(request.form), "tenant_id": _tid()})
+        novo_id = emp_model.criar({**_form_empresa(request.form), "tenant_id": _tid()})
         flash("Empresa cadastrada com sucesso.", "success")
-        return redirect(url_for("empresas.empresas_lista"))
+        return redirect(url_for("empresas.empresas_detalhe", id=novo_id))
     return render_template("empresas/form.html", empresa=None,
                            action=url_for("empresas.empresas_nova"))
 
