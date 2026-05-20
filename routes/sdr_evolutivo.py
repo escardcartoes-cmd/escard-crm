@@ -81,7 +81,7 @@ def sdr_evolutivo_configurar():
             db.commit()
             db.close()
             flash("Configurações salvas com sucesso!", "success")
-            return redirect(url_for("sdr_evolutivo.sdr_evolutivo_dashboard"))
+            return redirect(url_for("sdr_evolutivo.sdr_evolutivo_configurar"))
         except Exception as e:
             flash(f"Erro ao salvar configurações: {str(e)}", "danger")
 
