@@ -336,6 +336,9 @@ def _tid() -> int:
 
 # ── Dashboard ─────────────────────────────────────────────────────────────────
 
+_DASHBOARD_CACHE: dict = {}   # {tenant_id: {"ts": float, "stats": dict}}
+_DASHBOARD_TTL = 300          # 5 minutos
+
 _DASHBOARD_FALLBACK = dict(
     status_counts={}, estagio_counts={}, pipeline_val=0,
     atividades=[], total_empresas=0, clientes=0, em_aberto=0,
@@ -362,8 +365,12 @@ def dashboard():
 
     conn = database.get_connection()
     try:
-        # QUERY 1: todos os escalares — substitui 12+ chamadas a models separados
-        stats = dict(conn.execute("""
+        # QUERY 1: todos os escalares — com cache de 5 minutos por tenant
+        _cached = _DASHBOARD_CACHE.get(tid)
+        if _cached and (time.time() - _cached["ts"]) < _DASHBOARD_TTL:
+            stats = _cached["stats"]
+        else:
+            stats = dict(conn.execute("""
             SELECT
               (SELECT COALESCE(COUNT(*),0) FROM empresas WHERE tenant_id=?) AS emp_total,
               (SELECT COALESCE(COUNT(*),0) FROM empresas WHERE tenant_id=? AND status='cliente') AS emp_cliente,
@@ -409,6 +416,7 @@ def dashboard():
             tid, tid, hoje,              # pauto_prontos, pauto_hoje
             tid, tid, tid, tid,          # meta_*
         )).fetchone())
+            _DASHBOARD_CACHE[tid] = {"ts": time.time(), "stats": stats}
 
         # Ajusta datas da meta a partir do banco
         meta_valor = float(stats.get("meta_valor") or 100000)
@@ -3845,6 +3853,15 @@ def admin_importar_rf_status():
         return jsonify({"total": total})
     except Exception:
         return jsonify({"total": 0})
+
+
+@app.route("/admin/limpar-cache-dashboard", methods=["POST"])
+@login_required
+@require_perfil("admin")
+def admin_limpar_cache_dashboard():
+    _DASHBOARD_CACHE.clear()
+    flash("Cache do dashboard limpo.", "success")
+    return redirect(url_for("admin"))
 
 
 @app.route("/admin/enriquecer-cnae", methods=["POST"])
