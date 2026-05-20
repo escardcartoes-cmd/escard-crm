@@ -113,6 +113,7 @@
                 <div class="d-flex gap-1">
                   {% if t.id != 1 %}
                   <form method="post" action="{{ url_for('admin_tenant_entrar', tenant_id=t.id) }}" class="d-inline">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <button type="submit" class="btn btn-xs btn-outline-primary" title="Entrar como este tenant">
                       Entrar
                     </button>
