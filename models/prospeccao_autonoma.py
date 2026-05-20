@@ -537,14 +537,19 @@ def obter_leads_para_prospectar(config: dict, estado: str, limite: int) -> list:
         try:
             rows = db.execute("""
                 SELECT e.id, e.nome, e.cnpj, e.cidade, e.estado,
-                       e.telefone, e.segmento,
+                       e.segmento,
                        COALESCE(NULLIF(e.email, ''), (
                            SELECT c.email FROM contatos c
                            WHERE c.empresa_id = e.id
                              AND c.email IS NOT NULL AND c.email != ''
-                           ORDER BY c.id
-                           LIMIT 1
-                       )) AS email
+                           ORDER BY c.id LIMIT 1
+                       )) AS email,
+                       COALESCE(NULLIF(e.telefone, ''), (
+                           SELECT c.telefone FROM contatos c
+                           WHERE c.empresa_id = e.id
+                             AND c.telefone IS NOT NULL AND c.telefone != ''
+                           ORDER BY c.id LIMIT 1
+                       )) AS telefone
                 FROM empresas e
                 WHERE e.tenant_id = %s
                 AND e.status IN ('prospect', 'importado')
@@ -553,7 +558,14 @@ def obter_leads_para_prospectar(config: dict, estado: str, limite: int) -> list:
                     WHERE empresa_id IS NOT NULL
                 )
                 AND (e.estado = %s OR %s = 'TODOS')
-                ORDER BY e.score DESC, e.criado_em ASC
+                ORDER BY
+                    CASE WHEN EXISTS (
+                        SELECT 1 FROM contatos c
+                        WHERE c.empresa_id = e.id
+                          AND (c.email IS NOT NULL AND c.email != ''
+                               OR c.telefone IS NOT NULL AND c.telefone != '')
+                    ) THEN 0 ELSE 1 END,
+                    e.score DESC, e.criado_em ASC
                 LIMIT %s
             """, (tenant_id, estado, estado, limite)).fetchall()
             for r in rows:

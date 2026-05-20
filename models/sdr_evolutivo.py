@@ -211,7 +211,7 @@ def calcular_score_prontidao(empresa: dict, config: dict) -> dict:
         motivos.append(f"Empresa consolidada ({idade}a)")
 
     score = min(15, max(0, score))
-    aprovado = score >= int(config.get("score_prontidao_minimo") or 8)
+    aprovado = bool(empresa.get("email") or empresa.get("telefone"))
 
     return {
         "score": score,
