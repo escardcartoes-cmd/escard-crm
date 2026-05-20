@@ -5,6 +5,16 @@ load_dotenv(override=True)
 
 import anthropic
 
+_PITCH_VARIACOES = [
+    {"angulo": "benefício e ROI — custo real que a empresa economiza", "cta": "conversa de 15 minutos para ver os números"},
+    {"angulo": "risco e dor — problema que ocorre sem a solução", "cta": "responder com disponibilidade para uma demo rápida"},
+]
+
+
+def _variacao_pitch(prospeccao_id: int) -> dict:
+    """Alterna variações de pitch por paridade do ID para evitar mensagens idênticas em lote."""
+    return _PITCH_VARIACOES[prospeccao_id % 2]
+
 MODEL = "claude-sonnet-4-6"
 _client = None
 
@@ -120,14 +130,18 @@ def gerar_whatsapp_lead(prospeccao_id: int) -> dict:
         except Exception:
             pass
 
+    variacao = _variacao_pitch(prospeccao_id)
     prompt = f"""Você é um consultor comercial da Krylo, empresa brasileira de cartão de benefícios B2B.
 
 Produtos Krylo: alimentação, refeição, combustível, premiação, Welhub (bem-estar), Vidalink (farmácia), Viva+ (saúde).
 Dor do cliente: gerenciar múltiplos cartões de benefícios é caro e complexo.
 Tom: consultivo, direto, não agressivo. Empresas ideais: 20 a 20.000 funcionários.
 
+ÂNGULO DESTA MENSAGEM: {variacao['angulo']}.
+CTA: {variacao['cta']}.
+
 Crie uma mensagem de WhatsApp de primeiro contato para o lead abaixo.
-Regras: máximo 5 linhas, identifique e recomende UM produto Krylo específico para o segmento, termine com call-to-action claro para uma conversa de 15 minutos.
+Regras: máximo 5 linhas, identifique e recomende UM produto Krylo específico para o segmento.
 Retorne SOMENTE um JSON válido: {{"mensagem": "<texto completo>"}}
 
 Contato: {lead["contato_nome"]}, {lead["cargo"] or "cargo não informado"} — {lead["empresa_nome"]}
@@ -158,13 +172,17 @@ def gerar_email_lead(prospeccao_id: int) -> dict:
         except Exception:
             pass
 
+    variacao = _variacao_pitch(prospeccao_id)
     prompt = f"""Você é um consultor comercial da Krylo, empresa brasileira de cartão de benefícios B2B.
 
 Produtos Krylo: alimentação, refeição, combustível, premiação, Welhub (bem-estar), Vidalink (farmácia), Viva+ (saúde).
 Dor do cliente: gerenciar múltiplos benefícios é caro e burocrático.
 Tom: consultivo, profissional, não agressivo.
 
-Crie um e-mail comercial de primeiro contato. Regras: assunto direto com no máximo 10 palavras; corpo com 3 parágrafos curtos (dor específica do segmento → como Krylo resolve → CTA para reunião de 15 minutos); recomende UM produto Krylo específico para o segmento.
+ÂNGULO DESTA MENSAGEM: {variacao['angulo']}.
+CTA: {variacao['cta']}.
+
+Crie um e-mail comercial de primeiro contato. Regras: assunto direto com no máximo 10 palavras; corpo com 3 parágrafos curtos (aplique o ângulo acima → como Krylo resolve → CTA indicado); recomende UM produto Krylo específico para o segmento.
 Retorne SOMENTE um JSON válido:
 {{"assunto": "<assunto do e-mail>", "corpo": "<corpo completo do e-mail>"}}
 

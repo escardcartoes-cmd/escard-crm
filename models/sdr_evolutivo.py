@@ -260,34 +260,70 @@ def _get_nome_vendedor(db, tenant_id: int) -> str:
     return "Equipe"
 
 
+_VARIACAO_A = {
+    "angulo": "benefício imediato — custo e ROI rápido",
+    "cta": "conversa de 15 minutos para mostrar números reais",
+}
+_VARIACAO_B = {
+    "angulo": "risco e dor — o que acontece sem o benefício",
+    "cta": "responder com disponibilidade para uma demo",
+}
+
+
+def _variacao_por_empresa(empresa: dict) -> dict:
+    """Alterna entre variação A e B pelo CNPJ para evitar mensagens idênticas em lote."""
+    cnpj_digits = "".join(c for c in str(empresa.get("cnpj") or "") if c.isdigit())
+    if cnpj_digits:
+        return _VARIACAO_A if int(cnpj_digits[-1]) % 2 == 0 else _VARIACAO_B
+    return _VARIACAO_A if random.randint(0, 1) == 0 else _VARIACAO_B
+
+
 def gerar_pitch_adaptativo(db, empresa: dict, produto: dict, canal: str,
                             feedback_anterior: dict = None, tenant_id: int = 1) -> str:
     """
-    Pitch Dinâmico Adaptativo:
-    - Não é só um pitch gerado uma vez
-    - Se adapta com feedback das interações anteriores
-    - Usa o Score de Prontidão para personalizar o tom
-    - Se a empresa ignorou o WhatsApp, tenta email com ângulo diferente
-    - Se respondeu, ajusta para o interesse demonstrado
+    Pitch Dinâmico Adaptativo com variacao A/B por empresa:
+    - Versao A: angulo de beneficio/ROI imediato
+    - Versao B: angulo de risco/dor sem o produto
+    - Alternancia por paridade do ultimo digito do CNPJ (evita mensagens identicas em lote)
+    - Adapta tom ao Score de Prontidao
+    - Ajusta baseado em feedback de interacoes anteriores
     """
     razao = (empresa.get("razao_social") or "sua empresa").title()
     nome_vendedor = _get_nome_vendedor(db, tenant_id)
 
-    # Sem CNAE: pitch genérico sem produto específico
+    # Sem CNAE: pitch genérico (sem IA — evita custo desnecessário)
     if not empresa.get("cnae_codigo", "").strip():
+        variacao = _variacao_por_empresa(empresa)
         if canal == "whatsapp":
-            return (
-                f"Oi! Tudo bem? Somos a Escard Cartões e Benefícios e gostaríamos de "
-                f"apresentar nossas soluções para {razao}. Podemos conversar? 👋\n— {nome_vendedor}"
-            )
+            if variacao == _VARIACAO_A:
+                return (
+                    f"Oi! Tudo bem? Somos a Escard Cartões e Benefícios. "
+                    f"Ajudamos empresas como {razao} a reduzir custos com benefícios em até 20%. "
+                    f"Posso mostrar como? 👋\n— {nome_vendedor}"
+                )
+            else:
+                return (
+                    f"Oi! Tudo bem? Sou {nome_vendedor} da Escard. "
+                    f"Muitas empresas do porte de {razao} perdem dinheiro com benefícios fragmentados. "
+                    f"Posso te mostrar uma alternativa mais simples? 👋"
+                )
         else:
-            return (
-                f"Olá,\n\n"
-                f"Somos a Escard Cartões e Benefícios e gostaríamos de apresentar nossas "
-                f"soluções para a {razao}.\n\n"
-                f"Podemos agendar uma conversa rápida?\n\n"
-                f"Abraços,\n{nome_vendedor} | Escard Cartões e Benefícios"
-            )
+            if variacao == _VARIACAO_A:
+                return (
+                    f"Olá,\n\n"
+                    f"Somos a Escard Cartões e Benefícios e ajudamos empresas a consolidar VR, VA "
+                    f"e outros benefícios em um único cartão — com economia real e menos burocracia.\n\n"
+                    f"Podemos agendar 15 minutos para mostrar os números?\n\n"
+                    f"Abraços,\n{nome_vendedor} | Escard Cartões e Benefícios"
+                )
+            else:
+                return (
+                    f"Olá,\n\n"
+                    f"Gerenciar múltiplos cartões de benefícios custa mais do que parece — "
+                    f"em tempo, taxas e complexidade administrativa.\n\n"
+                    f"A Escard resolve isso com um único cartão. Posso te mostrar como?\n\n"
+                    f"Abraços,\n{nome_vendedor} | Escard Cartões e Benefícios"
+                )
 
     try:
         import models.ia_config as ia_mod
@@ -295,6 +331,7 @@ def gerar_pitch_adaptativo(db, empresa: dict, produto: dict, canal: str,
         score_prontidao = empresa.get("score_prontidao", 5)
         cnae_desc = empresa.get("cnae_descricao", "")
         motivos = empresa.get("motivos_prontidao", [])
+        variacao = _variacao_por_empresa(empresa)
 
         # Tom baseado no score de prontidão
         if score_prontidao >= 12:
@@ -313,17 +350,17 @@ def gerar_pitch_adaptativo(db, empresa: dict, produto: dict, canal: str,
                 interesse = feedback_anterior.get("interesse_demonstrado", "")
                 ajuste_feedback = f"Foque no interesse demonstrado: {interesse}."
 
-        # Informações específicas do produto
         beneficios = produto.get("beneficios", "")
         objecoes = produto.get("objecoes_comuns", "")
         pitch_base = produto.get("pitch_whatsapp" if canal == "whatsapp" else "pitch_email", "")
 
-        # Prompt para IA
         limite = "máximo 180 caracteres" if canal == "whatsapp" else "3-5 frases claras"
         msg = (
             f"Gere uma mensagem de prospecção {tom} para {canal} para a empresa '{razao}' "
             f"(setor: {cnae_desc}). Produto: {produto.get('produto', produto.get('nome', 'Produto'))}. "
             f"Score de prontidão: {score_prontidao}/15 — {motivos}. "
+            f"ÂNGULO DESTA MENSAGEM: {variacao['angulo']}. "
+            f"CTA: {variacao['cta']}. "
             f"Use o nome da empresa, destaque 1 benefício concreto. {limite}. Sem emojis excessivos. "
             f"Assine como '{nome_vendedor}' (sem sobrenome)."
         )
@@ -335,7 +372,7 @@ def gerar_pitch_adaptativo(db, empresa: dict, produto: dict, canal: str,
         if ajuste_feedback:
             msg += f"\nAjuste baseado em feedback anterior: {ajuste_feedback}"
         if pitch_base:
-            msg += f"\nPitch base (use como referência):\n{pitch_base}"
+            msg += f"\nPitch base (use como referência, NÃO copie — aplique o ângulo acima):\n{pitch_base}"
 
         return ia_mod.chat_com_ia(db, msg, tenant_id=tenant_id)
     except Exception as e:
