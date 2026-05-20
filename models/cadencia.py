@@ -106,6 +106,9 @@ def enviar_email_brevo(
             },
             timeout=10,
         )
+        if resp.status_code not in (200, 201):
+            print(f"[BREVO] HTTP {resp.status_code}: {resp.text[:300]}")
+            return {"status": "erro", "id": None}
         data = resp.json()
         return {"status": "enviado", "id": data.get("messageId", "")}
     except Exception as e:
