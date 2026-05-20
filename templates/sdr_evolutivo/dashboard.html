@@ -18,8 +18,9 @@
                     <a href="{{ url_for('sdr_evolutivo.sdr_evolutivo_radar') }}" class="btn btn-outline-info">
                         <i class="bi bi-radar"></i> Radar de Intent
                     </a>
-                    <form method="POST" action="{{ url_for('sdr_evolutivo.sdr_evolutivo_executar') }}" class="d-inline">
-                        <button type="submit" class="btn btn-primary">
+                    <form method="POST" action="{{ url_for('sdr_evolutivo.sdr_evolutivo_executar') }}" class="d-inline" id="formExecutar">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="btn btn-primary" id="btnExecutar">
                             <i class="bi bi-play-fill"></i> Executar Agora
                         </button>
                     </form>
@@ -105,12 +106,41 @@
     <div class="row g-4">
         <div class="col-xl-8">
             <div class="card">
-                <div class="card-header">
-                    <h5 class="card-title mb-0">Recapitulativo</h5>
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="card-title mb-0">Última Execução</h5>
+                    {% if last_exec %}
+                    <span class="badge bg-success">Concluída</span>
+                    {% endif %}
                 </div>
                 <div class="card-body">
-                    <p class="text-muted">Nenhuma execução do SDR Evolutivo registrada ainda.</p>
-                    <p class="text-muted">Clique em "Executar Agora" para começar!</p>
+                    {% if last_exec %}
+                    <div class="row g-3 mb-3">
+                        <div class="col-6 col-md-3 text-center">
+                            <div class="fs-3 fw-bold text-primary">{{ last_exec.leads_encontrados }}</div>
+                            <div class="text-muted small">Leads encontrados</div>
+                        </div>
+                        <div class="col-6 col-md-3 text-center">
+                            <div class="fs-3 fw-bold text-success">{{ last_exec.leads_aprovados }}</div>
+                            <div class="text-muted small">Leads aprovados</div>
+                        </div>
+                        <div class="col-6 col-md-3 text-center">
+                            <div class="fs-3 fw-bold text-info">{{ last_exec.cadencias_criadas }}</div>
+                            <div class="text-muted small">Cadências criadas</div>
+                        </div>
+                        <div class="col-6 col-md-3 text-center">
+                            <div class="fs-3 fw-bold text-warning">{{ last_exec.radar_eventos }}</div>
+                            <div class="text-muted small">Eventos radar</div>
+                        </div>
+                    </div>
+                    <p class="text-muted small mb-0">
+                        Início: {{ last_exec.inicio[:19].replace('T', ' ') }}
+                        &nbsp;·&nbsp;
+                        Fim: {{ last_exec.fim[:19].replace('T', ' ') }}
+                    </p>
+                    {% else %}
+                    <p class="text-muted mb-1">Nenhuma execução registrada nesta sessão.</p>
+                    <p class="text-muted small mb-0">Clique em "Executar Agora" para começar.</p>
+                    {% endif %}
                 </div>
             </div>
         </div>
@@ -164,4 +194,14 @@
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.getElementById('formExecutar').addEventListener('submit', function() {
+    const btn = document.getElementById('btnExecutar');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Executando...';
+});
+</script>
 {% endblock %}

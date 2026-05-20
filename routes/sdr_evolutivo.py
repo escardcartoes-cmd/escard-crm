@@ -30,13 +30,15 @@ def sdr_evolutivo_dashboard():
     ecosistema_leads  = _count("SELECT COUNT(*) AS n FROM empresas WHERE tenant_id=? AND status IN ('prospect','importado')", (tid,))
     eventos_radar     = _count("SELECT COUNT(*) AS n FROM radar_intent WHERE tenant_id=?", (tid,))
 
+    last_exec = session.pop("sdr_last_exec", None)
     db.close()
     return render_template("sdr_evolutivo/dashboard.html",
                            config=config,
                            leads_aprovados=leads_aprovados,
                            cadencias_criadas=cadencias_criadas,
                            ecosistema_leads=ecosistema_leads,
-                           eventos_radar=eventos_radar)
+                           eventos_radar=eventos_radar,
+                           last_exec=last_exec)
 
 
 @sdr_evolutivo_bp.route("/sdr-evolutivo/executar", methods=["POST"])
@@ -50,8 +52,9 @@ def sdr_evolutivo_executar():
         db.close()
 
         stats = sdr_evo_mod.executar_sdr_evolutivo(config, _tid())
+        session["sdr_last_exec"] = stats
 
-        flash(f"SDR Evolutivo executado! {stats['leads_aprovados']} leads aprovados, {stats['cadencias_criadas']} cadências criadas.", "success")
+        flash(f"SDR executado: {stats['leads_aprovados']} leads aprovados, {stats['cadencias_criadas']} cadências criadas.", "success")
         return redirect(url_for("sdr_evolutivo.sdr_evolutivo_dashboard"))
     except Exception as e:
         flash(f"Erro ao executar SDR Evolutivo: {str(e)}", "danger")
