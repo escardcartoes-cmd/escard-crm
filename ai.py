@@ -204,7 +204,7 @@ def gerar_email_cadencia(empresa_nome: str, etapa: int, produto: str = "") -> di
         f'{{\"assunto\": \"<assunto>\", \"corpo\": \"<corpo em HTML simples com <p> e <strong>>\"}}'
     )
     msg = _get_client().messages.create(
-        model="claude-haiku-4-5-20251001",
+        model=MODEL,
         max_tokens=700,
         system=_ia_system(),
         messages=[{"role": "user", "content": prompt}],
