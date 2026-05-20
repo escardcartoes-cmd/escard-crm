@@ -252,7 +252,7 @@ def gerar_pitch_adaptativo(db, empresa: dict, produto: dict, canal: str,
     - Se a empresa ignorou o WhatsApp, tenta email com ângulo diferente
     - Se respondeu, ajusta para o interesse demonstrado
     """
-    razao = empresa.get("razao_social", "sua empresa")
+    razao = (empresa.get("razao_social") or "sua empresa").title()
 
     # Sem CNAE: pitch genérico sem produto específico
     if not empresa.get("cnae_codigo", "").strip():
