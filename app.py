@@ -902,6 +902,10 @@ def oportunidades_editar(id):
 @login_required
 @require_perfil('vendedor')
 def oportunidades_excluir(id):
+    tid = _tid()
+    if not op_model.buscar_por_id(id, tenant_id=tid):
+        flash("Oportunidade não encontrada.", "danger")
+        return redirect(url_for("oportunidades_kanban"))
     op_model.excluir(id)
     flash("Oportunidade excluída.", "success")
     return redirect(url_for("oportunidades_kanban"))
@@ -911,10 +915,11 @@ def oportunidades_excluir(id):
 @login_required
 @require_perfil('vendedor')
 def oportunidades_mover(id):
+    tid = _tid()
     novo = request.json.get("etapa") or request.json.get("estagio", "")
     if novo not in op_model.ESTAGIOS:
         return jsonify({"error": "Estágio inválido"}), 400
-    o = op_model.buscar_por_id(id)
+    o = op_model.buscar_por_id(id, tenant_id=tid)
     if not o:
         return jsonify({"error": "Não encontrado"}), 404
     dados = dict(o)

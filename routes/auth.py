@@ -43,7 +43,10 @@ def login():
                     return redirect(url_for('auth.login_2fa'))
                 login_user(u, remember=True)
                 session["tenant_id"] = getattr(u, "tenant_id", 1) or 1
-                return redirect(request.args.get("next") or url_for("dashboard"))
+                next_url = request.args.get("next") or ""
+                if next_url and (not next_url.startswith("/") or next_url.startswith("//")):
+                    next_url = ""
+                return redirect(next_url or url_for("dashboard"))
 
             if u_raw and u_raw.get('ativo'):
                 tentativas = user_model.registrar_tentativa_falha(u_raw['id'])
