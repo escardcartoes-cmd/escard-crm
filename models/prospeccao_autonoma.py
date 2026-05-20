@@ -536,17 +536,24 @@ def obter_leads_para_prospectar(config: dict, estado: str, limite: int) -> list:
         db = get_new_db_connection()
         try:
             rows = db.execute("""
-                SELECT id, nome, cnpj, cidade, estado,
-                       telefone, email, segmento
-                FROM empresas
-                WHERE tenant_id = %s
-                AND status IN ('prospect', 'importado')
-                AND id NOT IN (
+                SELECT e.id, e.nome, e.cnpj, e.cidade, e.estado,
+                       e.telefone, e.segmento,
+                       COALESCE(NULLIF(e.email, ''), (
+                           SELECT c.email FROM contatos c
+                           WHERE c.empresa_id = e.id
+                             AND c.email IS NOT NULL AND c.email != ''
+                           ORDER BY c.id
+                           LIMIT 1
+                       )) AS email
+                FROM empresas e
+                WHERE e.tenant_id = %s
+                AND e.status IN ('prospect', 'importado')
+                AND e.id NOT IN (
                     SELECT empresa_id FROM cadencias
                     WHERE empresa_id IS NOT NULL
                 )
-                AND (estado = %s OR %s = 'TODOS')
-                ORDER BY score DESC, criado_em ASC
+                AND (e.estado = %s OR %s = 'TODOS')
+                ORDER BY e.score DESC, e.criado_em ASC
                 LIMIT %s
             """, (tenant_id, estado, estado, limite)).fetchall()
             for r in rows:

@@ -16,9 +16,27 @@ def _tid() -> int:
 @require_perfil('gerente')
 def sdr_evolutivo_dashboard():
     db = database.get_connection()
-    config = sdr_evo_mod.get_sdr_evolutivo_config(db, _tid())
+    tid = _tid()
+    config = sdr_evo_mod.get_sdr_evolutivo_config(db, tid)
+
+    def _count(sql, params=()):
+        try:
+            return db.execute(sql, params).fetchone()["n"] or 0
+        except Exception:
+            return 0
+
+    leads_aprovados  = _count("SELECT COUNT(DISTINCT empresa_id) AS n FROM cadencias WHERE tenant_id=?", (tid,))
+    cadencias_criadas = _count("SELECT COUNT(*) AS n FROM cadencias WHERE tenant_id=?", (tid,))
+    ecosistema_leads  = _count("SELECT COUNT(*) AS n FROM empresas WHERE tenant_id=? AND status IN ('prospect','importado')", (tid,))
+    eventos_radar     = _count("SELECT COUNT(*) AS n FROM radar_intent WHERE tenant_id=?", (tid,))
+
     db.close()
-    return render_template("sdr_evolutivo/dashboard.html", config=config)
+    return render_template("sdr_evolutivo/dashboard.html",
+                           config=config,
+                           leads_aprovados=leads_aprovados,
+                           cadencias_criadas=cadencias_criadas,
+                           ecosistema_leads=ecosistema_leads,
+                           eventos_radar=eventos_radar)
 
 
 @sdr_evolutivo_bp.route("/sdr-evolutivo/executar", methods=["POST"])
