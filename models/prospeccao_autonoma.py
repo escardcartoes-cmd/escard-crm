@@ -537,9 +537,7 @@ def obter_leads_para_prospectar(config: dict, estado: str, limite: int) -> list:
         try:
             rows = db.execute("""
                 SELECT id, nome, cnpj, cidade, estado,
-                       telefone, email, cnae_fiscal,
-                       cnae_fiscal_descricao, capital_social,
-                       data_abertura
+                       telefone, email, segmento
                 FROM empresas
                 WHERE tenant_id = %s
                 AND status IN ('prospect', 'importado')
@@ -558,14 +556,14 @@ def obter_leads_para_prospectar(config: dict, estado: str, limite: int) -> list:
                     "razao_social":          r.get("nome") or "",
                     "municipio":             r.get("cidade") or "",
                     "uf":                    r.get("estado") or "",
-                    "cnae_codigo":           (r.get("cnae_fiscal") or "").replace(".", "").replace("-", ""),
-                    "cnae_descricao":        r.get("cnae_fiscal_descricao") or "",
+                    "cnae_codigo":           "",
+                    "cnae_descricao":        r.get("segmento") or "",
                     "telefone":              r.get("telefone") or None,
                     "email":                 r.get("email") or None,
-                    "capital_social":        float(r.get("capital_social") or 0),
+                    "capital_social":        0.0,
                     "situacao":              "ATIVA",
                     "is_matriz":             True,
-                    "data_inicio_atividade": str(r.get("data_abertura") or ""),
+                    "data_inicio_atividade": "",
                     "natureza_juridica":     "",
                     "porte":                 "",
                     "fonte":                 "importado",

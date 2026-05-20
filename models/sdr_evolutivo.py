@@ -562,7 +562,7 @@ def executar_sdr_evolutivo(config: dict, tenant_id: int = 1) -> dict:
 
 def get_sdr_evolutivo_config(db, tenant_id: int = 1) -> dict:
     defaults = {
-        "score_prontidao_minimo": 8,
+        "score_prontidao_minimo": 1,
         "max_leads_por_execucao": 20,
         "usar_radar_intent": 1,
         "usar_ecosistema": 1,
