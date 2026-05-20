@@ -3312,16 +3312,18 @@ def sdr_stats():
 @login_required
 def api_empresa_contato(empresa_id):
     try:
+        tid  = _tid()
         conn = database.get_connection()
         row = conn.execute(
-            "SELECT telefone, email FROM empresas WHERE id=?", (empresa_id,)
+            "SELECT telefone, email FROM empresas WHERE id=? AND tenant_id=?",
+            (empresa_id, tid)
         ).fetchone()
         telefone = (row["telefone"] or "") if row else ""
         email    = (row["email"]    or "") if row else ""
         if not telefone or not email:
             contato = conn.execute(
-                "SELECT telefone, email FROM contatos WHERE empresa_id=? ORDER BY id LIMIT 1",
-                (empresa_id,)
+                "SELECT telefone, email FROM contatos WHERE empresa_id=? AND tenant_id=? ORDER BY id LIMIT 1",
+                (empresa_id, tid)
             ).fetchone()
             if contato:
                 telefone = telefone or (contato["telefone"] or "")
