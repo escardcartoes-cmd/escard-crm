@@ -74,6 +74,7 @@
 <div class="card" id="form-novo-ramo">
   <p class="card-title" style="margin-bottom:18px">Adicionar Novo Ramo</p>
   <form method="POST" action="{{ url_for('configuracoes_ramos_novo') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
 
       <div>

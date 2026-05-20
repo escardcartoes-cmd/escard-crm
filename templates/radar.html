@@ -255,6 +255,7 @@
   <div class="card" style="max-width:600px">
     <p class="card-title">Configurações do Radar</p>
     <form method="post" action="{{ url_for('radar_config_salvar') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
       <div style="margin-bottom:16px">
         <label style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;display:block;margin-bottom:4px">

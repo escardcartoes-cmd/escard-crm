@@ -179,6 +179,7 @@
                     onclick="iniciarCadenciaFromRow({{ l.id }})">⚡ SDR</button>
             <form method="post" action="{{ url_for('prospeccao_excluir', id=l.id) }}"
                   onsubmit="return confirm('Remover este lead da prospecção?')" style="display:inline">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
               <button type="submit" class="btn btn-danger btn-xs">✕</button>
             </form>
           </div>

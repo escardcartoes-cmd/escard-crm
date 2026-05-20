@@ -3,6 +3,7 @@
 {% block topbar_title %}Recebíveis da Krylo{% endblock %}
 {% block topbar_actions %}
   <form method="post" action="{{ url_for('recebiveis_gerar') }}" style="display:inline">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <input type="hidden" name="mes" value="{{ mes }}">
     <button type="submit" class="btn btn-outline btn-sm">⚡ Gerar {{ mes }}</button>
   </form>

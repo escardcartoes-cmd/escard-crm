@@ -61,6 +61,7 @@
             <a href="{{ url_for('contatos_editar', id=c.id) }}" class="btn btn-outline btn-xs">Editar</a>
             <form method="post" action="{{ url_for('contatos_excluir', id=c.id) }}" style="display:inline"
                   onsubmit="return confirm('Excluir {{ c.nome | replace("'","\\'") }}?')">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
               <button type="submit" class="btn btn-danger btn-xs">Excluir</button>
             </form>
           </div>

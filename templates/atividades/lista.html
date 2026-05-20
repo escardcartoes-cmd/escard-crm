@@ -52,6 +52,7 @@
         <a href="{{ c.mail_url }}" class="btn btn-outline btn-sm">📧 Email</a>
         {% endif %}
         <form method="post" action="{{ url_for('cadencia_concluir', id=c.id) }}" style="display:inline">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <button type="submit" class="btn btn-sm" style="background:#16A34A;color:#fff">✅ Concluir</button>
         </form>
       </div>
@@ -111,6 +112,7 @@
       </div>
       <form method="post" action="{{ url_for('atividades_excluir', id=a.id) }}"
             onsubmit="return confirm('Excluir?')" style="flex-shrink:0">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <button type="submit" class="btn btn-danger btn-xs">Excluir</button>
       </form>
     </div>

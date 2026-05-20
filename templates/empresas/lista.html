@@ -111,6 +111,7 @@
             </button>
             <form method="post" action="{{ url_for('empresas_excluir', id=e.id) }}" style="display:inline"
                   onsubmit="return confirm('Excluir {{ e.nome | replace("'","\\'") }}?')">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
               <button type="submit" class="btn btn-danger btn-xs">Excluir</button>
             </form>
           </div>

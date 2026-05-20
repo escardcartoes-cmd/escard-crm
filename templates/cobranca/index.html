@@ -127,6 +127,7 @@
   <div class="card">
     <p class="card-title">Gerar Relatório Mensal</p>
     <form method="post" action="{{ url_for('cobranca_relatorio_gerar') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <div class="form-group" style="margin-bottom:12px">
         <label>Cliente</label>
         <select name="cliente_id" required>

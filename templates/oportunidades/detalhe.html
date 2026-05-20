@@ -87,6 +87,7 @@
               </div>
               <form method="post" action="{{ url_for('atividades_excluir', id=a.id) }}"
                     onsubmit="return confirm('Excluir atividade?')">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <input type="hidden" name="next" value="{{ request.url }}">
                 <button type="submit" class="btn btn-danger btn-xs">✕</button>
               </form>
@@ -111,6 +112,7 @@
       <p class="text-muted text-sm mb-3">Excluir esta oportunidade remove também as atividades vinculadas.</p>
       <form method="post" action="{{ url_for('oportunidades_excluir', id=op.id) }}"
             onsubmit="return confirm('Excluir esta oportunidade?')">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <button type="submit" class="btn btn-danger btn-sm">Excluir oportunidade</button>
       </form>
     </div>

@@ -158,6 +158,7 @@
       <p class="text-muted text-sm mb-3">Excluir esta empresa remove também todos os contatos, oportunidades e atividades vinculados.</p>
       <form method="post" action="{{ url_for('empresas_excluir', id=empresa.id) }}"
             onsubmit="return confirm('Excluir ' + {{ empresa.nome | tojson }} + '? Esta ação não pode ser desfeita.')">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <button type="submit" class="btn btn-danger btn-sm">Excluir empresa</button>
       </form>
     </div>

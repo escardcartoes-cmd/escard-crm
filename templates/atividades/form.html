@@ -9,6 +9,7 @@
 <div class="form-wrap">
   <div class="form-card">
     <form method="post" action="{{ url_for('atividades_nova') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <input type="hidden" name="next" value="{{ next_url }}">
 
       <div class="form-section">
