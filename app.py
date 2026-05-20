@@ -3847,6 +3847,22 @@ def admin_importar_rf_status():
         return jsonify({"total": 0})
 
 
+@app.route("/admin/enriquecer-cnae", methods=["POST"])
+@login_required
+@require_perfil("admin")
+def admin_enriquecer_cnae():
+    """Enriquece empresas sem CNAE via receitaws.com.br (max 20 por chamada, rate-limit 3 req/min)."""
+    limite = min(int(request.form.get("limite", 20)), 50)
+    resultado = emp_model.enriquecer_cnae_batch(tenant_id=_tid(), limite=limite)
+    flash(
+        f"Enriquecimento CNAE: {resultado['atualizadas']} atualizadas, "
+        f"{resultado['erros']} erros, {resultado['sem_cnpj']} sem CNPJ válido "
+        f"(de {resultado['total']} pendentes).",
+        "success" if resultado["atualizadas"] > 0 else "warning",
+    )
+    return redirect(url_for("admin"))
+
+
 # ── Setup Wizard — Onboarding Multi-tenant ────────────────────────────────────
 
 @app.route("/setup")

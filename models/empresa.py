@@ -1,4 +1,9 @@
+import logging
+import time
+import requests as _req
 from database import get_connection
+
+logger = logging.getLogger(__name__)
 
 STATUS = ["prospect", "cliente", "inativo"]
 PORTES = ["micro", "pequena", "média", "grande"]
@@ -73,6 +78,73 @@ def excluir(id_: int) -> None:
     conn.execute("DELETE FROM empresas WHERE id = ?", (id_,))
     conn.commit()
     conn.close()
+
+
+def enriquecer_cnae_batch(tenant_id: int = 1, limite: int = 20) -> dict:
+    """
+    Busca CNAE na API receitaws.com.br para empresas com CNPJ mas sem cnae_codigo.
+    Respeita o rate-limit da API: max 3 req/min (pausa de 21s entre chamadas).
+    Retorna {"atualizadas": N, "erros": N, "sem_cnpj": N}.
+    """
+    conn = get_connection()
+    pendentes = [dict(r) for r in conn.execute(
+        """SELECT id, cnpj, nome FROM empresas
+           WHERE tenant_id=? AND cnpj IS NOT NULL AND cnpj != ''
+             AND (cnae_codigo IS NULL OR cnae_codigo = '')
+           ORDER BY id LIMIT ?""",
+        (tenant_id, limite),
+    ).fetchall()]
+    conn.close()
+
+    atualizadas = erros = sem_cnpj = 0
+
+    for emp in pendentes:
+        cnpj_digits = "".join(c for c in str(emp["cnpj"] or "") if c.isdigit())
+        if len(cnpj_digits) != 14:
+            sem_cnpj += 1
+            continue
+        try:
+            resp = _req.get(
+                f"https://receitaws.com.br/v1/cnpj/{cnpj_digits}",
+                headers={"User-Agent": "EscardCRM/1.0"},
+                timeout=10,
+            )
+            if resp.status_code == 429:
+                logger.warning("[CNAE] Rate-limit receitaws — aguardando 60s")
+                time.sleep(60)
+                resp = _req.get(
+                    f"https://receitaws.com.br/v1/cnpj/{cnpj_digits}",
+                    headers={"User-Agent": "EscardCRM/1.0"},
+                    timeout=10,
+                )
+            if resp.status_code != 200:
+                logger.warning("[CNAE] HTTP %s para CNPJ %s (%s)", resp.status_code, cnpj_digits, emp["nome"])
+                erros += 1
+                time.sleep(21)
+                continue
+            data = resp.json()
+            atividades = data.get("atividade_principal") or []
+            if not atividades:
+                erros += 1
+                time.sleep(21)
+                continue
+            cnae_code = (atividades[0].get("code") or "").replace(".", "").replace("-", "").replace("/", "")
+            cnae_desc = atividades[0].get("text") or ""
+            conn2 = get_connection()
+            conn2.execute(
+                "UPDATE empresas SET cnae_codigo=?, segmento=? WHERE id=?",
+                (cnae_code, cnae_desc, emp["id"]),
+            )
+            conn2.commit()
+            conn2.close()
+            logger.info("[CNAE] Empresa %s (%s): %s — %s", emp["id"], emp["nome"], cnae_code, cnae_desc[:60])
+            atualizadas += 1
+        except Exception as e:
+            logger.error("[CNAE] Erro ao enriquecer empresa %s: %s", emp["id"], e, exc_info=True)
+            erros += 1
+        time.sleep(21)  # rate-limit: 3 req/min
+
+    return {"atualizadas": atualizadas, "erros": erros, "sem_cnpj": sem_cnpj, "total": len(pendentes)}
 
 
 def contar_por_status(tenant_id=None) -> dict:

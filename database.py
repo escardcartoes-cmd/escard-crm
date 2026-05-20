@@ -603,6 +603,8 @@ def run_migrations(conn) -> None:
     _ALTER = [
         # usuarios
         f"ALTER TABLE usuarios ADD COLUMN{_ifne} perfil TEXT NOT NULL DEFAULT 'admin'",
+        # empresas — CNAE e enriquecimento
+        f"ALTER TABLE empresas ADD COLUMN{_ifne} cnae_codigo TEXT",
         # empresas — Motor de Expansão
         f"ALTER TABLE empresas ADD COLUMN{_ifne} produtos_ativos TEXT",
         f"ALTER TABLE empresas ADD COLUMN{_ifne} num_funcionarios INTEGER",
