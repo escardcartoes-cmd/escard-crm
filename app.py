@@ -336,205 +336,184 @@ def _tid() -> int:
 
 # ── Dashboard ─────────────────────────────────────────────────────────────────
 
+_DASHBOARD_FALLBACK = dict(
+    status_counts={}, estagio_counts={}, pipeline_val=0,
+    atividades=[], total_empresas=0, clientes=0, em_aberto=0,
+    radar=[], radar_alerta_count=0, potencial_expansao=0,
+    cob_resumo={}, rec_resumo={}, radar_badge={"editais": 0, "concorrentes": 0, "total": 0},
+    portais_ativos=0, rec_atrasados_count=0, deals_fechados_semana=0,
+    receita_mes=0, pct_meta=0, cadencias_ativas_count=0,
+    top_acao="", pauto_resumo={"novos_hoje": 0, "prontos": 0},
+    dias_restantes=90, faturado_90d=0, pct_90d=0, ritmo_diario=0,
+    funil={"sdr_novos": 0, "em_cadencia": 0, "props_abertas": 0, "fechados_mes": 0},
+    cad_hoje=[], ops_paradas=[], meta_valor=100000, meta_nome="Meta Principal",
+)
+
+
 @app.route("/")
 @login_required
 def dashboard():
+    _log = logging.getLogger(__name__)
+    tid = _tid()
+    hoje = str(date.today())
+    mes_atual = hoje[:7]
+    limite_14d = (date.today() - timedelta(days=14)).isoformat()
+    meta_inicio_default = "2026-05-15"
+
+    conn = database.get_connection()
     try:
-        tid = _tid()
+        # QUERY 1: todos os escalares — substitui 12+ chamadas a models separados
+        stats = dict(conn.execute("""
+            SELECT
+              (SELECT COALESCE(COUNT(*),0) FROM empresas WHERE tenant_id=?) AS emp_total,
+              (SELECT COALESCE(COUNT(*),0) FROM empresas WHERE tenant_id=? AND status='cliente') AS emp_cliente,
+              (SELECT COALESCE(COUNT(*),0) FROM empresas WHERE tenant_id=? AND status='prospect') AS emp_prospect,
+              (SELECT COALESCE(COUNT(*),0) FROM empresas WHERE tenant_id=? AND status='lead') AS emp_lead,
+              (SELECT COALESCE(SUM(valor_estimado),0) FROM oportunidades
+               WHERE tenant_id=? AND etapa NOT IN ('fechado_ganho','fechado_perdido')) AS pipeline_val,
+              (SELECT COALESCE(COUNT(*),0) FROM oportunidades
+               WHERE tenant_id=? AND etapa NOT IN ('fechado_ganho','fechado_perdido')) AS ops_abertas,
+              (SELECT COALESCE(COUNT(*),0) FROM oportunidades WHERE tenant_id=? AND etapa='prospect') AS ops_prospect,
+              (SELECT COALESCE(COUNT(*),0) FROM oportunidades WHERE tenant_id=? AND etapa='contato') AS ops_contato,
+              (SELECT COALESCE(COUNT(*),0) FROM oportunidades WHERE tenant_id=? AND etapa='proposta') AS ops_proposta,
+              (SELECT COALESCE(COUNT(*),0) FROM oportunidades WHERE tenant_id=? AND etapa='negociacao') AS ops_negociacao,
+              (SELECT COALESCE(COUNT(*),0) FROM oportunidades WHERE tenant_id=? AND etapa='fechado') AS ops_fechado,
+              (SELECT COALESCE(SUM(valor_estimado),0) FROM oportunidades
+               WHERE tenant_id=? AND etapa='fechado_ganho' AND criado_em >= ?) AS faturado_90d,
+              (SELECT COALESCE(SUM(valor_estimado),0) FROM oportunidades
+               WHERE tenant_id=? AND etapa='fechado_ganho' AND criado_em LIKE ?) AS fechados_mes,
+              (SELECT COALESCE(COUNT(*),0) FROM prospeccao_automatica WHERE tenant_id=? AND status='novo') AS sdr_novos,
+              (SELECT COALESCE(COUNT(*),0) FROM cadencias WHERE tenant_id=? AND status='pendente') AS em_cadencia,
+              (SELECT COALESCE(COUNT(*),0) FROM radar_alertas WHERE tenant_id=? AND lido=0) AS radar_nao_lidos,
+              (SELECT COALESCE(COUNT(*),0) FROM portal_acessos WHERE tenant_id=? AND ativo=1) AS portais_ativos,
+              (SELECT COALESCE(COUNT(*),0) FROM prospeccao_automatica
+               WHERE tenant_id=? AND status IN ('pronto','quente')) AS pauto_prontos,
+              (SELECT COALESCE(COUNT(*),0) FROM prospeccao_automatica
+               WHERE tenant_id=? AND DATE(importado_em)=?) AS pauto_hoje,
+              (SELECT COALESCE(valor_meta,100000) FROM metas
+               WHERE tenant_id=? AND ativo=1 ORDER BY criado_em DESC LIMIT 1) AS meta_valor,
+              (SELECT COALESCE(nome,'Meta Principal') FROM metas
+               WHERE tenant_id=? AND ativo=1 ORDER BY criado_em DESC LIMIT 1) AS meta_nome,
+              (SELECT data_fim FROM metas
+               WHERE tenant_id=? AND ativo=1 ORDER BY criado_em DESC LIMIT 1) AS meta_data_fim,
+              (SELECT data_inicio FROM metas
+               WHERE tenant_id=? AND ativo=1 ORDER BY criado_em DESC LIMIT 1) AS meta_data_inicio
+        """, (
+            tid, tid, tid, tid,          # emp_*
+            tid, tid,                    # pipeline_val, ops_abertas
+            tid, tid, tid, tid, tid,     # ops por etapa
+            tid, meta_inicio_default,    # faturado_90d
+            tid, mes_atual + "%",        # fechados_mes
+            tid, tid,                    # sdr_novos, em_cadencia
+            tid, tid,                    # radar_nao_lidos, portais_ativos
+            tid, tid, hoje,              # pauto_prontos, pauto_hoje
+            tid, tid, tid, tid,          # meta_*
+        )).fetchone())
+
+        # Ajusta datas da meta a partir do banco
+        meta_valor = float(stats.get("meta_valor") or 100000)
+        meta_nome = stats.get("meta_nome") or "Meta Principal"
+        meta_fim_str = str(stats["meta_data_fim"])[:10] if stats.get("meta_data_fim") else "2026-08-13"
         try:
-            status_counts = emp_model.contar_por_status(tenant_id=tid)
+            dias_restantes = max(0, (date.fromisoformat(meta_fim_str) - date.today()).days)
         except Exception:
-            status_counts = {}
-        try:
-            estagio_counts = op_model.contar_por_estagio(tenant_id=tid)
-        except Exception:
-            estagio_counts = {}
-        try:
-            pipeline_val = op_model.valor_total_pipeline(tenant_id=tid)
-        except Exception:
-            pipeline_val = 0
-        try:
-            atividades = atv_model.listar(limit=8, tenant_id=tid)
-        except Exception:
-            atividades = []
-        total_empresas = sum(status_counts.values())
-        clientes       = status_counts.get("cliente", 0)
-        em_aberto      = sum(v for k, v in estagio_counts.items() if k != "fechado")
-        try:
-            radar = op_model.listar_radar(tenant_id=tid)
-            op_model.salvar_scores_radar(radar)
-        except Exception:
-            radar = []
-        radar_alerta_count = sum(
-            1 for r in radar
-            if r.get("dias_sem_contato") is not None and r["dias_sem_contato"] > 7
-        )
-        try:
-            potencial_expansao = exp_model.potencial_total()
-        except Exception:
-            potencial_expansao = 0
-        try:
-            cob_resumo = cob_model.resumo()
-        except Exception:
-            cob_resumo = {}
-        mes_atual = str(date.today())[:7]
-        try:
-            rec_resumo = rec_model.resumo_mes(mes_atual)
-        except Exception:
-            rec_resumo = {}
-        try:
-            radar_badge = radar_model.contar_nao_lidos()
-        except Exception:
-            radar_badge = {"editais": 0, "concorrentes": 0, "total": 0}
-        try:
-            dash_extra = rel_model.coletar_dashboard_extra(mes_atual)
-        except Exception:
-            dash_extra = {}
-        top_acao = (radar[0].get("proxima_acao") or "") if radar else ""
-        try:
-            pauto_resumo = pauto_model.resumo_dashboard()
-        except Exception:
-            pauto_resumo = {"novos_hoje": 0, "prontos": 0}
-        # Meta 90 dias
-        from datetime import date as _d2, timedelta as _td2
-        _meta_inicio = _d2(2026, 5, 15)
-        _meta_fim    = _meta_inicio + _td2(days=90)
-        _hoje_d      = _d2.today()
-        dias_restantes = max(0, (_meta_fim - _hoje_d).days)
-        meta_valor = 100_000
-        meta_nome  = "Meta Principal"
-        try:
-            conn_m = database.get_connection()
-            # Busca meta ativa no banco
-            try:
-                _meta_row = conn_m.execute(
-                    "SELECT valor_meta, data_inicio, data_fim, nome FROM metas"
-                    " WHERE tenant_id=? AND ativo=1 ORDER BY criado_em DESC LIMIT 1",
-                    (tid,)
-                ).fetchone()
-                if _meta_row:
-                    meta_valor = float(_meta_row["valor_meta"] or 100_000)
-                    meta_nome  = _meta_row["nome"] or "Meta Principal"
-                    if _meta_row["data_fim"]:
-                        try:
-                            _meta_fim = _d2.fromisoformat(str(_meta_row["data_fim"])[:10])
-                            dias_restantes = max(0, (_meta_fim - _hoje_d).days)
-                        except Exception:
-                            pass
-                    if _meta_row["data_inicio"]:
-                        try:
-                            _meta_inicio = _d2.fromisoformat(str(_meta_row["data_inicio"])[:10])
-                        except Exception:
-                            pass
-            except Exception:
-                pass
-            _row90 = conn_m.execute(
-                "SELECT COALESCE(SUM(valor_estimado),0) AS total FROM oportunidades"
-                " WHERE etapa='fechado_ganho' AND criado_em >= ? AND tenant_id = ?",
-                (_meta_inicio.isoformat(), tid)
-            ).fetchone()
-            faturado_90d = float(_row90["total"] if _row90 else 0)
-            pct_90d = round(min(faturado_90d / meta_valor * 100, 100), 1)
-            ritmo_diario = round((meta_valor - faturado_90d) / max(dias_restantes, 1), 2)
-            # Funil comercial
-            try:
-                _f = conn_m.execute("""
-                    SELECT
-                      (SELECT COALESCE(COUNT(*),0) FROM prospeccao_automatica WHERE status='novo' AND tenant_id=?) AS sdr_novos,
-                      (SELECT COALESCE(COUNT(*),0) FROM cadencias WHERE status='pendente' AND tenant_id=?) AS em_cadencia,
-                      (SELECT COALESCE(COUNT(*),0) FROM oportunidades
-                       WHERE etapa NOT IN ('fechado_ganho','fechado_perdido') AND tenant_id=?) AS props_abertas,
-                      (SELECT COALESCE(SUM(valor_estimado),0) FROM oportunidades
-                       WHERE etapa='fechado_ganho' AND criado_em LIKE ? AND tenant_id=?) AS fechados_mes
-                """, (tid, tid, tid, mes_atual + "%", tid)).fetchone()
-                funil = dict(_f) if _f else {}
-            except Exception:
-                funil = {}
-            funil.setdefault("sdr_novos", 0)
-            funil.setdefault("em_cadencia", 0)
-            funil.setdefault("props_abertas", 0)
-            funil.setdefault("fechados_mes", 0)
-            # Atividade de hoje
-            limite_14d = (_hoje_d - _td2(days=14)).isoformat()
-            try:
-                cad_hoje = cad_model.listar_hoje(tenant_id=tid)[:5]
-            except Exception:
-                cad_hoje = []
-            try:
-                ops_paradas = [dict(r) for r in conn_m.execute("""
-                    SELECT o.id, o.titulo, e.nome AS empresa_nome, o.etapa, o.data_ultimo_contato
-                    FROM oportunidades o
-                    LEFT JOIN empresas e ON e.id = o.empresa_id
-                    WHERE o.etapa NOT IN ('fechado_ganho','fechado_perdido')
-                      AND o.tenant_id = ?
-                      AND (o.data_ultimo_contato IS NULL OR o.data_ultimo_contato < ?)
-                    ORDER BY o.data_ultimo_contato LIMIT 5
-                """, (tid, limite_14d)).fetchall()]
-            except Exception:
-                ops_paradas = []
-            conn_m.close()
-        except Exception as _e:
-            print(f"[DASHBOARD] Erro queries conn_m: {_e}")
-            faturado_90d = 0
-            pct_90d = 0
-            ritmo_diario = 0
-            funil = {"sdr_novos": 0, "em_cadencia": 0, "props_abertas": 0, "fechados_mes": 0}
-            cad_hoje = []
-            ops_paradas = []
+            dias_restantes = 90
+
+        faturado_90d = float(stats.get("faturado_90d") or 0)
+        pct_90d = round(min(faturado_90d / max(meta_valor, 1) * 100, 100), 1)
+        ritmo_diario = round((meta_valor - faturado_90d) / max(dias_restantes, 1), 2)
+
+        # QUERY 2: atividades recentes com nome da empresa
+        atividades = [dict(r) for r in conn.execute("""
+            SELECT a.*, e.nome AS empresa_nome
+            FROM atividades a
+            LEFT JOIN empresas e ON e.id = a.empresa_id
+            WHERE a.tenant_id = ?
+            ORDER BY a.criado_em DESC LIMIT 8
+        """, (tid,)).fetchall()]
+
+        # QUERY 3: cadências de hoje (lista, precisa de rows)
+        cad_hoje = [dict(r) for r in conn.execute("""
+            SELECT * FROM cadencias
+            WHERE tenant_id=? AND data_acao=? AND status='pendente'
+            ORDER BY empresa_nome LIMIT 5
+        """, (tid, hoje)).fetchall()]
+
+        # QUERY 4: oportunidades paradas (JOIN necessário para nome da empresa)
+        ops_paradas = [dict(r) for r in conn.execute("""
+            SELECT o.id, o.titulo, e.nome AS empresa_nome, o.etapa, o.data_ultimo_contato
+            FROM oportunidades o
+            LEFT JOIN empresas e ON e.id = o.empresa_id
+            WHERE o.tenant_id=?
+              AND o.etapa NOT IN ('fechado_ganho','fechado_perdido')
+              AND (o.data_ultimo_contato IS NULL OR o.data_ultimo_contato < ?)
+            ORDER BY o.data_ultimo_contato LIMIT 5
+        """, (tid, limite_14d)).fetchall()]
+
+        conn.close()
+
+        status_counts = {
+            "prospect": stats.get("emp_prospect", 0),
+            "lead": stats.get("emp_lead", 0),
+            "cliente": stats.get("emp_cliente", 0),
+        }
+        estagio_counts = {
+            "prospect": stats.get("ops_prospect", 0),
+            "contato": stats.get("ops_contato", 0),
+            "proposta": stats.get("ops_proposta", 0),
+            "negociacao": stats.get("ops_negociacao", 0),
+            "fechado": stats.get("ops_fechado", 0),
+        }
 
         return render_template(
             "dashboard.html",
             status_counts=status_counts,
             estagio_counts=estagio_counts,
-            pipeline_val=pipeline_val,
+            pipeline_val=float(stats.get("pipeline_val") or 0),
             atividades=atividades,
-            total_empresas=total_empresas,
-            clientes=clientes,
-            em_aberto=em_aberto,
-            radar=radar[:5],
-            radar_alerta_count=radar_alerta_count,
-            potencial_expansao=potencial_expansao,
-            cob_resumo=cob_resumo,
-            rec_resumo=rec_resumo,
+            total_empresas=stats.get("emp_total", 0),
+            clientes=stats.get("emp_cliente", 0),
+            em_aberto=stats.get("ops_abertas", 0),
+            radar=[],
+            radar_alerta_count=0,
+            potencial_expansao=0,
+            cob_resumo={},
+            rec_resumo={},
             mes_atual=mes_atual,
-            radar_badge=radar_badge,
-            portais_ativos=dash_extra.get("portais_ativos", 0),
-            rec_atrasados_count=dash_extra.get("rec_atrasados_count", 0),
-            deals_fechados_semana=dash_extra.get("deals_fechados_semana", 0),
-            receita_mes=dash_extra.get("receita_mes", 0),
-            pct_meta=dash_extra.get("pct_meta", 0),
-            cadencias_ativas_count=dash_extra.get("cadencias_ativas_count", 0),
-            top_acao=top_acao,
-            pauto_resumo=pauto_resumo,
+            radar_badge={"editais": 0, "concorrentes": 0, "total": stats.get("radar_nao_lidos", 0)},
+            portais_ativos=stats.get("portais_ativos", 0),
+            rec_atrasados_count=0,
+            deals_fechados_semana=0,
+            receita_mes=float(stats.get("fechados_mes") or 0),
+            pct_meta=pct_90d,
+            cadencias_ativas_count=stats.get("em_cadencia", 0),
+            top_acao="",
+            pauto_resumo={"novos_hoje": stats.get("pauto_hoje", 0), "prontos": stats.get("pauto_prontos", 0)},
             dias_restantes=dias_restantes,
             faturado_90d=faturado_90d,
             pct_90d=pct_90d,
             ritmo_diario=ritmo_diario,
-            funil=funil,
+            funil={
+                "sdr_novos": stats.get("sdr_novos", 0),
+                "em_cadencia": stats.get("em_cadencia", 0),
+                "props_abertas": stats.get("ops_abertas", 0),
+                "fechados_mes": float(stats.get("fechados_mes") or 0),
+            },
             cad_hoje=cad_hoje,
             ops_paradas=ops_paradas,
             meta_valor=meta_valor,
             meta_nome=meta_nome,
         )
-    except Exception as e:
-        import traceback
-        print(f"[DASHBOARD] Erro crítico: {traceback.format_exc()}")
+    except Exception:
+        _log.error("[DASHBOARD] Erro critico", exc_info=True)
         try:
-            return render_template(
-                "dashboard.html",
-                status_counts={}, estagio_counts={}, pipeline_val=0,
-                atividades=[], total_empresas=0, clientes=0, em_aberto=0,
-                radar=[], radar_alerta_count=0, potencial_expansao=0,
-                cob_resumo={}, rec_resumo={}, mes_atual=str(date.today())[:7],
-                radar_badge={"editais": 0, "concorrentes": 0, "total": 0},
-                portais_ativos=0, rec_atrasados_count=0, deals_fechados_semana=0,
-                receita_mes=0, pct_meta=0, cadencias_ativas_count=0,
-                top_acao="", pauto_resumo={"novos_hoje": 0, "prontos": 0},
-                dias_restantes=90, faturado_90d=0, pct_90d=0, ritmo_diario=0,
-                funil={"sdr_novos": 0, "em_cadencia": 0, "props_abertas": 0, "fechados_mes": 0},
-                cad_hoje=[], ops_paradas=[],
-                meta_valor=100000, meta_nome="Meta Principal",
-            )
+            conn.close()
+        except Exception:
+            pass
+        try:
+            return render_template("dashboard.html",
+                                   mes_atual=str(date.today())[:7],
+                                   **_DASHBOARD_FALLBACK)
         except Exception:
             return redirect(url_for("auth.login"))
 
