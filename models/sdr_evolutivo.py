@@ -242,8 +242,23 @@ def _calcular_idade_empresa(data_abertura) -> int:
 
 # ── 3. PITCH DINÂMICO ADAPTATIVO (se adapta com feedback das interações) ────────────────────────
 
+def _get_nome_vendedor(db, tenant_id: int) -> str:
+    """Retorna nome_vendedor de sdr_config para o tenant, ou 'Equipe' como fallback."""
+    try:
+        row = db.execute(
+            "SELECT nome_vendedor FROM sdr_config WHERE tenant_id = %s", (tenant_id,)
+        ).fetchone()
+        if row:
+            nome = (dict(row).get("nome_vendedor") or "").strip()
+            if nome:
+                return nome
+    except Exception:
+        pass
+    return "Equipe"
+
+
 def gerar_pitch_adaptativo(db, empresa: dict, produto: dict, canal: str,
-                            feedback_anterior: dict = None) -> str:
+                            feedback_anterior: dict = None, tenant_id: int = 1) -> str:
     """
     Pitch Dinâmico Adaptativo:
     - Não é só um pitch gerado uma vez
@@ -253,13 +268,14 @@ def gerar_pitch_adaptativo(db, empresa: dict, produto: dict, canal: str,
     - Se respondeu, ajusta para o interesse demonstrado
     """
     razao = (empresa.get("razao_social") or "sua empresa").title()
+    nome_vendedor = _get_nome_vendedor(db, tenant_id)
 
     # Sem CNAE: pitch genérico sem produto específico
     if not empresa.get("cnae_codigo", "").strip():
         if canal == "whatsapp":
             return (
                 f"Oi! Tudo bem? Somos a Escard Cartões e Benefícios e gostaríamos de "
-                f"apresentar nossas soluções para {razao}. Podemos conversar? 👋"
+                f"apresentar nossas soluções para {razao}. Podemos conversar? 👋\n— {nome_vendedor}"
             )
         else:
             return (
@@ -267,7 +283,7 @@ def gerar_pitch_adaptativo(db, empresa: dict, produto: dict, canal: str,
                 f"Somos a Escard Cartões e Benefícios e gostaríamos de apresentar nossas "
                 f"soluções para a {razao}.\n\n"
                 f"Podemos agendar uma conversa rápida?\n\n"
-                f"Abraços,\nEquipe Escard Cartões e Benefícios"
+                f"Abraços,\n{nome_vendedor} | Escard Cartões e Benefícios"
             )
 
     try:
@@ -306,6 +322,7 @@ def gerar_pitch_adaptativo(db, empresa: dict, produto: dict, canal: str,
             f"(setor: {cnae_desc}). Produto: {produto.get('produto', produto.get('nome', 'Produto'))}. "
             f"Score de prontidão: {score_prontidao}/15 — {motivos}. "
             f"Use o nome da empresa, destaque 1 benefício concreto. {limite}. Sem emojis excessivos. "
+            f"Assine como '{nome_vendedor}' (sem sobrenome)."
         )
 
         if beneficios:
@@ -317,7 +334,7 @@ def gerar_pitch_adaptativo(db, empresa: dict, produto: dict, canal: str,
         if pitch_base:
             msg += f"\nPitch base (use como referência):\n{pitch_base}"
 
-        return ia_mod.chat_com_ia(db, msg)
+        return ia_mod.chat_com_ia(db, msg, tenant_id=tenant_id)
     except Exception as e:
         print(f"[PITCH ADAPTATIVO] Erro: {e}")
         return ""
@@ -484,8 +501,8 @@ def executar_sdr_evolutivo(config: dict, tenant_id: int = 1) -> dict:
                 )
 
                 # Passo 6: Gerar pitches para email e WhatsApp
-                pitch_email = gerar_pitch_adaptativo(db, lead, produto, "email")
-                pitch_wa    = gerar_pitch_adaptativo(db, lead, produto, "whatsapp")
+                pitch_email = gerar_pitch_adaptativo(db, lead, produto, "email", tenant_id=tenant_id)
+                pitch_wa    = gerar_pitch_adaptativo(db, lead, produto, "whatsapp", tenant_id=tenant_id)
 
                 nome_empresa = lead.get("razao_social", "")
                 fone         = lead.get("telefone", "")

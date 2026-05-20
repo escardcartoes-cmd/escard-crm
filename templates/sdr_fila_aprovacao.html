@@ -64,29 +64,42 @@
 </div>
 
 <script>
+const _csrf = document.querySelector('meta[name="csrf-token"]')?.content || '';
+
+function _postJson(url) {
+  return fetch(url, {
+    method: 'POST',
+    headers: { 'X-CSRFToken': _csrf, 'Content-Type': 'application/json' }
+  });
+}
+
+function _decrementBadge() {
+  const badge = document.querySelector('.badge.bg-warning');
+  if (!badge) return;
+  const n = parseInt(badge.textContent) - 1;
+  badge.textContent = n > 0 ? `${n} pendente${n !== 1 ? 's' : ''}` : '0 pendentes';
+}
+
 async function aprovar(id, btn) {
   const card = document.getElementById(`card-${id}`);
   btn.disabled = true;
   btn.textContent = 'Aprovando…';
   try {
-    const res = await fetch(`/sdr/aprovar/${id}`, { method: 'POST' });
+    const res = await _postJson(`/sdr/aprovar/${id}`);
     const data = await res.json();
     if (data.ok) {
+      if (data.wa_url) window.location.href = data.wa_url;
       card.style.transition = 'opacity 0.4s';
       card.style.opacity = '0';
       setTimeout(() => card.remove(), 400);
-      const badge = document.querySelector('.badge.bg-warning');
-      if (badge) {
-        const n = parseInt(badge.textContent) - 1;
-        badge.textContent = n > 0 ? `${n} pendente${n !== 1 ? 's' : ''}` : '0 pendentes';
-      }
+      _decrementBadge();
     } else {
       alert('Erro: ' + (data.erro || 'desconhecido'));
       btn.disabled = false;
       btn.textContent = '✅ Aprovar e abrir WhatsApp';
     }
   } catch (e) {
-    alert('Erro de rede');
+    alert('Erro de rede: ' + e.message);
     btn.disabled = false;
     btn.textContent = '✅ Aprovar e abrir WhatsApp';
   }
@@ -97,24 +110,20 @@ async function rejeitar(id, btn) {
   btn.disabled = true;
   btn.textContent = 'Rejeitando…';
   try {
-    const res = await fetch(`/sdr/rejeitar/${id}`, { method: 'POST' });
+    const res = await _postJson(`/sdr/rejeitar/${id}`);
     const data = await res.json();
     if (data.ok) {
       card.style.transition = 'opacity 0.4s';
       card.style.opacity = '0';
       setTimeout(() => card.remove(), 400);
-      const badge = document.querySelector('.badge.bg-warning');
-      if (badge) {
-        const n = parseInt(badge.textContent) - 1;
-        badge.textContent = n > 0 ? `${n} pendente${n !== 1 ? 's' : ''}` : '0 pendentes';
-      }
+      _decrementBadge();
     } else {
       alert('Erro: ' + (data.erro || 'desconhecido'));
       btn.disabled = false;
       btn.textContent = '✗ Rejeitar';
     }
   } catch (e) {
-    alert('Erro de rede');
+    alert('Erro de rede: ' + e.message);
     btn.disabled = false;
     btn.textContent = '✗ Rejeitar';
   }

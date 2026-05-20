@@ -3604,7 +3604,7 @@ def sdr_fila_aprovacao():
             fone = (item.get("contato_whatsapp") or "").replace(" ", "").replace("-", "").replace("(", "").replace(")", "")
             fone = re.sub(r'\D', '', fone)
             from urllib.parse import quote as _q
-            item["wa_url"] = f"https://wa.me/55{fone}?text={_q(item.get('mensagem_whatsapp') or '')}" if fone else ""
+            item["wa_url"] = f"whatsapp://send?phone=55{fone}&text={_q(item.get('mensagem_whatsapp') or '')}" if fone else ""
         return render_template("sdr_fila_aprovacao.html", itens=itens)
     except Exception as e:
         flash(f"Erro ao carregar fila: {e}", "danger")
@@ -3633,7 +3633,7 @@ def sdr_aprovar_whatsapp(cad_id):
         conn.commit()
         fone = re.sub(r'\D', '', str(row["contato_whatsapp"] or ""))
         from urllib.parse import quote as _q
-        wa_url = f"https://wa.me/55{fone}?text={_q(row['mensagem_whatsapp'] or '')}" if fone else ""
+        wa_url = f"whatsapp://send?phone=55{fone}&text={_q(row['mensagem_whatsapp'] or '')}" if fone else ""
         conn.close()
         return jsonify({"ok": True, "wa_url": wa_url})
     except Exception as e:
