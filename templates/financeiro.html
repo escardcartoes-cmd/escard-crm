@@ -121,6 +121,7 @@
     <button type="submit" class="btn btn-outline btn-sm">Filtrar</button>
   </form>
   <form method="post" action="{{ url_for('recebiveis_gerar') }}" style="margin-left:auto">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <input type="hidden" name="mes" value="{{ mes }}">
     <button type="submit" class="btn btn-primary btn-sm">⚡ Gerar Mês</button>
   </form>

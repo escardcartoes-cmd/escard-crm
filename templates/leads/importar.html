@@ -55,6 +55,7 @@
       <form id="confirmForm" method="post"
             action="{{ url_for('leads_importar_confirmar') }}"
             enctype="multipart/form-data">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="file" id="hiddenFile" name="arquivo" style="display:none">
         <input type="hidden" name="map_nome"     id="h_nome">
         <input type="hidden" name="map_empresa"  id="h_empresa">
