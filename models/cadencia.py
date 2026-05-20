@@ -223,7 +223,7 @@ def enviar_email_cadencia(cadencia_id: int, etapa_num: int, tenant_id: int) -> b
     try:
         cad = conn.execute(
             """SELECT c.*, e.email AS email_empresa_db,
-                      e.cnae_fiscal_descricao AS cnae
+                      e.segmento AS cnae
                FROM cadencias c
                LEFT JOIN empresas e ON e.id = c.empresa_id
                WHERE c.id = ?""",
@@ -285,7 +285,7 @@ def enviar_email_cadencia(cadencia_id: int, etapa_num: int, tenant_id: int) -> b
         email_remetente=email_remetente,
     )
 
-    print(f"[EMAIL CADENCIA] {etapa_str} → {email_destino}: {resultado['status']}")
+    print(f"[EMAIL CADENCIA] {etapa_str} -> {email_destino}: {resultado['status']}")
 
     agora = str(date.today())
     try:
