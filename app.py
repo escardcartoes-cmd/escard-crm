@@ -1,3 +1,4 @@
+import logging
 import os
 import re
 import csv
@@ -9,6 +10,12 @@ import atexit
 from datetime import timedelta
 from dotenv import load_dotenv
 load_dotenv(override=True)
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+    datefmt="%Y-%m-%dT%H:%M:%S",
+)
 
 from apscheduler.schedulers.background import BackgroundScheduler
 

@@ -7,6 +7,7 @@ SDR Evolutivo — Módulo de prospecção autônoma com features inovadoras que 
 5. Ecosistema de Leads (conecta empresas que fazem negócios entre si)
 """
 import json
+import logging
 import random
 import re
 import time
@@ -15,6 +16,8 @@ import requests
 from datetime import datetime, date, timedelta
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from database import get_connection, get_new_db_connection
+
+logger = logging.getLogger(__name__)
 
 _HEADERS = {"User-Agent": "KryloCRM/2.0 SDR-Evolutivo"}
 
@@ -109,7 +112,7 @@ def monitorar_radar_intent(tenant_id: int = 1) -> list:
             ))
         db.commit()
     except Exception as e:
-        print(f"[RADAR] Erro ao salvar: {e}")
+        logger.error("[RADAR] Erro ao salvar eventos no banco: %s", e, exc_info=True)
     finally:
         db.close()
 
@@ -336,7 +339,7 @@ def gerar_pitch_adaptativo(db, empresa: dict, produto: dict, canal: str,
 
         return ia_mod.chat_com_ia(db, msg, tenant_id=tenant_id)
     except Exception as e:
-        print(f"[PITCH ADAPTATIVO] Erro: {e}")
+        logger.error("[PITCH ADAPTATIVO] Erro ao gerar pitch para %s via %s: %s", empresa.get("razao_social"), canal, e, exc_info=True)
         return ""
 
 
@@ -392,7 +395,7 @@ def encontrar_ecosistema_leads(empresa_central: dict, tenant_id: int = 1) -> lis
                     "score_ecosistema": 7 + random.randint(0, 3),
                 })
     except Exception as e:
-        print(f"[ECOSISTEMA] Erro: {e}")
+        logger.error("[ECOSISTEMA] Erro ao buscar leads relacionados: %s", e, exc_info=True)
     finally:
         db.close()
 
@@ -584,7 +587,7 @@ def executar_sdr_evolutivo(config: dict, tenant_id: int = 1) -> dict:
                 stats["cadencias_criadas"] += 1
 
     except Exception as e:
-        print(f"[SDR EVOLUTIVO] Erro: {e}")
+        logger.error("[SDR EVOLUTIVO] Erro fatal no pipeline (tenant=%s): %s", tenant_id, e, exc_info=True)
     finally:
         db.close()
 

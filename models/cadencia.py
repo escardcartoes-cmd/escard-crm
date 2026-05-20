@@ -1,8 +1,11 @@
 import json
+import logging
 import os
 import requests as _req
 from datetime import date, timedelta
 from database import get_connection
+
+logger = logging.getLogger(__name__)
 
 ETAPA_LABELS = {
     1: "Apresentação",
@@ -37,9 +40,9 @@ def _salvar_email_na_fila(
         )
         conn.commit()
         conn.close()
-        print(f"[EMAIL FILA] Enfileirado para {destinatario}: {assunto[:50]}")
+        logger.info("[EMAIL FILA] Enfileirado para %s: %s", destinatario, assunto[:50])
     except Exception as e:
-        print(f"[EMAIL FILA] Erro ao enfileirar: {e}")
+        logger.error("[EMAIL FILA] Erro ao enfileirar para %s: %s", destinatario, e, exc_info=True)
 
 
 def processar_fila_email(tenant_id: int = 1) -> int:
@@ -72,8 +75,8 @@ def processar_fila_email(tenant_id: int = 1) -> int:
             )
             conn2.commit()
             conn2.close()
-        except Exception:
-            pass
+        except Exception as e:
+            logger.error("[EMAIL FILA] Erro ao atualizar status item %s: %s", item["id"], e, exc_info=True)
         if novo_status == "enviado":
             enviados += 1
     return enviados
@@ -107,12 +110,12 @@ def enviar_email_brevo(
             timeout=10,
         )
         if resp.status_code not in (200, 201):
-            print(f"[BREVO] HTTP {resp.status_code}: {resp.text[:300]}")
+            logger.warning("[BREVO] HTTP %s ao enviar para %s: %s", resp.status_code, destinatario_email, resp.text[:300])
             return {"status": "erro", "id": None}
         data = resp.json()
         return {"status": "enviado", "id": data.get("messageId", "")}
     except Exception as e:
-        print(f"[BREVO] enviar_email_brevo erro: {e}")
+        logger.error("[BREVO] Erro ao enviar para %s: %s", destinatario_email, e, exc_info=True)
         return {"status": "erro", "id": None}
 
 
@@ -205,7 +208,7 @@ O HTML deve ter saudação com nome da empresa, parágrafos com <p>, pontos em <
         texto = texto.replace("```json", "").replace("```", "").strip()
         return json.loads(texto)
     except Exception as e:
-        print(f"[EMAIL CADENCIA] Erro IA: {e}")
+        logger.error("[EMAIL CADENCIA] Erro IA para %s etapa %s: %s", empresa_nome, etapa, e, exc_info=True)
         return {
             "assunto": f"Proposta para {empresa_nome}",
             "corpo_html": f"<p>Olá,</p><p>Gostaríamos de apresentar nossa solução para <strong>{empresa_nome}</strong>.</p>",
@@ -266,7 +269,7 @@ def enviar_email_cadencia(cadencia_id: int, etapa_num: int, tenant_id: int) -> b
         conn.close()
 
     except Exception as e:
-        print(f"[EMAIL CADENCIA] Erro ao buscar cadência: {e}")
+        logger.error("[EMAIL CADENCIA] Erro ao buscar cadencia %s: %s", cadencia_id, e, exc_info=True)
         try:
             conn.close()
         except Exception:
@@ -293,7 +296,7 @@ def enviar_email_cadencia(cadencia_id: int, etapa_num: int, tenant_id: int) -> b
         email_remetente=email_remetente,
     )
 
-    print(f"[EMAIL CADENCIA] {etapa_str} -> {email_destino}: {resultado['status']}")
+    logger.info("[EMAIL CADENCIA] %s -> %s: %s", etapa_str, email_destino, resultado['status'])
 
     agora = str(date.today())
     try:
@@ -305,7 +308,7 @@ def enviar_email_cadencia(cadencia_id: int, etapa_num: int, tenant_id: int) -> b
         conn2.commit()
         conn2.close()
     except Exception as e:
-        print(f"[EMAIL CADENCIA] Erro ao atualizar status: {e}")
+        logger.error("[EMAIL CADENCIA] Erro ao atualizar status cadencia %s: %s", cadencia_id, e, exc_info=True)
 
     return resultado["status"] == "enviado"
 
@@ -397,7 +400,7 @@ def criar_etapa(dados: dict) -> int:
         try:
             enviar_email_cadencia(new_id, etapa_num, tenant_id)
         except Exception as e:
-            print(f"[EMAIL CADENCIA] criar_etapa etapa {etapa_num}: {e}")
+            logger.error("[EMAIL CADENCIA] criar_etapa etapa %s cadencia %s: %s", etapa_num, new_id, e, exc_info=True)
 
     return new_id
 
@@ -439,7 +442,7 @@ def _tentar_enviar_email(
         conn.commit()
         conn.close()
     except Exception as e:
-        print(f"[BREVO] Erro ao processar e-mail para cadência {cadencia_id}: {e}")
+        logger.error("[BREVO] Erro ao processar email cadencia %s: %s", cadencia_id, e, exc_info=True)
 
 
 def cancelar_por_empresa(empresa_id: int) -> None:
@@ -626,11 +629,11 @@ def atualizar_temperatura_lead(empresa_id: int, evento: str, tenant_id: int = 1)
                    WHERE empresa_id = ? AND status = 'pendente' AND tenant_id = ?""",
                 (empresa_id, tenant_id),
             )
-            print(f"[TEMPERATURA] Empresa {empresa_id} ficou QUENTE — adicionada à fila WhatsApp")
+            logger.info("[TEMPERATURA] Empresa %s ficou QUENTE — adicionada a fila WhatsApp", empresa_id)
 
         conn.commit()
     except Exception as e:
-        print(f"[TEMPERATURA] Erro ao atualizar empresa {empresa_id}: {e}")
+        logger.error("[TEMPERATURA] Erro ao atualizar empresa %s: %s", empresa_id, e, exc_info=True)
     finally:
         conn.close()
 
@@ -656,7 +659,7 @@ def processar_cadencias_pendentes(tenant_id: int = 1) -> int:
         (hoje, tenant_id),
     ).fetchall()]
 
-    print(f"[CADÊNCIA] {len(pendentes)} cadências para processar")
+    logger.info("[CADENCIA] %s cadencias para processar (tenant=%s)", len(pendentes), tenant_id)
     processados = 0
 
     for cad in pendentes:
@@ -669,7 +672,7 @@ def processar_cadencias_pendentes(tenant_id: int = 1) -> int:
             try:
                 enviar_email_cadencia(cad_id, etapa_atual, tenant_id)
             except Exception as e:
-                print(f"[CADÊNCIA] Erro email cad {cad_id}: {e}")
+                logger.error("[CADENCIA] Erro ao enviar email cad %s etapa %s: %s", cad_id, etapa_atual, e, exc_info=True)
 
         # Cria próxima etapa se houver e ainda não existir
         if etapa_atual in PROXIMA:
@@ -703,7 +706,7 @@ def processar_cadencias_pendentes(tenant_id: int = 1) -> int:
                         "tenant_id":         tenant_id,
                     })
             except Exception as e:
-                print(f"[CADÊNCIA] Erro criar etapa {proxima_etapa} para {empresa_nome}: {e}")
+                logger.error("[CADENCIA] Erro ao criar etapa %s para %s: %s", proxima_etapa, empresa_nome, e, exc_info=True)
 
         # Marca etapa atual como concluída
         try:
@@ -713,7 +716,7 @@ def processar_cadencias_pendentes(tenant_id: int = 1) -> int:
             conn.commit()
             processados += 1
         except Exception as e:
-            print(f"[CADÊNCIA] Erro ao concluir cad {cad_id}: {e}")
+            logger.error("[CADENCIA] Erro ao concluir cad %s: %s", cad_id, e, exc_info=True)
 
     conn.close()
     return processados
