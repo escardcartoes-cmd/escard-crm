@@ -258,6 +258,11 @@ def enviar_email_cadencia(cadencia_id: int, etapa_num: int, tenant_id: int) -> b
             "SELECT nome_plataforma FROM tenants WHERE id = ?", (tenant_id,)
         ).fetchone()
         nome_plataforma = (dict(t).get("nome_plataforma") or "Krylo") if t else "Krylo"
+
+        sc = conn.execute(
+            "SELECT email_remetente FROM sdr_config WHERE tenant_id = ?", (tenant_id,)
+        ).fetchone()
+        email_remetente_config = (dict(sc).get("email_remetente") or "").strip() if sc else ""
         conn.close()
 
     except Exception as e:
@@ -268,7 +273,7 @@ def enviar_email_cadencia(cadencia_id: int, etapa_num: int, tenant_id: int) -> b
             pass
         return False
 
-    email_remetente = os.environ.get("EMAIL_ONBOARDING", "contato@krylo.com.br")
+    email_remetente = email_remetente_config or os.environ.get("EMAIL_ONBOARDING", "contato@krylo.com.br")
 
     email_data = gerar_email_cadencia(
         empresa_nome=cad.get("empresa_nome") or "",
