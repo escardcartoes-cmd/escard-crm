@@ -1049,8 +1049,11 @@ def run_migrations(conn) -> None:
         )""",
         # Indexes for multi-tenant performance
         "CREATE INDEX IF NOT EXISTS idx_empresas_tenant ON empresas(tenant_id)",
+        "CREATE INDEX IF NOT EXISTS idx_empresas_tenant_status ON empresas(tenant_id, status)",
         "CREATE INDEX IF NOT EXISTS idx_cadencias_tenant ON cadencias(tenant_id)",
+        "CREATE INDEX IF NOT EXISTS idx_cadencias_tenant_status ON cadencias(tenant_id, status)",
         "CREATE INDEX IF NOT EXISTS idx_oportunidades_tenant ON oportunidades(tenant_id)",
+        "CREATE INDEX IF NOT EXISTS idx_contatos_empresa ON contatos(empresa_id)",
         # Base local Receita Federal
         """CREATE TABLE IF NOT EXISTS rf_empresas (
             id            INTEGER PRIMARY KEY AUTOINCREMENT,
