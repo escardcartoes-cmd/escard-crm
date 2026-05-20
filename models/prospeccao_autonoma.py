@@ -14,6 +14,13 @@ from database import get_connection, get_new_db_connection
 
 _HEADERS = {"User-Agent": "KryloCRM/1.0 SDR-autonomo"}
 
+# Colunas permitidas em UPDATE de sdr_sessoes — evita SQL injection via nomes dinâmicos
+_COLUNAS_SDR_SESSAO = frozenset({
+    "status", "encontrados", "aprovados", "importados", "cadencias",
+    "descartados", "filtrados", "produto_atual", "estado_atual",
+    "empresa_atual", "ultima_acao", "finalizado_em",
+})
+
 
 def _normalizar_texto(s: str) -> str:
     return unicodedata.normalize("NFD", s).encode("ascii", "ignore").decode("ascii").upper().strip()
@@ -879,9 +886,12 @@ def finalizar_sessao(db, sessao_id: str, stats: dict):
 def atualizar_progresso(db, sessao_id: str, **kwargs):
     if not kwargs or not sessao_id:
         return
+    safe = {k: v for k, v in kwargs.items() if k in _COLUNAS_SDR_SESSAO}
+    if not safe:
+        return
     try:
-        set_clause = ", ".join(f"{k}=?" for k in kwargs)
-        values = list(kwargs.values()) + [sessao_id]
+        set_clause = ", ".join(f"{k}=?" for k in safe)
+        values = list(safe.values()) + [sessao_id]
         db.execute(f"UPDATE sdr_sessoes SET {set_clause} WHERE sessao_id=?", values)
         db.commit()
     except Exception:
