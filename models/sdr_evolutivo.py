@@ -365,7 +365,36 @@ def encontrar_ecosistema_leads(empresa_central: dict, tenant_id: int = 1) -> lis
     return ecosistema
 
 
-# ── 5. INTEGRAÇÃO COMPLETA: Executa todo o pipeline SDR Evolutivo ────────────────────────────────
+# ── 5. SELEÇÃO DE PRODUTO POR CNAE (white-label: lê catálogo do tenant) ──────────────────────────
+
+def _selecionar_produto_por_cnae(cnae_codigo: str, produtos: list) -> dict:
+    """
+    Retorna o produto do catálogo do tenant cujos cnaes_alvo melhor batem
+    com o CNAE da empresa prospectada. Fallback: primeiro produto da lista.
+    """
+    if not produtos:
+        return {}
+    cnae_norm = (cnae_codigo or "").replace(".", "").replace("-", "").replace("/", "")[:7]
+    melhor, melhor_score = produtos[0], 0
+    for p in produtos:
+        cnaes_alvo = (p.get("cnaes_alvo") or "").replace(" ", "").split(",")
+        for c in cnaes_alvo:
+            c_norm = c.replace(".", "").replace("-", "").replace("/", "")
+            if not c_norm:
+                continue
+            # Comprimento do prefixo em comum
+            match_len = 0
+            for a, b in zip(cnae_norm, c_norm):
+                if a == b:
+                    match_len += 1
+                else:
+                    break
+            if match_len > melhor_score:
+                melhor_score, melhor = match_len, p
+    return melhor
+
+
+# ── 6. INTEGRAÇÃO COMPLETA: Executa todo o pipeline SDR Evolutivo ────────────────────────────────
 
 def executar_sdr_evolutivo(config: dict, tenant_id: int = 1) -> dict:
     """
@@ -393,59 +422,132 @@ def executar_sdr_evolutivo(config: dict, tenant_id: int = 1) -> dict:
         eventos_radar = monitorar_radar_intent(tenant_id)
         stats["radar_eventos"] = len(eventos_radar)
 
-        # Passo 2: Buscar leads (usando a função existente)
+        # Passo 2: Buscar leads — modo "ambos": importados + rf_empresas
         from models.prospeccao_autonoma import obter_leads_para_prospectar, carregar_produtos_do_banco
-        estados = (config.get("estados_selecionados") or config.get("estados") or "ES,SP").split(",")
-        max_leads = int(config.get("max_leads_por_execucao") or 20)
+        cfg = dict(config)
+        cfg.setdefault("fonte_leads", "ambos")
+        estados_raw = (cfg.get("estados_selecionados") or cfg.get("estados") or "ES").split(",")
+        estados = [e.strip() for e in estados_raw if e.strip()] or ["ES"]
+        max_leads = int(cfg.get("max_leads_por_execucao") or 50)
 
-        for estado in estados[:3]:
+        # Carrega catálogo de produtos UMA vez (multi-tenant)
+        produtos = carregar_produtos_do_banco(db, tenant_id)
+
+        for estado in estados:
             if stats["leads_aprovados"] >= max_leads:
                 break
 
-            leads = obter_leads_para_prospectar(config, estado.strip(), max_leads)
+            leads = obter_leads_para_prospectar(cfg, estado, max_leads)
             stats["leads_encontrados"] += len(leads)
 
-            # Passo 3: Score de Prontidão para cada lead
+            # Passo 3: Score de Prontidão
             for lead in leads:
-                score_result = calcular_score_prontidao(lead, config)
+                if stats["leads_aprovados"] >= max_leads:
+                    break
+
+                score_result = calcular_score_prontidao(lead, cfg)
                 lead["score_prontidao"] = score_result["score"]
                 lead["motivos_prontidao"] = score_result["motivos"]
-                lead["aprovado"] = score_result["aprovado"]
 
                 if not score_result["aprovado"]:
                     continue
 
                 stats["leads_aprovados"] += 1
 
-                # Passo 4: Encontrar Ecosistema de Leads
+                # Passo 4: Ecosistema de leads
                 ecosistema = encontrar_ecosistema_leads(lead, tenant_id)
                 stats["ecosistema_leads"] += len(ecosistema)
 
-                # Passo 5: Gerar Pitch Dinâmico Adaptativo
-                produtos = carregar_produtos_do_banco(db, tenant_id)
-                if produtos:
-                    produto = produtos[0]
-                    canal = config.get("canal_primario", "whatsapp")
-                    pitch = gerar_pitch_adaptativo(db, lead, produto, canal)
+                if not produtos:
+                    continue
 
-                    # Passo 6: Criar cadência
-                    from models.cadencia import criar_etapa
-                    criar_etapa({
-                        "empresa_id": None,
-                        "empresa_nome": lead.get("razao_social", ""),
-                        "contato_whatsapp": lead.get("telefone", ""),
-                        "contato_email": lead.get("email", ""),
-                        "oportunidade_id": None,
-                        "etapa": 1,
-                        "data_acao": (date.today() + timedelta(days=1)).isoformat(),
-                        "mensagem_whatsapp": pitch[:500] if canal == "whatsapp" else "",
-                        "assunto_email": f"Proposta para {lead.get('razao_social', '')}",
-                        "corpo_email": pitch if canal == "email" else "",
-                        "status": "pendente",
-                        "produto_alvo": produto.get("produto", produto.get("nome", "")),
-                        "score_prontidao": score_result["score"],
-                    })
-                    stats["cadencias_criadas"] += 1
+                # Passo 5: Selecionar produto pelo CNAE do lead (white-label)
+                produto = _selecionar_produto_por_cnae(
+                    lead.get("cnae_codigo", ""), produtos
+                )
+
+                # Passo 6: Gerar pitches para email e WhatsApp
+                pitch_email = gerar_pitch_adaptativo(db, lead, produto, "email")
+                pitch_wa    = gerar_pitch_adaptativo(db, lead, produto, "whatsapp")
+
+                nome_empresa = lead.get("razao_social", "")
+                fone         = lead.get("telefone", "")
+                email_lead   = lead.get("email", "")
+                produto_nome = produto.get("produto", produto.get("nome", ""))
+                score        = score_result["score"]
+
+                base = {
+                    "empresa_id":        lead.get("_empresa_id"),
+                    "empresa_nome":      nome_empresa,
+                    "contato_whatsapp":  fone,
+                    "contato_email":     email_lead,
+                    "email_empresa":     email_lead,
+                    "oportunidade_id":   None,
+                    "status":            "pendente",
+                    "produto_alvo":      produto_nome,
+                    "score_prontidao":   score,
+                    "tenant_id":         tenant_id,
+                }
+                hoje = date.today()
+
+                from models.cadencia import criar_etapa
+
+                # D0 — email automático
+                criar_etapa({**base,
+                    "etapa": 1,
+                    "data_acao":        hoje.isoformat(),
+                    "canal_email":      1,
+                    "canal_whatsapp":   0,
+                    "assunto_email":    f"Benefícios para {nome_empresa}",
+                    "corpo_email":      pitch_email,
+                    "mensagem_whatsapp": "",
+                })
+
+                # D3 — email automático (seguimento)
+                criar_etapa({**base,
+                    "etapa": 2,
+                    "data_acao":        (hoje + timedelta(days=3)).isoformat(),
+                    "canal_email":      1,
+                    "canal_whatsapp":   0,
+                    "assunto_email":    f"Retorno — {nome_empresa}",
+                    "corpo_email":      pitch_email,
+                    "mensagem_whatsapp": "",
+                })
+
+                # D7 — WhatsApp (fila de aprovação)
+                criar_etapa({**base,
+                    "etapa": 3,
+                    "data_acao":        (hoje + timedelta(days=7)).isoformat(),
+                    "canal_email":      0,
+                    "canal_whatsapp":   1,
+                    "assunto_email":    "",
+                    "corpo_email":      "",
+                    "mensagem_whatsapp": pitch_wa[:500],
+                })
+
+                # D10 — WhatsApp (fila de aprovação)
+                criar_etapa({**base,
+                    "etapa": 4,
+                    "data_acao":        (hoje + timedelta(days=10)).isoformat(),
+                    "canal_email":      0,
+                    "canal_whatsapp":   1,
+                    "assunto_email":    "",
+                    "corpo_email":      "",
+                    "mensagem_whatsapp": pitch_wa[:500],
+                })
+
+                # D15 — WhatsApp final (fila de aprovação)
+                criar_etapa({**base,
+                    "etapa": 5,
+                    "data_acao":        (hoje + timedelta(days=15)).isoformat(),
+                    "canal_email":      0,
+                    "canal_whatsapp":   1,
+                    "assunto_email":    "",
+                    "corpo_email":      "",
+                    "mensagem_whatsapp": pitch_wa[:500],
+                })
+
+                stats["cadencias_criadas"] += 1
 
     except Exception as e:
         print(f"[SDR EVOLUTIVO] Erro: {e}")
