@@ -252,11 +252,28 @@ def gerar_pitch_adaptativo(db, empresa: dict, produto: dict, canal: str,
     - Se a empresa ignorou o WhatsApp, tenta email com ângulo diferente
     - Se respondeu, ajusta para o interesse demonstrado
     """
+    razao = empresa.get("razao_social", "sua empresa")
+
+    # Sem CNAE: pitch genérico sem produto específico
+    if not empresa.get("cnae_codigo", "").strip():
+        if canal == "whatsapp":
+            return (
+                f"Oi! Tudo bem? Somos a Escard Cartões e Benefícios e gostaríamos de "
+                f"apresentar nossas soluções para {razao}. Podemos conversar? 👋"
+            )
+        else:
+            return (
+                f"Olá,\n\n"
+                f"Somos a Escard Cartões e Benefícios e gostaríamos de apresentar nossas "
+                f"soluções para a {razao}.\n\n"
+                f"Podemos agendar uma conversa rápida?\n\n"
+                f"Abraços,\nEquipe Escard Cartões e Benefícios"
+            )
+
     try:
         import models.ia_config as ia_mod
 
         score_prontidao = empresa.get("score_prontidao", 5)
-        razao = empresa.get("razao_social", "Empresa")
         cnae_desc = empresa.get("cnae_descricao", "")
         motivos = empresa.get("motivos_prontidao", [])
 
