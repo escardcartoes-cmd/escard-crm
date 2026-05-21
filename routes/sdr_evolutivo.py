@@ -71,10 +71,9 @@ def sdr_evolutivo_executar():
     try:
         db = database.get_connection()
         config = sdr_evo_mod.get_sdr_evolutivo_config(db, _tid())
-        config["tenant_id"] = _tid()
         db.close()
 
-        stats = sdr_evo_mod.executar_sdr_evolutivo(config, _tid())
+        stats = sdr_evo_mod.executar_sdr(_tid(), config.get("max_leads_por_execucao", 20))
         session["sdr_last_exec"] = stats
 
         flash(f"SDR executado: {stats['leads_aprovados']} leads aprovados, {stats['cadencias_criadas']} cadências criadas.", "success")
@@ -92,28 +91,21 @@ def sdr_evolutivo_configurar():
 
     if request.method == "POST":
         try:
-            score_min = int(request.form.get("score_prontidao_minimo", 8))
             max_leads = int(request.form.get("max_leads_por_execucao", 20))
-            usar_radar = 1 if request.form.get("usar_radar_intent") else 0
-            usar_ecosistema = 1 if request.form.get("usar_ecosistema") else 0
-            pitch_adaptativo = 1 if request.form.get("pitch_adaptativo") else 0
 
             existing = db.execute(
                 "SELECT id FROM sdr_evolutivo_config WHERE tenant_id = ?", (_tid(),)
             ).fetchone()
             if existing:
                 db.execute(
-                    "UPDATE sdr_evolutivo_config SET score_prontidao_minimo=?,"
-                    " max_leads_por_execucao=?, usar_radar_intent=?,"
-                    " usar_ecosistema=?, pitch_adaptativo=? WHERE tenant_id=?",
-                    (score_min, max_leads, usar_radar, usar_ecosistema, pitch_adaptativo, _tid())
+                    "UPDATE sdr_evolutivo_config SET max_leads_por_execucao=? WHERE tenant_id=?",
+                    (max_leads, _tid())
                 )
             else:
                 db.execute(
-                    "INSERT INTO sdr_evolutivo_config (tenant_id, score_prontidao_minimo,"
-                    " max_leads_por_execucao, usar_radar_intent, usar_ecosistema, pitch_adaptativo)"
-                    " VALUES (?, ?, ?, ?, ?, ?)",
-                    (_tid(), score_min, max_leads, usar_radar, usar_ecosistema, pitch_adaptativo)
+                    "INSERT INTO sdr_evolutivo_config (tenant_id, max_leads_por_execucao)"
+                    " VALUES (?, ?)",
+                    (_tid(), max_leads)
                 )
             db.commit()
             db.close()
