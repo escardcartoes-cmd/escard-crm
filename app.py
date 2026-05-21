@@ -148,9 +148,9 @@ def inject_tenant():
         t = None
     if not t:
         t = {
-            "id": 1, "slug": "escard", "nome_empresa": "Escard Cartões",
-            "nome_plataforma": "Krylo", "cor_primaria": "#C5A089",
-            "cor_secundaria": "#8B6914", "cor_fundo": "#FAF8F5",
+            "id": 1, "slug": "krylo", "nome_empresa": "Krylo",
+            "nome_plataforma": "Krylo CRM", "cor_primaria": "#4A90D9",
+            "cor_secundaria": "#2C5F8A", "cor_fundo": "#F5F8FF",
             "logo_url": None, "plano": "enterprise", "configurado": 1,
         }
     try:
@@ -1601,7 +1601,7 @@ def prospeccao_exportar():
     return Response(
         "﻿" + output.getvalue(),
         mimetype="text/csv",
-        headers={"Content-Disposition": "attachment; filename=leads_escard.csv"},
+        headers={"Content-Disposition": "attachment; filename=leads.csv"},
     )
 
 

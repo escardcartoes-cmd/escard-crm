@@ -76,13 +76,17 @@
       {% set _t = tenant_login %}
       {% if _t and _t.logo_url %}
         <img src="{{ _t.logo_url }}" alt="{{ _t.nome_plataforma }}" class="logo-img"><br>
+        {% if _t.nome_empresa and _t.nome_empresa != _t.nome_plataforma %}
         <div class="logo-sub">{{ _t.nome_empresa }}</div>
+        {% endif %}
       {% elif _t %}
         <div class="logo-name">{{ _t.nome_plataforma }}</div>
+        {% if _t.nome_empresa and _t.nome_empresa != _t.nome_plataforma %}
         <div class="logo-sub">{{ _t.nome_empresa }}</div>
+        {% endif %}
       {% else %}
         <div class="logo-name">Kry<span>lo</span></div>
-        <div class="logo-sub">CRM · Cartão de Benefícios B2B</div>
+        <div class="logo-sub">CRM · Gestão Comercial</div>
       {% endif %}
     </div>
 

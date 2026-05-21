@@ -1192,9 +1192,9 @@ def run_migrations(conn) -> None:
         "INSERT OR IGNORE INTO empresa_config (id, tenant_id) VALUES (1, 1)",
         "INSERT OR IGNORE INTO sdr_config (id) VALUES (1)",
         "INSERT OR IGNORE INTO sdr_evolutivo_config (id, tenant_id) VALUES (1, 1)",
-        # Tenant padrão Escard (id=1 garantido na primeira execução)
-        "INSERT OR IGNORE INTO tenants (slug, nome_empresa, nome_plataforma, cor_primaria, cor_secundaria, ativo, configurado) VALUES ('escard', 'Escard Cartões', 'Krylo', '#C5A089', '#8B6914', 1, 1)",
-        "INSERT OR IGNORE INTO tenant_config (tenant_id) SELECT 1 WHERE EXISTS (SELECT 1 FROM tenants WHERE slug='escard')",
+        # Tenant padrão Krylo (id=1 garantido na primeira execução)
+        "INSERT OR IGNORE INTO tenants (slug, nome_empresa, nome_plataforma, cor_primaria, cor_secundaria, ativo, configurado) VALUES ('krylo', 'Krylo', 'Krylo CRM', '#4A90D9', '#2C5F8A', 1, 1)",
+        "INSERT OR IGNORE INTO tenant_config (tenant_id) SELECT 1 WHERE EXISTS (SELECT 1 FROM tenants WHERE slug='krylo')",
     ]
     for sql in _seeds:
         try:
