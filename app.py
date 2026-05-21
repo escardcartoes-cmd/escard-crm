@@ -484,7 +484,7 @@ def dashboard():
         limite_3d = (date.today() - timedelta(days=3)).isoformat()
         cad_paradas = [dict(r) for r in conn.execute("""
             SELECT empresa_nome, data_acao, etapa, id,
-                   CAST(EXTRACT(EPOCH FROM (NOW() - data_acao::timestamp))/86400 AS INTEGER) AS dias_parada
+                   CAST(EXTRACT(EPOCH FROM (NOW() - CAST(data_acao AS TIMESTAMP)))/86400 AS INTEGER) AS dias_parada
             FROM cadencias
             WHERE tenant_id=? AND status='pendente' AND data_acao < ?
             ORDER BY data_acao ASC LIMIT 10

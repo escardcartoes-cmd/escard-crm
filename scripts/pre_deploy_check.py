@@ -96,10 +96,10 @@ def check_colunas_criticas():
         try:
             if _USE_PG:
                 result = db.execute(
-                    "SELECT COUNT(*) FROM information_schema.columns "
+                    "SELECT COUNT(*) AS count FROM information_schema.columns "
                     "WHERE table_name = %s AND column_name = %s",
                     (tabela, coluna)
-                ).fetchone()[0]
+                ).fetchone()["count"]
                 if result == 0:
                     erros.append(f"Coluna {tabela}.{coluna} não existe")
             else:

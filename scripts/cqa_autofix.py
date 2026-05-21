@@ -110,7 +110,7 @@ def fix_cadencias_travadas():
                 "UPDATE cadencias SET status='cancelada' "
                 "WHERE status='pendente' "
                 "AND data_acao > '' "
-                "AND data_acao::date < NOW() - INTERVAL '30 days'"
+                "AND CAST(data_acao AS DATE) < NOW() - INTERVAL '30 days'"
             )
         else:
             conn.execute(

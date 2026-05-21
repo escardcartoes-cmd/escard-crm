@@ -459,7 +459,8 @@ _SQLITE_DDL = """
 def _to_pg(sql: str) -> str:
     """Convert SQLite SQL syntax to PostgreSQL."""
     # Named placeholders :name → %(name)s  (must run before ? → %s)
-    sql = re.sub(r":([A-Za-z_]\w*)", r"%(\1)s", sql)
+    # Negative lookbehind avoids mangling PostgreSQL cast syntax ::type
+    sql = re.sub(r"(?<!:):([A-Za-z_]\w*)", r"%(\1)s", sql)
     # Positional placeholders
     sql = sql.replace("?", "%s")
     # Date/time functions: TEXT DEFAULT (datetime(...)) needs ::TEXT cast

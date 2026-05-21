@@ -132,7 +132,7 @@ def teste_cadencias_travadas():
                 "SELECT COUNT(*) AS cnt FROM cadencias "
                 "WHERE status='pendente' "
                 "AND data_acao > '' "
-                "AND data_acao::date < NOW() - INTERVAL '7 days'"
+                "AND CAST(data_acao AS DATE) < NOW() - INTERVAL '7 days'"
             ).fetchone()
         else:
             row = conn.execute(
