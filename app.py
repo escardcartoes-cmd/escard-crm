@@ -1766,6 +1766,49 @@ def cron_executar_sdr():
     })
 
 
+# ── Cron Job Railway — backup automático ─────────────────────────────────────
+# Configuração Railway: Dashboard → seu projeto → Cron Jobs → New Cron Job
+#   Schedule:  0 18 * * 5   (toda sexta-feira às 18h UTC)
+#   Command:   curl -s -X POST https://<seu-app>.up.railway.app/cron/backup
+#              -H "X-Cron-Token: $CRON_TOKEN"
+
+@app.route("/cron/backup", methods=["POST"])
+def cron_backup():
+    import hmac as _hmac
+
+    cron_token = os.environ.get("CRON_TOKEN", "")
+    if not cron_token:
+        return jsonify({"error": "CRON_TOKEN não configurado no servidor"}), 503
+
+    token_recebido = (
+        request.headers.get("X-Cron-Token", "")
+        or request.args.get("token", "")
+    )
+    if not token_recebido or not _hmac.compare_digest(
+        cron_token.encode(), token_recebido.encode()
+    ):
+        return jsonify({"error": "Token inválido"}), 401
+
+    def _rodar_backup():
+        import traceback
+        try:
+            import importlib.util, pathlib
+            spec = importlib.util.spec_from_file_location(
+                "backup",
+                pathlib.Path(__file__).parent / "scripts" / "backup.py",
+            )
+            mod = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(mod)
+            rc = mod.main()
+            app.logger.info("[CRON-BACKUP] exit code: %s", rc)
+        except Exception as exc:
+            app.logger.error("[CRON-BACKUP] ERRO: %s", exc)
+            traceback.print_exc()
+
+    threading.Thread(target=_rodar_backup, daemon=True).start()
+    return jsonify({"status": "iniciado", "mensagem": "Backup iniciado em background"})
+
+
 # ── Webhook Brevo — rastreamento de emails ────────────────────────────────────
 # Configurar no Brevo: Settings → Webhooks → Add → URL: https://<app>/brevo/webhook?secret=<BREVO_WEBHOOK_SECRET>
 # Marcar eventos: opened, clicked
