@@ -92,9 +92,10 @@ def _criar_cadencia_empresa(emp: dict, tenant_id: int):
     seg = emp.get("segmento") or ""
     hoje = date.today()
 
-    pitch_email = _pitch(nome, seg, "email")
+    tem_email = bool(email)
+    pitch_email = _pitch(nome, seg, "email") if tem_email else ""
     pitch_wa = _pitch(nome, seg, "whatsapp")[:500]
-    assunto = _assunto(nome, seg)
+    assunto = _assunto(nome, seg) if tem_email else ""
 
     base = {
         "empresa_id": emp.get("id"),
@@ -117,7 +118,7 @@ def _criar_cadencia_empresa(emp: dict, tenant_id: int):
         criar_etapa({**base,
             "etapa": etapa,
             "data_acao": (hoje + timedelta(days=dias)).isoformat(),
-            "canal_email": c_email,
+            "canal_email": c_email if tem_email else 0,
             "canal_whatsapp": c_wa,
             "assunto_email": assunto_e,
             "corpo_email": corpo_e,
