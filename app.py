@@ -163,7 +163,8 @@ def inject_tenant():
 @app.before_request
 def check_tenant_setup():
     _bypass = {
-        "login", "logout", "static", "setup_wizard", "setup_salvar",
+        "login", "logout", "static", "krylo_landing",
+        "setup_wizard", "setup_salvar",
         "setup_step1", "setup_step2", "setup_step3", "setup_step4",
         "leads_importar_form", "leads_importar_preview", "leads_importar_confirmar",
         "sdr_evolutivo.sdr_evolutivo_configurar",
@@ -4265,6 +4266,11 @@ def setup_step4():
         flash(f"Erro: {e}", "danger")
         return redirect(url_for("setup_wizard"))
     return redirect(url_for("dashboard"))
+
+
+@app.route("/krylo")
+def krylo_landing():
+    return render_template("krylo_landing.html")
 
 
 @app.route("/planos")
