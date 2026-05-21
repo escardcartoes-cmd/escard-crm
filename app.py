@@ -1683,6 +1683,64 @@ def prospeccao_autonoma_status():
     return jsonify(status_resumo())
 
 
+# ── Cron Job Railway — executa SDR automaticamente ───────────────────────────
+# Configuração Railway: Dashboard → seu projeto → Cron Jobs → New Cron Job
+#   Schedule:  0 9,14 * * 1-5   (segunda a sexta, 9h e 14h)
+#   Command:   curl -s -X POST https://<seu-app>.up.railway.app/cron/executar-sdr
+#              -H "X-Cron-Token: $CRON_TOKEN"
+# Adicione CRON_TOKEN nas variáveis de ambiente do Railway.
+
+@app.route("/cron/executar-sdr", methods=["GET", "POST"])
+def cron_executar_sdr():
+    import hmac as _hmac
+
+    cron_token = os.environ.get("CRON_TOKEN", "")
+    if not cron_token:
+        return jsonify({"error": "CRON_TOKEN não configurado no servidor"}), 503
+
+    token_recebido = (
+        request.headers.get("X-Cron-Token", "")
+        or request.args.get("token", "")
+    )
+    if not token_recebido or not _hmac.compare_digest(
+        cron_token.encode(), token_recebido.encode()
+    ):
+        return jsonify({"error": "Token inválido"}), 401
+
+    from models.prospeccao_autonoma import rodar_prospeccao_autonoma
+
+    def _rodar_cron():
+        import traceback
+        _db = None
+        try:
+            _db = database.get_new_db_connection()
+            resultado = rodar_prospeccao_autonoma(
+                _db, config_override={"max_leads_por_execucao": 50}
+            )
+            app.logger.info("[CRON-SDR] resultado: %s", resultado)
+        except Exception as exc:
+            app.logger.error("[CRON-SDR] ERRO: %s", exc)
+            traceback.print_exc()
+            if _db:
+                try:
+                    _db.rollback()
+                except Exception:
+                    pass
+        finally:
+            if _db:
+                try:
+                    _db.close()
+                except Exception:
+                    pass
+
+    threading.Thread(target=_rodar_cron, daemon=True).start()
+    return jsonify({
+        "status": "iniciado",
+        "mensagem": "SDR cron rodando em background",
+        "max_leads": 50,
+    })
+
+
 # ── IA — leads (por lead, chamadas via JS loop) ───────────────────────────────
 
 @app.route("/ai/leads/pontuar/<int:id>", methods=["POST"])
