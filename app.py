@@ -3792,9 +3792,30 @@ def admin_tenant_novo():
 @login_required
 @require_perfil("admin")
 def admin_tenant_entrar(tenant_id):
+    conn = database.get_connection()
+    t = conn.execute("SELECT nome_empresa FROM tenants WHERE id=?", (tenant_id,)).fetchone()
+    conn.close()
+    if not t:
+        flash(f"Tenant #{tenant_id} não encontrado.", "danger")
+        return redirect(url_for("admin_tenants"))
+    # Preserva tenant original para poder voltar
+    if not session.get("impersonating"):
+        session["original_tenant_id"] = int(session.get("tenant_id") or 1)
     session["tenant_id"] = tenant_id
-    flash(f"Você está visualizando o ambiente do tenant #{tenant_id}.", "info")
-    return redirect(url_for("dashboard"))
+    session["impersonating"] = True
+    flash(f"Visualizando ambiente do tenant: {t['nome_empresa']}.", "info")
+    return redirect(url_for("admin_tenants"))
+
+
+@app.route("/admin/tenant/sair", methods=["POST"])
+@login_required
+@require_perfil("admin")
+def admin_tenant_sair():
+    original = int(session.pop("original_tenant_id", 1))
+    session.pop("impersonating", None)
+    session["tenant_id"] = original
+    flash("Voltou ao ambiente Super Admin.", "success")
+    return redirect(url_for("admin_tenants"))
 
 
 @app.route("/admin/tenant/<int:tenant_id>/toggle", methods=["POST"])

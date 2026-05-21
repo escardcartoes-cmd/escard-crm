@@ -151,10 +151,13 @@
 
   <!-- Session info -->
   {% if session.get('impersonating') %}
-  <div class="alert alert-warning mt-3 d-flex align-items-center gap-3">
+  <div class="alert alert-warning mt-3 d-flex align-items-center gap-3 flex-wrap">
     <strong>Modo impersonação ativo:</strong>
-    Você está vendo o sistema como o tenant <strong>{{ tenant.nome_empresa }}</strong>.
-    <a href="{{ url_for('admin_tenants') }}" class="btn btn-sm btn-warning ms-auto">Voltar ao Super Admin</a>
+    Você está vendo o sistema como o tenant <strong>{{ session.get('tenant_id') }}</strong>.
+    <form method="post" action="{{ url_for('admin_tenant_sair') }}" class="ms-auto">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button type="submit" class="btn btn-sm btn-warning">Voltar ao Super Admin</button>
+    </form>
   </div>
   {% endif %}
 
