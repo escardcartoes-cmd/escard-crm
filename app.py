@@ -1,3 +1,4 @@
+import hmac
 import logging
 import os
 import re
@@ -1739,6 +1740,81 @@ def cron_executar_sdr():
         "mensagem": "SDR cron rodando em background",
         "max_leads": 50,
     })
+
+
+# ── Webhook Brevo — rastreamento de emails ────────────────────────────────────
+# Configurar no Brevo: Settings → Webhooks → Add → URL: https://<app>/brevo/webhook?secret=<BREVO_WEBHOOK_SECRET>
+# Marcar eventos: opened, clicked
+
+@app.route("/brevo/webhook", methods=["POST"])
+def brevo_webhook():
+    from models.cadencia import atualizar_email_status, atualizar_temperatura_lead
+
+    secret = os.environ.get("BREVO_WEBHOOK_SECRET", "")
+    if secret:
+        token = (
+            request.args.get("secret", "")
+            or request.headers.get("X-Sib-Webhook-Secret", "")
+            or request.headers.get("X-Brevo-Webhook-Secret", "")
+        )
+        if not token or not hmac.compare_digest(secret.encode(), token.encode()):
+            app.logger.warning("[BREVO-WH] Token inválido — request ignorado")
+            return jsonify({"error": "Unauthorized"}), 401
+
+    payload = request.get_json(silent=True) or {}
+    event_type = (payload.get("event") or "").lower()
+    message_id = (payload.get("message-id") or "").strip()
+    email_dest  = (payload.get("email") or "").lower().strip()
+
+    _EVENT_MAP = {
+        "opened":  "aberto",
+        "clicked": "clicado",
+    }
+    _TEMP_MAP = {
+        "opened":  "email_aberto",
+        "clicked": "email_clicado",
+    }
+
+    if event_type not in _EVENT_MAP:
+        return jsonify({"ok": True, "skipped": event_type}), 200
+
+    novo_status = _EVENT_MAP[event_type]
+    evento_temp = _TEMP_MAP[event_type]
+
+    conn = database.get_connection()
+    try:
+        cad = None
+        if message_id:
+            cad = conn.execute(
+                "SELECT id, empresa_id, tenant_id FROM cadencias WHERE email_brevo_id=?",
+                (message_id,),
+            ).fetchone()
+        if not cad and email_dest:
+            cad = conn.execute(
+                """SELECT id, empresa_id, tenant_id FROM cadencias
+                   WHERE (contato_email=? OR email_empresa=?)
+                     AND email_status IN ('enviado','aberto')
+                   ORDER BY id DESC LIMIT 1""",
+                (email_dest, email_dest),
+            ).fetchone()
+
+        if cad:
+            atualizar_email_status(cad["id"], novo_status)
+            if cad["empresa_id"]:
+                atualizar_temperatura_lead(
+                    cad["empresa_id"], evento_temp, cad["tenant_id"] or 1
+                )
+            app.logger.info(
+                "[BREVO-WH] %s → cadência %s empresa %s",
+                event_type, cad["id"], cad["empresa_id"],
+            )
+        else:
+            app.logger.debug("[BREVO-WH] %s — cadência não encontrada (msg=%s email=%s)",
+                             event_type, message_id, email_dest)
+    finally:
+        conn.close()
+
+    return jsonify({"ok": True}), 200
 
 
 # ── IA — leads (por lead, chamadas via JS loop) ───────────────────────────────
