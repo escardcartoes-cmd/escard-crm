@@ -82,13 +82,18 @@ def processar_fila_email(tenant_id: int = 1) -> int:
     return enviados
 
 
+_SENDER_EMAIL = "executivo.vendas@escardcartoes.com.br"
+_SENDER_NAME  = "Executivo de Vendas Escard"
+
+
 def enviar_email_brevo(
     destinatario_email: str,
     destinatario_nome: str,
     assunto: str,
     corpo: str,
-    nome_remetente: str = "Krylo CRM",
-    email_remetente: str = "contato@krylo.com.br",
+    nome_remetente: str = _SENDER_NAME,
+    email_remetente: str = _SENDER_EMAIL,
+    reply_to: str = _SENDER_EMAIL,
 ) -> dict:
     """Envia e-mail transacional via Brevo (requests). Retorna status e message_id."""
     api_key = os.getenv("BREVO_API_KEY", "")
@@ -103,6 +108,7 @@ def enviar_email_brevo(
             headers={"api-key": api_key, "Content-Type": "application/json"},
             json={
                 "sender": {"name": nome_remetente, "email": email_remetente},
+                "replyTo": {"email": reply_to or email_remetente, "name": nome_remetente},
                 "to": [{"email": destinatario_email, "name": destinatario_nome or destinatario_email}],
                 "subject": assunto,
                 "htmlContent": html or f"<p>{corpo}</p>",
@@ -276,7 +282,7 @@ def enviar_email_cadencia(cadencia_id: int, etapa_num: int, tenant_id: int) -> b
             pass
         return False
 
-    email_remetente = email_remetente_config or os.environ.get("EMAIL_ONBOARDING", "contato@krylo.com.br")
+    email_remetente = email_remetente_config or os.environ.get("EMAIL_ONBOARDING", _SENDER_EMAIL)
 
     email_data = gerar_email_cadencia(
         empresa_nome=cad.get("empresa_nome") or "",
@@ -292,8 +298,9 @@ def enviar_email_cadencia(cadencia_id: int, etapa_num: int, tenant_id: int) -> b
         destinatario_nome=cad.get("empresa_nome") or email_destino,
         assunto=email_data["assunto"],
         corpo=email_data["corpo_html"],
-        nome_remetente=nome_plataforma,
+        nome_remetente=_SENDER_NAME,
         email_remetente=email_remetente,
+        reply_to=_SENDER_EMAIL,
     )
 
     logger.info("[EMAIL CADENCIA] %s -> %s: %s", etapa_str, email_destino, resultado['status'])
