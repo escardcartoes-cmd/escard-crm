@@ -3264,7 +3264,9 @@ def central_ia_chat():
         messages.append({"role": "user", "content": mensagem})
 
         import anthropic as _ant
-        client   = _ant.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+        _key = os.getenv("ANTHROPIC_API_KEY") or ""
+        logger.info("[IA DIAG] ANTHROPIC_API_KEY presente=%s tamanho=%d", bool(_key), len(_key))
+        client   = _ant.Anthropic(api_key=_key if _key else None)
         response = client.messages.create(
             model="claude-haiku-4-5-20251001",
             max_tokens=1024,
@@ -3274,6 +3276,7 @@ def central_ia_chat():
         resposta = response.content[0].text
         return jsonify({"resposta": resposta})
     except Exception as e:
+        logger.error("[IA DIAG] Erro em central_ia_chat: %s", e, exc_info=True)
         return jsonify({"error": str(e)}), 500
 
 
