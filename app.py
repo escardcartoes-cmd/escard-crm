@@ -223,55 +223,54 @@ except Exception as _e:
 # ── APScheduler — SDR Autônomo ────────────────────────────────────────────────
 
 def _job_prospeccao_autonoma():
-    from datetime import datetime as _dt2
-    # Verifica sdr_config antes de rodar
+    import traceback as _tb
+    from datetime import timezone as _tz, timedelta as _td, datetime as _dt2
     try:
         _c = database.get_connection()
-        _cfg = _c.execute(
-            "SELECT ativo, horario_inicio, horario_fim FROM sdr_config WHERE tenant_id=1 LIMIT 1"
-        ).fetchone()
+        _tenant_rows = _c.execute(
+            "SELECT s.tenant_id FROM sdr_config s"
+            " JOIN tenants t ON t.id = s.tenant_id WHERE t.ativo = 1"
+        ).fetchall()
         _c.close()
-        if _cfg:
-            if not _cfg["ativo"]:
-                print("[SCHEDULER] SDR pausado, pulando execução")
-                return
-            from datetime import timezone as _tz, timedelta as _td
-            _hora = _dt2.now(_tz(_td(hours=-3))).hour
-            if _hora < int(_cfg["horario_inicio"] or 8) or _hora >= int(_cfg["horario_fim"] or 18):
-                print(f"[SCHEDULER] Fora do horário ({_hora}h), pulando")
-                return
     except Exception as _e:
-        print(f"[SCHEDULER] Aviso ao ler sdr_config: {_e}")
+        print(f"[SCHEDULER] Erro ao listar tenants SDR: {_e}")
+        return
 
-    import traceback as _tb
-    _db_sdr = None
-    try:
-        from models.prospeccao_autonoma import rodar_prospeccao_autonoma
-        _db_sdr = database.get_new_db_connection()
-        resultado = rodar_prospeccao_autonoma(_db_sdr)
-        print(f"[SCHEDULER] resultado: {resultado}")
-    except Exception as e:
-        print(f"[SCHEDULER] ERRO: {e}")
-        _tb.print_exc()
-        if _db_sdr:
-            try: _db_sdr.rollback()
-            except Exception: pass
-    finally:
-        if _db_sdr:
-            try: _db_sdr.close()
-            except Exception: pass
+    for _trow in _tenant_rows:
+        _tid = _trow["tenant_id"]
+        _db_sdr = None
+        try:
+            from models.prospeccao_autonoma import rodar_prospeccao_autonoma, get_sdr_config
+            _db_sdr = database.get_new_db_connection()
+            _cfg = get_sdr_config(_db_sdr, tenant_id=_tid)
+            if not _cfg.get("ativo", 1):
+                print(f"[SCHEDULER] tenant {_tid}: SDR pausado, pulando")
+                _db_sdr.close(); _db_sdr = None
+                continue
+            _hora = _dt2.now(_tz(_td(hours=-3))).hour
+            if not _cfg.get("sem_restricao_horario") and (
+                _hora < int(_cfg.get("horario_inicio") or 8) or
+                _hora >= int(_cfg.get("horario_fim") or 18)
+            ):
+                print(f"[SCHEDULER] tenant {_tid}: Fora do horário ({_hora}h), pulando")
+                _db_sdr.close(); _db_sdr = None
+                continue
+            resultado = rodar_prospeccao_autonoma(_db_sdr, config_override=_cfg)
+            print(f"[SCHEDULER] tenant {_tid} resultado: {resultado}")
+        except Exception as e:
+            print(f"[SCHEDULER] tenant {_tid} ERRO: {e}")
+            _tb.print_exc()
+            if _db_sdr:
+                try: _db_sdr.rollback()
+                except Exception: pass
+        finally:
+            if _db_sdr:
+                try: _db_sdr.close()
+                except Exception: pass
+                _db_sdr = None
 
 
-# Lê intervalo de execução do sdr_config (padrão 6h)
-try:
-    _conn_sched = database.get_connection()
-    _sdr_row = _conn_sched.execute(
-        "SELECT intervalo_horas FROM sdr_config WHERE tenant_id=1 LIMIT 1"
-    ).fetchone()
-    _conn_sched.close()
-    _sdr_interval = int(_sdr_row["intervalo_horas"]) if _sdr_row else 6
-except Exception:
-    _sdr_interval = 6
+_sdr_interval = 6  # intervalo padrão; sdr_config por tenant verificado dentro do job
 
 def _job_cqa():
     try:
@@ -288,12 +287,18 @@ def _job_cqa():
 def _job_processar_cadencias():
     try:
         from models.cadencia import processar_cadencias_pendentes, processar_fila_email
-        n = processar_cadencias_pendentes(tenant_id=1)
-        if n:
-            print(f"[SCHEDULER] Cadências processadas: {n}")
-        e = processar_fila_email(tenant_id=1)
-        if e:
-            print(f"[SCHEDULER] Emails da fila enviados: {e}")
+        _c = database.get_connection()
+        _tids = [r["id"] for r in _c.execute(
+            "SELECT id FROM tenants WHERE ativo = 1"
+        ).fetchall()]
+        _c.close()
+        for _tid in _tids:
+            n = processar_cadencias_pendentes(tenant_id=_tid)
+            if n:
+                print(f"[SCHEDULER] tenant {_tid}: Cadências processadas: {n}")
+            e = processar_fila_email(tenant_id=_tid)
+            if e:
+                print(f"[SCHEDULER] tenant {_tid}: Emails da fila enviados: {e}")
     except Exception as _e:
         print(f"[SCHEDULER CADENCIAS] Erro: {_e}")
 
