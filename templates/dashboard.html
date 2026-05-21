@@ -266,6 +266,93 @@
 
 </div>
 
+<!-- ALERTAS EXECUTIVOS: Leads Quentes + Cadências Paradas -->
+<div class="grid-2" style="margin-bottom:24px">
+
+  <!-- TOP 5 LEADS QUENTES -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">🔥 Top Leads Quentes</span>
+      <a href="{{ url_for('empresas_index') }}?temperatura=quente" class="btn btn-ghost btn-sm">Ver todos →</a>
+    </div>
+    <div style="max-height:300px;overflow-y:auto">
+      {% if leads_quentes %}
+        {% for lead in leads_quentes %}
+        <a href="{{ url_for('empresas_detalhe', id=lead.id) }}"
+           style="display:flex;align-items:center;gap:12px;padding:10px 20px;
+                  border-bottom:1px solid var(--border-subtle);text-decoration:none;
+                  transition:var(--transition)"
+           onmouseover="this.style.background='var(--glass-hover)'"
+           onmouseout="this.style.background='transparent'">
+          <div style="width:36px;height:36px;border-radius:8px;background:#FEF3C7;
+                      border:1px solid #FCD34D;display:flex;align-items:center;
+                      justify-content:center;font-size:13px;font-weight:700;
+                      color:#D97706;flex-shrink:0">
+            {{ lead.score or 0 }}
+          </div>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:13px;font-weight:500;color:var(--text-primary);
+                        white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
+              {{ lead.nome }}
+            </div>
+            <div style="font-size:11px;color:var(--text-muted)">
+              {{ lead.segmento or 'Sem segmento' }}
+            </div>
+          </div>
+          <span class="badge badge-warning">Quente</span>
+        </a>
+        {% endfor %}
+      {% else %}
+        <div class="empty-state" style="padding:40px">
+          <div class="empty-state-icon">🌡️</div>
+          <div class="empty-state-text">Nenhum lead quente ainda.<br>O SDR aquece os leads conforme engajamento.</div>
+        </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- CADÊNCIAS PARADAS -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">
+        ⚠️ Cadências Paradas
+        {% if cad_paradas %}
+        <span class="badge badge-danger" style="margin-left:6px">{{ cad_paradas|length }}</span>
+        {% endif %}
+      </span>
+      <a href="{{ url_for('cadencias_index') }}" class="btn btn-ghost btn-sm">Gerenciar →</a>
+    </div>
+    <div style="max-height:300px;overflow-y:auto">
+      {% if cad_paradas %}
+        {% for c in cad_paradas %}
+        <div style="display:flex;align-items:center;gap:12px;padding:10px 20px;
+                    border-bottom:1px solid var(--border-subtle)">
+          <div style="width:8px;height:8px;border-radius:50%;
+                      background:#EF4444;flex-shrink:0"></div>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:13px;font-weight:500;color:var(--text-primary);
+                        white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
+              {{ c.empresa_nome or 'Empresa' }}
+            </div>
+            <div style="font-size:11px;color:var(--text-muted)">
+              Prevista para {{ c.data_acao }} · Etapa {{ c.etapa or 1 }}
+            </div>
+          </div>
+          <span class="badge badge-danger">+{{ c.dias_parada or 3 }}d</span>
+        </div>
+        {% endfor %}
+      {% else %}
+        <div class="empty-state" style="padding:40px">
+          <div class="empty-state-icon">✅</div>
+          <div class="empty-state-title">Cadências em dia!</div>
+          <div class="empty-state-text">Nenhuma cadência parada há mais de 3 dias.</div>
+        </div>
+      {% endif %}
+    </div>
+  </div>
+
+</div>
+
 <!-- INDICADORES SECUNDÁRIOS -->
 <div class="grid-4">
 

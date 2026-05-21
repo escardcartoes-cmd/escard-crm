@@ -351,6 +351,7 @@ _DASHBOARD_FALLBACK = dict(
     dias_restantes=90, faturado_90d=0, pct_90d=0, ritmo_diario=0,
     funil={"sdr_novos": 0, "em_cadencia": 0, "props_abertas": 0, "fechados_mes": 0},
     cad_hoje=[], ops_paradas=[], meta_valor=100000, meta_nome="Meta Principal",
+    leads_quentes=[], cad_paradas=[],
 )
 
 
@@ -459,6 +460,24 @@ def dashboard():
             ORDER BY o.data_ultimo_contato LIMIT 5
         """, (tid, limite_14d)).fetchall()]
 
+        # QUERY 5: top 5 leads mais quentes (real-time — fora do cache)
+        leads_quentes = [dict(r) for r in conn.execute("""
+            SELECT id, nome, segmento, score, temperatura, telefone, email
+            FROM empresas
+            WHERE tenant_id=? AND temperatura='quente'
+            ORDER BY score DESC LIMIT 5
+        """, (tid,)).fetchall()]
+
+        # QUERY 6: cadências paradas há 3+ dias (real-time — alertas operacionais)
+        limite_3d = (date.today() - timedelta(days=3)).isoformat()
+        cad_paradas = [dict(r) for r in conn.execute("""
+            SELECT empresa_nome, data_acao, etapa, id,
+                   CAST(JULIANDAY('now') - JULIANDAY(data_acao) AS INTEGER) AS dias_parada
+            FROM cadencias
+            WHERE tenant_id=? AND status='pendente' AND data_acao < ?
+            ORDER BY data_acao ASC LIMIT 10
+        """, (tid, limite_3d)).fetchall()]
+
         conn.close()
 
         status_counts = {
@@ -510,6 +529,8 @@ def dashboard():
             },
             cad_hoje=cad_hoje,
             ops_paradas=ops_paradas,
+            leads_quentes=leads_quentes,
+            cad_paradas=cad_paradas,
             meta_valor=meta_valor,
             meta_nome=meta_nome,
         )
