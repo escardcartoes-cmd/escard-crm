@@ -1728,6 +1728,7 @@ def prospeccao_autonoma_status():
 #              -H "X-Cron-Token: $CRON_TOKEN"
 # Adicione CRON_TOKEN nas variáveis de ambiente do Railway.
 
+@csrf.exempt
 @app.route("/cron/executar-sdr", methods=["GET", "POST"])
 def cron_executar_sdr():
     import hmac as _hmac
@@ -1785,6 +1786,7 @@ def cron_executar_sdr():
 #   Command:   curl -s -X POST https://<seu-app>.up.railway.app/cron/backup
 #              -H "X-Cron-Token: $CRON_TOKEN"
 
+@csrf.exempt
 @app.route("/cron/backup", methods=["POST"])
 def cron_backup():
     import hmac as _hmac
@@ -1826,6 +1828,7 @@ def cron_backup():
 # Configurar no Brevo: Settings → Webhooks → Add → URL: https://<app>/brevo/webhook?secret=<BREVO_WEBHOOK_SECRET>
 # Marcar eventos: opened, clicked
 
+@csrf.exempt
 @app.route("/brevo/webhook", methods=["POST"])
 def brevo_webhook():
     from models.cadencia import atualizar_email_status, atualizar_temperatura_lead
