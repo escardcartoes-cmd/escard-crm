@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Configurar SDR Evolutivo | Krylo CRM{% endblock %}
+{% block title %}Configurar SDR | Escard CRM{% endblock %}
 
 {% block content %}
 <div class="container-fluid py-4">
@@ -8,8 +8,8 @@
         <div class="col-12">
             <div class="d-flex justify-content-between align-items-center">
                 <div>
-                    <h1 class="h2 mb-0">Configurar SDR Evolutivo</h1>
-                    <p class="text-muted mb-0">Personalize o comportamento do SDR Evolutivo</p>
+                    <h1 class="h2 mb-0">Configurar SDR</h1>
+                    <p class="text-muted mb-0">Quantos leads processar por execução</p>
                 </div>
                 <a href="{{ url_for('sdr_evolutivo.sdr_evolutivo_dashboard') }}" class="btn btn-outline-secondary">
                     <i class="bi bi-arrow-left"></i> Voltar
@@ -18,128 +18,36 @@
         </div>
     </div>
 
-    <div class="row">
-        <div class="col-xl-8">
+    <div class="row justify-content-center">
+        <div class="col-xl-6 col-lg-8">
             <div class="card">
                 <div class="card-header">
-                    <h5 class="card-title mb-0">Configurações Principais</h5>
+                    <h5 class="card-title mb-0">Configuração</h5>
                 </div>
                 <div class="card-body">
                     <form method="POST">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                        <div class="row g-3 mb-4">
-                            <div class="col-md-6">
-                                <label class="form-label" for="score_prontidao_minimo">
-                                    Score de Prontidão Mínimo
-                                </label>
-                                <input type="number" class="form-control" id="score_prontidao_minimo"
-                                       name="score_prontidao_minimo"
-                                       value="{{ config.score_prontidao_minimo or 8 }}" min="1" max="15">
-                                <div class="form-text">Mínimo de 1 a 15</div>
-                            </div>
-
-                            <div class="col-md-6">
-                                <label class="form-label" for="max_leads_por_execucao">
-                                    Máximo de Leads por Execução
-                                </label>
-                                <input type="number" class="form-control" id="max_leads_por_execucao"
-                                       name="max_leads_por_execucao"
-                                       value="{{ config.max_leads_por_execucao or 20 }}" min="1" max="100">
-                                <div class="form-text">Máximo de 1 a 100</div>
-                            </div>
-                        </div>
-
-                        <div class="row g-3 mb-4">
-                            <div class="col-md-4">
-                                <div class="form-check form-switch">
-                                    <input class="form-check-input" type="checkbox" role="switch"
-                                           id="usar_radar_intent" name="usar_radar_intent"
-                                           {{ 'checked' if config.usar_radar_intent else '' }}>
-                                    <label class="form-check-label" for="usar_radar_intent">
-                                        Usar Radar de Intent
-                                    </label>
-                                </div>
-                            </div>
-
-                            <div class="col-md-4">
-                                <div class="form-check form-switch">
-                                    <input class="form-check-input" type="checkbox" role="switch"
-                                           id="usar_ecosistema" name="usar_ecosistema"
-                                           {{ 'checked' if config.usar_ecosistema else '' }}>
-                                    <label class="form-check-label" for="usar_ecosistema">
-                                        Usar Ecosistema de Leads
-                                    </label>
-                                </div>
-                            </div>
-
-                            <div class="col-md-4">
-                                <div class="form-check form-switch">
-                                    <input class="form-check-input" type="checkbox" role="switch"
-                                           id="pitch_adaptativo" name="pitch_adaptativo"
-                                           {{ 'checked' if config.pitch_adaptativo else '' }}>
-                                    <label class="form-check-label" for="pitch_adaptativo">
-                                        Pitch Adaptativo
-                                    </label>
-                                </div>
+                        <div class="mb-4">
+                            <label class="form-label fw-semibold" for="max_leads_por_execucao">
+                                Máximo de Leads por Execução
+                            </label>
+                            <input type="number" class="form-control form-control-lg" id="max_leads_por_execucao"
+                                   name="max_leads_por_execucao"
+                                   value="{{ config.max_leads_por_execucao or 20 }}" min="1" max="200">
+                            <div class="form-text">
+                                A cada execução, o SDR pega até este número de leads importados sem cadência e cria 5 etapas para cada um (D0/D3 email + D7/D10/D15 WhatsApp).
                             </div>
                         </div>
 
                         <div class="d-flex gap-2">
                             <button type="submit" class="btn btn-primary">
-                                <i class="bi bi-check-lg"></i> Salvar Configurações
+                                <i class="bi bi-check-lg"></i> Salvar
                             </button>
                             <a href="{{ url_for('sdr_evolutivo.sdr_evolutivo_dashboard') }}" class="btn btn-outline-secondary">
                                 Cancelar
                             </a>
                         </div>
                     </form>
-                </div>
-            </div>
-        </div>
-
-        <div class="col-xl-4">
-            <div class="card mb-4">
-                <div class="card-header">
-                    <h5 class="card-title mb-0">O que cada configuração faz?</h5>
-                </div>
-                <div class="card-body">
-                    <ul class="list-unstyled mb-0">
-                        <li class="mb-3">
-                            <strong>Score de Prontidão Mínimo</strong>
-                            <p class="text-muted small mb-0">
-                                Define o score mínimo (1-15) que um lead precisa ter para ser aprovado.
-                            </p>
-                        </li>
-                        <li class="mb-3">
-                            <strong>Radar de Intent</strong>
-                            <p class="text-muted small mb-0">
-                                Monitora notícias, licitações e editais para encontrar triggers que indicam prontidão para comprar.
-                            </p>
-                        </li>
-                        <li class="mb-3">
-                            <strong>Ecosistema de Leads</strong>
-                            <p class="text-muted small mb-0">
-                                Encontra empresas que fazem negócios entre si — se uma compra, as outras têm maior chance.
-                            </p>
-                        </li>
-                        <li class="mb-0">
-                            <strong>Pitch Adaptativo</strong>
-                            <p class="text-muted small mb-0">
-                                O pitch se adapta com feedback das interações anteriores.
-                            </p>
-                        </li>
-                    </ul>
-                </div>
-            </div>
-
-            <div class="card">
-                <div class="card-header">
-                    <h5 class="card-title mb-0">Dicas</h5>
-                </div>
-                <div class="card-body">
-                    <p class="text-muted small mb-0">
-                        Para melhores resultados, comece com score mínimo 8, ative todas as features e ajuste conforme vai vendo os resultados!
-                    </p>
                 </div>
             </div>
         </div>
