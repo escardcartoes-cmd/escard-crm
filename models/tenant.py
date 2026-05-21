@@ -129,14 +129,14 @@ def criar_tenant(dados: dict) -> int:
 
         # Config vazia
         conn.execute(
-            "INSERT OR IGNORE INTO tenant_config (tenant_id) VALUES (?)", (tenant_id,)
+            "INSERT INTO tenant_config (tenant_id) VALUES (?) ON CONFLICT (tenant_id) DO NOTHING", (tenant_id,)
         )
         # Seed ia_config e empresa_config para o novo tenant
         conn.execute(
-            "INSERT OR IGNORE INTO ia_config (tenant_id) VALUES (?)", (tenant_id,)
+            "INSERT INTO ia_config (tenant_id) VALUES (?) ON CONFLICT DO NOTHING", (tenant_id,)
         )
         conn.execute(
-            "INSERT OR IGNORE INTO empresa_config (tenant_id) VALUES (?)", (tenant_id,)
+            "INSERT INTO empresa_config (tenant_id) VALUES (?) ON CONFLICT DO NOTHING", (tenant_id,)
         )
         conn.commit()
 
@@ -184,7 +184,7 @@ def salvar_setup(tenant_id: int, dados: dict):
 
     # Atualiza tenant_config
     conn.execute(
-        """INSERT OR IGNORE INTO tenant_config (tenant_id) VALUES (?)""", (tenant_id,)
+        """INSERT INTO tenant_config (tenant_id) VALUES (?) ON CONFLICT (tenant_id) DO NOTHING""", (tenant_id,)
     )
     conn.execute(
         """UPDATE tenant_config SET ramo_principal=?, produtos_texto=?,

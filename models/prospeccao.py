@@ -75,8 +75,9 @@ def buscar_por_contato(contato_id, tenant_id=1):
 def criar(dados: dict) -> int:
     conn = get_connection()
     cur = conn.execute(
-        """INSERT OR IGNORE INTO prospeccao (contato_id, empresa_id, status, tenant_id)
-           VALUES (:contato_id, :empresa_id, :status, :tenant_id)""",
+        """INSERT INTO prospeccao (contato_id, empresa_id, status, tenant_id)
+           VALUES (:contato_id, :empresa_id, :status, :tenant_id)
+           ON CONFLICT (contato_id) DO NOTHING""",
         dados,
     )
     conn.commit()

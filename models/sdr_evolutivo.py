@@ -103,9 +103,10 @@ def monitorar_radar_intent(tenant_id: int = 1) -> list:
     try:
         for lead in leads_quentes:
             db.execute("""
-                INSERT OR IGNORE INTO radar_intent
+                INSERT INTO radar_intent
                 (tenant_id, fonte, titulo, link, data_evento, resumo, score_intent, criado_em)
                 VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now', 'localtime'))
+                ON CONFLICT DO NOTHING
             """, (
                 lead["tenant_id"], lead["fonte"], lead["titulo"], lead["link"],
                 lead["data"], lead["resumo"], lead["score_intent"]
@@ -139,13 +140,15 @@ def calcular_score_prontidao(empresa: dict, config: dict) -> dict:
     # 1. Eventos do Radar de Intent (maior peso)
     db = get_new_db_connection()
     try:
+        from datetime import timedelta as _td30
+        cutoff_30d = (datetime.now() - _td30(days=30)).strftime('%Y-%m-%d %H:%M:%S')
         cnpj = empresa.get("cnpj", "")
         row = db.execute("""
             SELECT score_intent FROM radar_intent
             WHERE (titulo LIKE ? OR resumo LIKE ?)
-            AND criado_em >= datetime('now', '-30 days')
+            AND criado_em >= ?
             LIMIT 1
-        """, (f"%{empresa.get('razao_social', '')[:30]}%", f"%{empresa.get('razao_social', '')[:30]}%")).fetchone()
+        """, (f"%{empresa.get('razao_social', '')[:30]}%", f"%{empresa.get('razao_social', '')[:30]}%", cutoff_30d)).fetchone()
         if row:
             score += int(row["score_intent"])
             motivos.append("Evento recente detectado (Radar de Intent)")

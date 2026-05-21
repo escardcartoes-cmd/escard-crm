@@ -3076,7 +3076,7 @@ def ia_config_salvar():
         _agora = _dt.datetime.now().isoformat(sep=" ", timespec="seconds")
         # Ensure row exists for this tenant
         conn.execute(
-            "INSERT OR IGNORE INTO ia_config (tenant_id) VALUES (%s)", (tid,)
+            "INSERT INTO ia_config (tenant_id) VALUES (%s) ON CONFLICT DO NOTHING", (tid,)
         )
         for campo in campos:
             if campo in f:
@@ -3413,7 +3413,7 @@ def configuracoes_empresa_salvar():
         tid = _tid()
         # Ensure row exists for this tenant
         conn.execute(
-            "INSERT OR IGNORE INTO empresa_config (tenant_id) VALUES (%s)", (tid,)
+            "INSERT INTO empresa_config (tenant_id) VALUES (%s) ON CONFLICT DO NOTHING", (tid,)
         )
         for campo in campos:
             if campo in f:
@@ -3733,7 +3733,7 @@ def sdr_pausar():
         ).fetchone()
         if sessao:
             conn.execute(
-                "UPDATE sdr_sessoes SET status='pausado', finalizado_em=datetime('now', 'localtime') WHERE sessao_id=?",
+                "UPDATE sdr_sessoes SET status='pausado', finalizado_em=NOW() WHERE sessao_id=?",
                 (sessao["sessao_id"],)
             )
             conn.commit()
@@ -4212,7 +4212,7 @@ def setup_step1():
         db = database.get_connection()
         db.execute("UPDATE tenants SET nome_empresa=?, logo_url=? WHERE id=?",
                    (nome_empresa, logo_url, tid))
-        db.execute("INSERT OR IGNORE INTO tenant_config (tenant_id) VALUES (?)", (tid,))
+        db.execute("INSERT INTO tenant_config (tenant_id) VALUES (?) ON CONFLICT DO NOTHING", (tid,))
         db.execute(
             "UPDATE tenant_config SET email_remetente=?, nome_vendedor=? WHERE tenant_id=?",
             (email_remetente, nome_vendedor, tid),
@@ -4240,7 +4240,7 @@ def setup_step2():
     produtos_texto = ", ".join(partes)
     try:
         db = database.get_connection()
-        db.execute("INSERT OR IGNORE INTO tenant_config (tenant_id) VALUES (?)", (tid,))
+        db.execute("INSERT INTO tenant_config (tenant_id) VALUES (?) ON CONFLICT DO NOTHING", (tid,))
         db.execute("UPDATE tenant_config SET produtos_texto=? WHERE tenant_id=?",
                    (produtos_texto, tid))
         db.commit()
@@ -4516,18 +4516,12 @@ def cqa_toggle_autonomo():
     try:
         ativo = bool(request.json.get("ativo", True))
         conn = database.get_connection()
-        if database._USE_PG:
-            conn.execute(
-                """INSERT INTO cqa_config (tenant_id, chave, valor)
-                   VALUES (%s, 'modo_autonomo', %s)
-                   ON CONFLICT (tenant_id, chave) DO UPDATE SET valor = %s, atualizado_em = NOW()""",
-                (_tid(), str(ativo), str(ativo)),
-            )
-        else:
-            conn.execute(
-                "INSERT OR REPLACE INTO cqa_config (tenant_id, chave, valor) VALUES (?, ?, ?)",
-                (_tid(), "modo_autonomo", str(ativo)),
-            )
+        conn.execute(
+            """INSERT INTO cqa_config (tenant_id, chave, valor)
+               VALUES (?, 'modo_autonomo', ?)
+               ON CONFLICT (tenant_id, chave) DO UPDATE SET valor = EXCLUDED.valor""",
+            (_tid(), str(ativo)),
+        )
         conn.commit()
         conn.close()
         try:

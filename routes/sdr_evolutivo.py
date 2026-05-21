@@ -98,12 +98,23 @@ def sdr_evolutivo_configurar():
             usar_ecosistema = 1 if request.form.get("usar_ecosistema") else 0
             pitch_adaptativo = 1 if request.form.get("pitch_adaptativo") else 0
 
-            db.execute("""
-                INSERT OR REPLACE INTO sdr_evolutivo_config
-                (tenant_id, score_prontidao_minimo, max_leads_por_execucao,
-                 usar_radar_intent, usar_ecosistema, pitch_adaptativo)
-                VALUES (?, ?, ?, ?, ?, ?)
-            """, (_tid(), score_min, max_leads, usar_radar, usar_ecosistema, pitch_adaptativo))
+            existing = db.execute(
+                "SELECT id FROM sdr_evolutivo_config WHERE tenant_id = ?", (_tid(),)
+            ).fetchone()
+            if existing:
+                db.execute(
+                    "UPDATE sdr_evolutivo_config SET score_prontidao_minimo=?,"
+                    " max_leads_por_execucao=?, usar_radar_intent=?,"
+                    " usar_ecosistema=?, pitch_adaptativo=? WHERE tenant_id=?",
+                    (score_min, max_leads, usar_radar, usar_ecosistema, pitch_adaptativo, _tid())
+                )
+            else:
+                db.execute(
+                    "INSERT INTO sdr_evolutivo_config (tenant_id, score_prontidao_minimo,"
+                    " max_leads_por_execucao, usar_radar_intent, usar_ecosistema, pitch_adaptativo)"
+                    " VALUES (?, ?, ?, ?, ?, ?)",
+                    (_tid(), score_min, max_leads, usar_radar, usar_ecosistema, pitch_adaptativo)
+                )
             db.commit()
             db.close()
             flash("Configurações salvas com sucesso!", "success")

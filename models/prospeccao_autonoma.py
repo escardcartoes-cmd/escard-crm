@@ -1004,8 +1004,9 @@ def criar_sessao(db, config: dict) -> str:
     _sessao_global["pausado"] = False
     try:
         db.execute("""
-            INSERT OR IGNORE INTO sdr_sessoes (tenant_id, sessao_id, status, config_snapshot)
+            INSERT INTO sdr_sessoes (tenant_id, sessao_id, status, config_snapshot)
             VALUES (?, ?, 'rodando', ?)
+            ON CONFLICT (sessao_id) DO NOTHING
         """, (config.get("tenant_id", 1), sessao_id, json.dumps(config, default=str)[:500]))
         db.commit()
     except Exception:

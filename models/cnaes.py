@@ -210,7 +210,8 @@ def _salvar_no_db(dados_json: str):
         conn = database.get_connection()
         now = _dt.datetime.now().isoformat(sep=" ", timespec="seconds")
         conn.execute(
-            "INSERT OR REPLACE INTO cnae_cache (id, dados, atualizado_em) VALUES (1, ?, ?)",
+            "INSERT INTO cnae_cache (id, dados, atualizado_em) VALUES (1, ?, ?)"
+            " ON CONFLICT (id) DO UPDATE SET dados = EXCLUDED.dados, atualizado_em = EXCLUDED.atualizado_em",
             (dados_json, now),
         )
         conn.commit()
