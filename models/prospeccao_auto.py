@@ -181,19 +181,19 @@ def _calcular_score(emp: dict) -> int:
 
 # ── Dedup ─────────────────────────────────────────────────────────────────────
 
-def _ja_existe(cnpj: str, conn) -> bool:
+def _ja_existe(cnpj: str, conn, tenant_id: int) -> bool:
     if conn.execute(
-        "SELECT id FROM prospeccao_automatica WHERE cnpj = ?", (cnpj,)
+        "SELECT id FROM prospeccao_automatica WHERE cnpj = ? AND tenant_id = ?", (cnpj, tenant_id)
     ).fetchone():
         return True
     return bool(conn.execute(
-        "SELECT id FROM empresas WHERE cnpj = ?", (cnpj,)
+        "SELECT id FROM empresas WHERE cnpj = ? AND tenant_id = ?", (cnpj, tenant_id)
     ).fetchone())
 
 
 # ── Main search ───────────────────────────────────────────────────────────────
 
-def buscar_e_salvar(uf: str, cnaes: list, limite: int = 30) -> dict:
+def buscar_e_salvar(uf: str, cnaes: list, limite: int = 30, tenant_id: int = 1) -> dict:
     cnaes_norm = {str(c).replace(".", "").replace("-", "") for c in cnaes}
 
     # Fetch all seeds concurrently
@@ -237,7 +237,7 @@ def buscar_e_salvar(uf: str, cnaes: list, limite: int = 30) -> dict:
         if not cnpj_final:
             continue
 
-        if _ja_existe(cnpj_final, conn):
+        if _ja_existe(cnpj_final, conn, tenant_id):
             duplicados += 1
             continue
 
@@ -245,8 +245,8 @@ def buscar_e_salvar(uf: str, cnaes: list, limite: int = 30) -> dict:
         conn.execute(
             """INSERT INTO prospeccao_automatica
                (cnpj, razao_social, municipio, uf, cnae_descricao,
-                telefone, email, capital_social, score_fit, status)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'novo')""",
+                telefone, email, capital_social, score_fit, status, tenant_id)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'novo', ?)""",
             (
                 cnpj_final,
                 emp.get("razao_social") or "",
@@ -257,6 +257,7 @@ def buscar_e_salvar(uf: str, cnaes: list, limite: int = 30) -> dict:
                 emp.get("email"),
                 float(emp.get("capital_social") or 0),
                 score,
+                tenant_id,
             ),
         )
         conn.commit()
@@ -268,10 +269,10 @@ def buscar_e_salvar(uf: str, cnaes: list, limite: int = 30) -> dict:
 
 # ── Queries ───────────────────────────────────────────────────────────────────
 
-def listar(uf=None, score_min=None, status=None) -> list:
+def listar(uf=None, score_min=None, status=None, tenant_id: int = 1) -> list:
     conn = get_connection()
-    sql = "SELECT * FROM prospeccao_automatica WHERE 1=1"
-    params = []
+    sql = "SELECT * FROM prospeccao_automatica WHERE tenant_id = ?"
+    params = [tenant_id]
     if uf:
         sql += " AND uf = ?"
         params.append(uf.upper())
@@ -287,10 +288,12 @@ def listar(uf=None, score_min=None, status=None) -> list:
     return [dict(r) for r in rows]
 
 
-def importar(id_: int) -> int:
+def importar(id_: int, tenant_id: int = 1) -> int:
     import models.empresa as emp_model
     conn = get_connection()
-    row = conn.execute("SELECT * FROM prospeccao_automatica WHERE id = ?", (id_,)).fetchone()
+    row = conn.execute(
+        "SELECT * FROM prospeccao_automatica WHERE id = ? AND tenant_id = ?", (id_, tenant_id)
+    ).fetchone()
     conn.close()
     if not row:
         raise ValueError("Lead não encontrado")
@@ -311,28 +314,35 @@ def importar(id_: int) -> int:
         "valor_mensal": None,
         "tipo_cartao": None,
         "nome_private_label": None,
+        "tenant_id": tenant_id,
     })
     conn2 = get_connection()
-    conn2.execute("UPDATE prospeccao_automatica SET status='importado' WHERE id=?", (id_,))
+    conn2.execute(
+        "UPDATE prospeccao_automatica SET status='importado' WHERE id=? AND tenant_id=?",
+        (id_, tenant_id)
+    )
     conn2.commit()
     conn2.close()
     return emp_id
 
 
-def importar_varios(ids: list) -> int:
+def importar_varios(ids: list, tenant_id: int = 1) -> int:
     ok = 0
     for id_ in ids:
         try:
-            importar(int(id_))
+            importar(int(id_), tenant_id)
             ok += 1
         except Exception:
             pass
     return ok
 
 
-def atualizar_status(id_: int, status: str) -> None:
+def atualizar_status(id_: int, status: str, tenant_id: int = 1) -> None:
     conn = get_connection()
-    conn.execute("UPDATE prospeccao_automatica SET status=? WHERE id=?", (status, id_))
+    conn.execute(
+        "UPDATE prospeccao_automatica SET status=? WHERE id=? AND tenant_id=?",
+        (status, id_, tenant_id)
+    )
     conn.commit()
     conn.close()
 

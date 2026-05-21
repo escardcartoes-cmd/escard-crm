@@ -1592,7 +1592,7 @@ def prospeccao_automatica():
         score_min_int = int(score_min) if score_min else None
     except ValueError:
         score_min_int = None
-    leads = pauto_model.listar(uf=uf or None, score_min=score_min_int, status=status)
+    leads = pauto_model.listar(uf=uf or None, score_min=score_min_int, status=status, tenant_id=_tid())
     return render_template(
         "leads/busca_automatica.html",
         leads=leads,
@@ -1611,7 +1611,7 @@ def prospeccao_buscar_automatico():
     cnaes  = dados.get("cnaes") or []
     limite = min(int(dados.get("limite") or 30), 100)
     try:
-        resultado = pauto_model.buscar_e_salvar(uf, cnaes, limite)
+        resultado = pauto_model.buscar_e_salvar(uf, cnaes, limite, tenant_id=_tid())
         return jsonify(resultado)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -1622,7 +1622,7 @@ def prospeccao_buscar_automatico():
 @require_perfil("vendedor")
 def prospeccao_auto_importar(id):
     try:
-        emp_id = pauto_model.importar(id)
+        emp_id = pauto_model.importar(id, tenant_id=_tid())
         return jsonify({"ok": True, "empresa_id": emp_id})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -1633,7 +1633,7 @@ def prospeccao_auto_importar(id):
 @require_perfil("vendedor")
 def prospeccao_auto_importar_lote():
     ids = (request.json or {}).get("ids", [])
-    ok = pauto_model.importar_varios(ids)
+    ok = pauto_model.importar_varios(ids, tenant_id=_tid())
     return jsonify({"ok": True, "importados": ok})
 
 
@@ -1644,7 +1644,7 @@ def prospeccao_auto_status(id):
     novo = (request.json or {}).get("status", "")
     if novo not in ("novo", "importado", "descartado"):
         return jsonify({"error": "Status inválido"}), 400
-    pauto_model.atualizar_status(id, novo)
+    pauto_model.atualizar_status(id, novo, tenant_id=_tid())
     return jsonify({"ok": True})
 
 
