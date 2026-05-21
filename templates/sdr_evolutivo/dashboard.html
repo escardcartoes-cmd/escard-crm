@@ -103,6 +103,50 @@
         </div>
     </div>
 
+    <!-- Funil SDR -->
+    <div class="row g-4 mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Funil SDR</h5>
+                </div>
+                <div class="card-body pb-2">
+                    <div class="d-flex align-items-stretch gap-0 funil-wrap">
+                        {% set etapas = [
+                            ("prospectado",     "Prospectado",       funil.prospectado,       "primary",   "bi-building"),
+                            ("email_enviado",   "Email Enviado",     funil.email_enviado,     "info",      "bi-envelope-check"),
+                            ("whatsapp_enviado","WhatsApp Enviado",  funil.whatsapp_enviado,  "success",   "bi-whatsapp"),
+                            ("engajou",         "Respondeu/Engajou", funil.engajou,           "warning",   "bi-chat-dots"),
+                            ("reuniao",         "Reunião",           funil.reuniao,           "orange",    "bi-calendar2-check"),
+                            ("fechou",          "Fechou",            funil.fechou,            "danger",    "bi-trophy"),
+                        ] %}
+                        {% for key, label, cnt, cor, icon in etapas %}
+                        <div class="funil-etapa text-center flex-fill">
+                            <div class="funil-inner bg-{{ cor }}-subtle border border-{{ cor }}-subtle rounded-3 mx-1 py-3 px-2 h-100 d-flex flex-column align-items-center justify-content-center">
+                                <i class="bi {{ icon }} fs-4 text-{{ cor }} mb-1"></i>
+                                <div class="fs-3 fw-bold text-{{ cor }}">{{ cnt }}</div>
+                                <div class="small text-muted mt-1">{{ label }}</div>
+                            </div>
+                            {% if not loop.last %}
+                            <div class="funil-arrow d-none d-md-block">&#8250;</div>
+                            {% endif %}
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% if funil.prospectado > 0 %}
+                    <p class="text-muted small mt-2 mb-0 text-center">
+                        Taxa email→engajou:
+                        <strong>{{ "%.0f"|format((funil.engajou / funil.email_enviado * 100) if funil.email_enviado else 0) }}%</strong>
+                        &nbsp;·&nbsp;
+                        Taxa geral prospectado→fechou:
+                        <strong>{{ "%.1f"|format((funil.fechou / funil.prospectado * 100) if funil.prospectado else 0) }}%</strong>
+                    </p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div class="row g-4">
         <div class="col-xl-8">
             <div class="card">
@@ -197,6 +241,20 @@
 {% endblock %}
 
 {% block scripts %}
+<style>
+.funil-wrap { flex-wrap: wrap; position: relative; }
+.funil-etapa { position: relative; min-width: 90px; }
+.funil-inner { transition: transform .15s; }
+.funil-inner:hover { transform: translateY(-3px); }
+.funil-arrow {
+    position: absolute; right: -10px; top: 50%;
+    transform: translateY(-50%);
+    font-size: 1.4rem; color: #adb5bd; z-index: 1;
+}
+.text-orange { color: #fd7e14 !important; }
+.bg-orange-subtle { background-color: #fff3e0 !important; }
+.border-orange-subtle { border-color: #ffcc99 !important; }
+</style>
 <script>
 document.getElementById('formExecutar').addEventListener('submit', function() {
     const btn = document.getElementById('btnExecutar');

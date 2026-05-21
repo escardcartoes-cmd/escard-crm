@@ -30,6 +30,28 @@ def sdr_evolutivo_dashboard():
     ecosistema_leads  = _count("SELECT COUNT(*) AS n FROM empresas WHERE tenant_id=? AND status IN ('prospect','importado')", (tid,))
     eventos_radar     = _count("SELECT COUNT(*) AS n FROM radar_intent WHERE tenant_id=?", (tid,))
 
+    # Funil SDR — contagens por etapa
+    funil = {
+        "prospectado": _count(
+            "SELECT COUNT(*) AS n FROM empresas WHERE tenant_id=? AND status IN ('prospect','importado','cliente')",
+            (tid,)),
+        "email_enviado": _count(
+            "SELECT COUNT(DISTINCT COALESCE(empresa_id, empresa_nome)) AS n FROM cadencias WHERE tenant_id=? AND email_status IN ('enviado','aberto','clicado')",
+            (tid,)),
+        "whatsapp_enviado": _count(
+            "SELECT COUNT(DISTINCT COALESCE(empresa_id, empresa_nome)) AS n FROM cadencias WHERE tenant_id=? AND canal_whatsapp=1 AND whatsapp_status IN ('enviado','aguardando_aprovacao')",
+            (tid,)),
+        "engajou": _count(
+            "SELECT COUNT(DISTINCT COALESCE(empresa_id, empresa_nome)) AS n FROM cadencias WHERE tenant_id=? AND email_status IN ('aberto','clicado')",
+            (tid,)),
+        "reuniao": _count(
+            "SELECT COUNT(*) AS n FROM oportunidades WHERE tenant_id=?",
+            (tid,)),
+        "fechou": _count(
+            "SELECT COUNT(*) AS n FROM empresas WHERE tenant_id=? AND status='cliente'",
+            (tid,)),
+    }
+
     last_exec = session.pop("sdr_last_exec", None)
     db.close()
     return render_template("sdr_evolutivo/dashboard.html",
@@ -38,6 +60,7 @@ def sdr_evolutivo_dashboard():
                            cadencias_criadas=cadencias_criadas,
                            ecosistema_leads=ecosistema_leads,
                            eventos_radar=eventos_radar,
+                           funil=funil,
                            last_exec=last_exec)
 
 
