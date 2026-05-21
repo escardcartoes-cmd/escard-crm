@@ -52,7 +52,10 @@ from routes.empresas import empresas_bp
 from routes.contatos import contatos_bp
 from routes.sdr_evolutivo import sdr_evolutivo_bp
 
+from werkzeug.middleware.proxy_fix import ProxyFix
+
 app = Flask(__name__)
+app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
 app.secret_key = os.environ.get("SECRET_KEY")
 if not app.secret_key:
     import secrets as _sec
@@ -481,7 +484,7 @@ def dashboard():
         limite_3d = (date.today() - timedelta(days=3)).isoformat()
         cad_paradas = [dict(r) for r in conn.execute("""
             SELECT empresa_nome, data_acao, etapa, id,
-                   CAST(JULIANDAY('now') - JULIANDAY(data_acao) AS INTEGER) AS dias_parada
+                   CAST(EXTRACT(EPOCH FROM (NOW() - data_acao::timestamp))/86400 AS INTEGER) AS dias_parada
             FROM cadencias
             WHERE tenant_id=? AND status='pendente' AND data_acao < ?
             ORDER BY data_acao ASC LIMIT 10
@@ -553,8 +556,12 @@ def dashboard():
             return render_template("dashboard.html",
                                    mes_atual=str(date.today())[:7],
                                    **_DASHBOARD_FALLBACK)
-        except Exception:
-            return redirect(url_for("auth.login"))
+        except Exception as _fe:
+            _log.error("[DASHBOARD] Fallback render falhou", exc_info=True)
+            return render_template("erro.html",
+                                   titulo="Erro temporário",
+                                   mensagem="Não foi possível carregar o dashboard. Tente recarregar a página.",
+                                   detalhe=str(_fe)), 500
 
 
 @app.route("/dashboard")

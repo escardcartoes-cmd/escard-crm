@@ -1,0 +1,24 @@
+{% extends 'base.html' %}
+{% block title %}{{ titulo or 'Erro' }} — Krylo CRM{% endblock %}
+{% block topbar_title %}{{ titulo or 'Erro' }}{% endblock %}
+
+{% block content %}
+<div style="max-width:540px;margin:80px auto;text-align:center;padding:0 20px">
+  <div style="font-size:56px;margin-bottom:16px">⚠️</div>
+  <h2 style="font-size:22px;font-weight:700;margin-bottom:12px;color:var(--text-primary)">
+    {{ titulo or 'Algo deu errado' }}
+  </h2>
+  <p style="color:var(--text-secondary);margin-bottom:24px;line-height:1.6">
+    {{ mensagem or 'Ocorreu um erro inesperado. Tente recarregar a página.' }}
+  </p>
+  {% if detalhe and config.DEBUG %}
+  <pre style="text-align:left;background:#f8f8f8;border:1px solid #e2e8f0;
+              border-radius:8px;padding:16px;font-size:12px;
+              overflow-x:auto;color:#475569;margin-bottom:24px">{{ detalhe }}</pre>
+  {% endif %}
+  <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap">
+    <a href="/" class="btn btn-primary">Ir para o Dashboard</a>
+    <button onclick="location.reload()" class="btn btn-secondary">Recarregar</button>
+  </div>
+</div>
+{% endblock %}
