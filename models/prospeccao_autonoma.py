@@ -3,6 +3,7 @@ Prospecção Autônoma — motor SDR completo com scoring avançado, filtros,
 pitch por IA, criação automática de cadências e sessões com log ao vivo.
 """
 import json
+import os
 import random
 import re
 import time
@@ -20,6 +21,64 @@ _COLUNAS_SDR_SESSAO = frozenset({
     "descartados", "filtrados", "produto_atual", "estado_atual",
     "empresa_atual", "ultima_acao", "finalizado_em",
 })
+
+# ── Mapa segmento → dor específica + produto Escard recomendado ───────────────
+
+_SEGMENTO_MAPA = {
+    "seguros": {
+        "dor": "reter corretores e parceiros num mercado competitivo sem diferenciais de benefícios",
+        "produto_sugerido": "Private Label",
+    },
+    "representacoes": {
+        "dor": "equipe de representantes externos sem benefícios formais causando alta rotatividade",
+        "produto_sugerido": "Private Label",
+    },
+    "corretoras": {
+        "dor": "fidelizar corretores e parceiros que migram para concorrentes com pacotes melhores",
+        "produto_sugerido": "Private Label",
+    },
+    "construcao": {
+        "dor": "gestão de benefícios de mão de obra temporária e inadimplência com fornecedores",
+        "produto_sugerido": "Private Label",
+    },
+    "saude": {
+        "dor": "inadimplência de pacientes corroendo o caixa sem estrutura interna de cobrança",
+        "produto_sugerido": "Cobrança",
+    },
+    "varejo": {
+        "dor": "alta rotatividade de equipe e dificuldade de fidelizar clientes sem diferencial",
+        "produto_sugerido": "Private Label",
+    },
+    "tecnologia": {
+        "dor": "competir por talentos de TI sem um pacote de benefícios corporativos estruturado",
+        "produto_sugerido": "Private Label",
+    },
+    "industria": {
+        "dor": "benefícios da folha desorganizados e altos custos administrativos com RH",
+        "produto_sugerido": "Private Label",
+    },
+    "educacao": {
+        "dor": "inadimplência escolar elevada e custo interno alto com cobrança de mensalidades",
+        "produto_sugerido": "Cobrança",
+    },
+    "servicos": {
+        "dor": "alta rotatividade por falta de benefícios e dificuldade de estruturar folha de benefícios",
+        "produto_sugerido": "Private Label",
+    },
+}
+
+_SEGMENTO_KEYWORDS = {
+    "seguros":        ["segur", "corretora de seg", "seguradora", "broker"],
+    "representacoes": ["representac", "distribuic", "atacado", "representante"],
+    "corretoras":     ["corretora de val", "corretora de inv", "bolsa", "financ", "investiment"],
+    "construcao":     ["construc", "obras", "engenharia", "incorpor", "empreit", "imóvel", "imovel"],
+    "saude":          ["saude", "hospital", "clinic", "medic", "farmac", "odont", "laborat", "enferm"],
+    "varejo":         ["varejo", "comercio", "loja", "supermercado", "atacarejo", "magazine"],
+    "tecnologia":     ["tecnolog", "software", "desenvolvimento", "inform", "digital", "ti ", " ti,"],
+    "industria":      ["industri", "manufat", "fabricac", "metalurg", "siderurg", "quimic", "petro"],
+    "educacao":       ["educa", "escola", "universidade", "faculdade", "curso", "ensino", "colegio"],
+    "servicos":       ["servic", "consultori", "contabil", "advocac", "imobili", "transport", "logist"],
+}
 
 
 def _normalizar_texto(s: str) -> str:
@@ -818,25 +877,122 @@ def empresa_deve_ser_recontato(cnpj: str, config: dict, db) -> tuple:
     return (True, f"Tentativa {tentativas + 1}")
 
 
+def _match_segmento(desc: str) -> dict:
+    """Normaliza qualquer descrição CNAE ou segmento livre para o mapa interno."""
+    norm = (
+        unicodedata.normalize("NFD", desc or "")
+        .encode("ascii", "ignore")
+        .decode()
+        .lower()
+    )
+    for chave, keywords in _SEGMENTO_KEYWORDS.items():
+        if any(kw in norm for kw in keywords):
+            return {**_SEGMENTO_MAPA[chave], "chave": chave}
+    return {**_SEGMENTO_MAPA["servicos"], "chave": "servicos"}
+
+
+def gerar_pitches_segmento(
+    empresa_nome: str,
+    segmento_raw: str,
+    produto: str,
+    produto_desc: str = "",
+    beneficios: str = "",
+    cidade: str = "",
+) -> dict:
+    """
+    Gera 2 variações A/B de pitch WhatsApp + Email via Claude.
+    Uma única chamada retorna JSON com wpp_a, wpp_b, email_a, email_b.
+    WhatsApp: máx 3 linhas, direto, sem 'Tudo bem?'.
+    Email: 5 parágrafos, consultivo, proposta de valor clara.
+    """
+    seg = _match_segmento(segmento_raw)
+    dor = seg["dor"]
+    produto_eff = produto or seg["produto_sugerido"]
+    local = f", {cidade}" if cidade else ""
+    prod_info = produto_eff
+    if produto_desc:
+        prod_info += f" — {produto_desc}"
+
+    prompt = f"""Você é SDR sênior da Escard (cartão Private Label e serviço de Cobrança B2B).
+
+EMPRESA ALVO: {empresa_nome}{local}
+SEGMENTO: {segmento_raw or 'Serviços'}
+DOR DO SEGMENTO: {dor}
+PRODUTO: {prod_info}
+{f"BENEFÍCIOS: {beneficios}" if beneficios else ""}
+
+Gere 4 textos de prospecção. Retorne SOMENTE JSON válido, sem markdown, sem explicação:
+
+{{
+  "wpp_a": "...",
+  "wpp_b": "...",
+  "email_a": {{"assunto": "...", "corpo": "..."}},
+  "email_b": {{"assunto": "...", "corpo": "..."}}
+}}
+
+REGRAS WHATSAPP (wpp_a e wpp_b):
+- Exatamente 3 linhas separadas por \\n
+- NUNCA comece com "Tudo bem?", "Como vai?", "Olá, tudo certo?" ou qualquer saudação genérica
+- Linha 1: cite o nome da empresa OU a dor do segmento diretamente
+- Linha 2: benefício concreto e mensurável do produto
+- Linha 3: CTA direto (ex: "Posso mostrar em 15 min?")
+- Máximo 1 emoji por mensagem
+- wpp_a e wpp_b devem ter abordagens completamente diferentes
+
+REGRAS EMAIL (email_a e email_b):
+- assunto: máx 55 caracteres, sem palavras spam (promoção, grátis, ganhe, clique)
+- corpo: 5 parágrafos em texto puro, separados por \\n\\n
+  1. Gancho — cite a dor específica do segmento sem mencionar o produto
+  2. Contexto — mostre que é um problema recorrente no setor
+  3. Solução — como {produto_eff} resolve de forma específica
+  4. Prova — resultado concreto ou dado plausível (ex: "clientes reduzem X% do custo")
+  5. CTA — proposta de 15 minutos, com urgência leve e sem pressão
+- Tom consultivo; NUNCA use "Espero que esteja bem", "segue em anexo", "conforme combinado"
+- email_a foca no problema (ângulo da dor), email_b foca no resultado (ângulo do ganho)"""
+
+    _fallback = {
+        "wpp_a": "",
+        "wpp_b": "",
+        "email_a": {"assunto": f"Proposta para {empresa_nome}", "corpo": ""},
+        "email_b": {"assunto": f"Solução para {empresa_nome}", "corpo": ""},
+    }
+
+    try:
+        import anthropic
+        client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY", ""))
+        response = client.messages.create(
+            model="claude-sonnet-4-6",
+            max_tokens=2500,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        texto = response.content[0].text.strip()
+        texto = texto.replace("```json", "").replace("```", "").strip()
+        data = json.loads(texto)
+        return {
+            "wpp_a": str(data.get("wpp_a") or ""),
+            "wpp_b": str(data.get("wpp_b") or ""),
+            "email_a": {
+                "assunto": str((data.get("email_a") or {}).get("assunto") or ""),
+                "corpo":   str((data.get("email_a") or {}).get("corpo") or ""),
+            },
+            "email_b": {
+                "assunto": str((data.get("email_b") or {}).get("assunto") or ""),
+                "corpo":   str((data.get("email_b") or {}).get("corpo") or ""),
+            },
+        }
+    except Exception:
+        return _fallback
+
+
 def gerar_pitch_ia(db, empresa_nome: str, cnae_desc: str, produto: str, canal: str,
                    beneficios: str = "", objecoes: str = "") -> str:
-    try:
-        import models.ia_config as ia_mod
-        limite = "máximo 150 caracteres" if canal == "whatsapp" else "3-4 frases"
-        extra = ""
-        if beneficios:
-            extra += f"\nBenefícios do produto:\n{beneficios}"
-        if objecoes:
-            extra += f"\nObjeções comuns e respostas:\n{objecoes}"
-        msg = (
-            f"Gere uma mensagem de prospecção para {canal} para a empresa '{empresa_nome}' "
-            f"(setor: {cnae_desc}). Produto: {produto}. "
-            f"Use o nome da empresa, destaque um benefício concreto. {limite}. Sem emojis excessivos."
-            + extra
-        )
-        return ia_mod.chat_com_ia(db, msg)
-    except Exception:
-        return ""
+    """Wrapper de retrocompatibilidade — use gerar_pitches_segmento para A/B completo."""
+    pitches = gerar_pitches_segmento(
+        empresa_nome, cnae_desc, produto, beneficios=beneficios
+    )
+    if canal == "whatsapp":
+        return pitches["wpp_a"]
+    return pitches["email_a"]["corpo"]
 
 
 # ── Sessão e log ao vivo ──────────────────────────────────────────────────────
@@ -977,22 +1133,39 @@ def _salvar_empresa(db, cnpj, empresa, score, nome_produto, hoje_str):
 
 def _tentar_cadencia(db, sessao_id, stats, empresa, cnpj, score, nome_produto,
                      canal_prim, telefone, email, score_min_cad,
-                     pitch_base="", beneficios="", objecoes=""):
+                     pitch_base="", beneficios="", objecoes="", produto_desc=""):
     if not (score >= score_min_cad and (telefone or email)):
         return
     try:
         razao  = (empresa.get("razao_social") or "")[:80]
         uf_emp = empresa.get("uf") or ""
+
+        # Usa segmento do CRM se disponível; caso contrário, CNAE da API externa
+        segmento_raw = (
+            empresa.get("segmento") or empresa.get("cnae_descricao") or ""
+        ).strip()
+        cidade = (empresa.get("municipio") or "").strip()
+
         if pitch_base:
-            pitch = pitch_base.replace("{empresa}", razao)
+            wpp_msg      = pitch_base.replace("{empresa}", razao)
+            email_assunto = f"Proposta Escard para {razao}"
+            email_corpo  = pitch_base.replace("{empresa}", razao)
         else:
-            pitch = gerar_pitch_ia(
-                db, razao,
-                empresa.get("cnae_descricao", ""),
-                nome_produto, canal_prim,
+            pitches = gerar_pitches_segmento(
+                razao, segmento_raw, nome_produto,
+                produto_desc=produto_desc,
                 beneficios=beneficios,
-                objecoes=objecoes,
+                cidade=cidade,
             )
+            # Alterna A/B aleatoriamente para evitar uniformidade em lotes grandes
+            variante = random.choice(("a", "b"))
+            wpp_msg      = pitches[f"wpp_{variante}"] or pitches["wpp_a"]
+            email_assunto = (
+                pitches[f"email_{variante}"]["assunto"]
+                or f"Proposta para {razao}"
+            )
+            email_corpo  = pitches[f"email_{variante}"]["corpo"]
+
         from models.cadencia import criar_etapa
         criar_etapa({
             "empresa_id":        None,
@@ -1002,9 +1175,9 @@ def _tentar_cadencia(db, sessao_id, stats, empresa, cnpj, score, nome_produto,
             "oportunidade_id":   None,
             "etapa":             1,
             "data_acao":         (date.today() + timedelta(days=1)).isoformat(),
-            "mensagem_whatsapp": (pitch or "")[:500],
-            "assunto_email":     f"Proposta Krylo para {razao}",
-            "corpo_email":       pitch or "",
+            "mensagem_whatsapp": (wpp_msg or "")[:500],
+            "assunto_email":     (email_assunto or f"Proposta para {razao}")[:100],
+            "corpo_email":       email_corpo or "",
             "status":            "pendente",
             "produto_alvo":      nome_produto,
         })
