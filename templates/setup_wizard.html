@@ -1,264 +1,200 @@
 {% extends "base.html" %}
-{% block title %}Configurar sua Conta{% endblock %}
+{% block title %}Configurar sua Conta | {{ tenant.nome_plataforma }}{% endblock %}
 
 {% block content %}
-<div class="container py-5" style="max-width:720px">
+<div class="container py-5" style="max-width:760px">
 
   <div class="text-center mb-4">
     <h3 class="fw-bold">Bem-vindo ao {{ tenant.nome_plataforma }}!</h3>
-    <p class="text-muted">Configure sua conta em poucos minutos para começar a prospectar.</p>
+    <p class="text-muted">Complete os 4 passos abaixo para começar a prospectar.</p>
   </div>
 
-  <!-- Steps indicator -->
-  <div class="d-flex justify-content-between align-items-center mb-4 position-relative" id="stepsBar">
-    <div class="progress position-absolute w-100" style="height:3px;top:20px;z-index:0;left:0">
-      <div class="progress-bar bg-primary" id="progressBar" style="width:0%"></div>
+  <!-- Progress bar -->
+  <div class="mb-4">
+    <div class="d-flex justify-content-between align-items-center mb-1">
+      <small class="text-muted fw-semibold">Progresso da configuração</small>
+      <small class="fw-bold text-primary">{{ progress }}%</small>
     </div>
-    {% for label in ['Empresa', 'Produtos', 'IA', 'Conta', 'Concluir'] %}
-    <div class="text-center position-relative" style="z-index:1;flex:1">
-      <div class="step-dot mx-auto rounded-circle d-flex align-items-center justify-content-center fw-bold"
-           id="step-dot-{{ loop.index }}"
-           style="width:40px;height:40px;background:{% if loop.first %}var(--tenant-primary,#C5A089);color:#fff{% else %}#e2e8f0;color:#94a3b8{% endif %};transition:all .3s">
-        {{ loop.index }}
+    <div class="progress" style="height:8px;border-radius:4px">
+      <div class="progress-bar bg-primary" style="width:{{ progress }}%;transition:width .5s"></div>
+    </div>
+    {% if progress == 100 %}
+    <div class="alert alert-success mt-3 py-2 d-flex align-items-center gap-2 mb-0">
+      <i class="bi bi-check-circle-fill"></i>
+      <span>Tudo pronto! Clique em "Ir para o Dashboard" abaixo.</span>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- Step dots -->
+  <div class="d-flex justify-content-center gap-3 mb-5">
+    {% for n, label in [(1,'Empresa'),(2,'Produtos'),(3,'Leads'),(4,'SDR')] %}
+    <div class="text-center">
+      <div class="mx-auto rounded-circle d-flex align-items-center justify-content-center fw-bold"
+           style="width:40px;height:40px;
+           background:{% if steps[n] %}#22c55e{% else %}var(--tenant-primary,#C5A089){% endif %};
+           color:#fff">
+        {% if steps[n] %}<i class="bi bi-check-lg"></i>{% else %}{{ n }}{% endif %}
       </div>
-      <div class="small mt-1 text-muted step-label" id="step-lbl-{{ loop.index }}">{{ label }}</div>
+      <div class="small mt-1 {% if steps[n] %}text-success fw-semibold{% else %}text-muted{% endif %}">
+        {{ label }}
+      </div>
     </div>
     {% endfor %}
   </div>
 
-  <form method="post" action="{{ url_for('setup_salvar') }}" id="wizardForm">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-
-    <!-- Step 1: Empresa -->
-    <div class="wizard-step" data-step="1">
-      <div class="card border-0 shadow-sm">
-        <div class="card-body p-4 p-md-5">
-          <h5 class="fw-bold mb-1">Sobre sua Empresa</h5>
-          <p class="text-muted small mb-4">Essas informações ajudam a IA a entender seu negócio.</p>
-          <div class="mb-4">
-            <label class="form-label fw-semibold">Nome da Empresa *</label>
-            <input type="text" name="nome_empresa" class="form-control form-control-lg" required
+  <!-- Card 1: Dados da Empresa -->
+  <div class="card mb-3 {% if steps[1] %}border-success{% endif %}">
+    <div class="card-header d-flex align-items-center gap-2">
+      <span class="badge rounded-pill {% if steps[1] %}bg-success{% else %}bg-primary{% endif %}">1</span>
+      <strong>Dados da Empresa</strong>
+      {% if steps[1] %}<i class="bi bi-check-circle-fill text-success ms-auto"></i>{% endif %}
+    </div>
+    <div class="card-body">
+      <form method="post" action="{{ url_for('setup_step1') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label class="form-label">Nome da Empresa *</label>
+            <input type="text" name="nome_empresa" class="form-control" required
                    value="{{ tenant.nome_empresa or '' }}"
                    placeholder="Ex: Escard Cartões Benefícios">
           </div>
-          <div class="mb-4">
-            <label class="form-label fw-semibold">Ramo / Segmento</label>
-            <input type="text" name="ramo_principal" class="form-control"
-                   placeholder="Ex: Benefícios B2B, SaaS, E-commerce, Fintech...">
+          <div class="col-md-6">
+            <label class="form-label">Nome do Vendedor</label>
+            <input type="text" name="nome_vendedor" class="form-control"
+                   value="{{ tc.nome_vendedor or '' }}"
+                   placeholder="Ex: João Silva">
           </div>
-          <div class="mb-4">
-            <label class="form-label fw-semibold">Histórico / Descrição da Empresa</label>
-            <textarea name="historico" class="form-control" rows="3"
-                      placeholder="Ex: Fundada em 2018, somos uma empresa de benefícios corporativos com foco em PMEs do interior paulista..."></textarea>
-            <div class="form-text">Quanto mais detalhado, melhores serão as mensagens geradas pela IA.</div>
+          <div class="col-md-6">
+            <label class="form-label">Email Remetente (SDR)</label>
+            <input type="email" name="email_remetente" class="form-control"
+                   value="{{ tc.email_remetente or tc.email_contato or '' }}"
+                   placeholder="vendas@empresa.com.br">
+            <div class="form-text">Usado no envio de emails pelo SDR.</div>
           </div>
-          <div class="row g-3">
-            <div class="col-md-6">
-              <label class="form-label fw-semibold">Site</label>
-              <input type="url" name="site" class="form-control" placeholder="https://minhaempresa.com.br">
-            </div>
-            <div class="col-md-6">
-              <label class="form-label fw-semibold">WhatsApp Comercial</label>
-              <input type="text" name="whatsapp" class="form-control" placeholder="(11) 99999-9999">
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Step 2: Produtos -->
-    <div class="wizard-step d-none" data-step="2">
-      <div class="card border-0 shadow-sm">
-        <div class="card-body p-4 p-md-5">
-          <h5 class="fw-bold mb-1">Produtos e Diferenciais</h5>
-          <p class="text-muted small mb-4">A IA usará isso para criar pitches e mensagens personalizadas.</p>
-          <div class="mb-4">
-            <label class="form-label fw-semibold">Produtos / Serviços oferecidos</label>
-            <textarea name="produtos_texto" class="form-control" rows="4"
-                      placeholder="Ex: Cartão Alimentação (VR), Cartão Refeição (VA), Cartão Combustível, Premiação e Incentivo, Cartão Multibenefícios..."></textarea>
-          </div>
-          <div class="mb-4">
-            <label class="form-label fw-semibold">Diferenciais competitivos</label>
-            <textarea name="diferenciais" class="form-control" rows="3"
-                      placeholder="Ex: Implantação em 48h, sem taxa de adesão, suporte dedicado, aceito em 50 mil estabelecimentos..."></textarea>
-          </div>
-          <div class="mb-4">
-            <label class="form-label fw-semibold">Principais concorrentes (opcional)</label>
-            <input type="text" name="concorrentes" class="form-control"
-                   placeholder="Ex: Sodexo, Alelo, VR Benefícios, Flash, Swile...">
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Step 3: IA -->
-    <div class="wizard-step d-none" data-step="3">
-      <div class="card border-0 shadow-sm">
-        <div class="card-body p-4 p-md-5">
-          <h5 class="fw-bold mb-1">Configurar a IA Comercial</h5>
-          <p class="text-muted small mb-4">
-            A IA vai gerar mensagens, pitches e responder dúvidas com o tom da sua empresa.
-          </p>
-          <div class="mb-4">
-            <label class="form-label fw-semibold">Tom de voz da marca</label>
-            <select name="tom_ia" class="form-select">
-              <option value="profissional">Profissional e consultivo</option>
-              <option value="amigavel">Amigável e descontraído</option>
-              <option value="formal">Formal e técnico</option>
-              <option value="energico">Energético e motivador</option>
-            </select>
-          </div>
-          <div class="mb-4">
-            <label class="form-label fw-semibold">Personalidade da IA</label>
-            <textarea name="personalidade_ia" class="form-control" rows="3"
-                      placeholder="Ex: Direta e consultiva, nunca agressiva. Faz perguntas antes de propor solução. Usa linguagem simples, evita jargões técnicos..."></textarea>
-          </div>
-          <div class="mb-4">
-            <label class="form-label fw-semibold">Email de contato</label>
-            <input type="email" name="email_contato" class="form-control"
-                   placeholder="contato@minhaempresa.com.br">
-            <div class="form-text">Email usado nas assinaturas geradas pela IA.</div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Step 4: Visual -->
-    <div class="wizard-step d-none" data-step="4">
-      <div class="card border-0 shadow-sm">
-        <div class="card-body p-4">
-          <h5 class="fw-bold mb-3">Identidade Visual</h5>
-          <p class="text-muted small mb-3">Personalize as cores e o logo do seu CRM.</p>
-          <div class="row g-3 mb-3">
-            <div class="col-md-6">
-              <label class="form-label fw-semibold">Cor Primária</label>
-              <input type="color" name="cor_primaria" class="form-control form-control-color w-100"
-                     value="{{ tenant.cor_primaria or '#C5A089' }}" id="corPrimaria">
-            </div>
-            <div class="col-md-6">
-              <label class="form-label fw-semibold">Cor Secundária</label>
-              <input type="color" name="cor_secundaria" class="form-control form-control-color w-100"
-                     value="{{ tenant.cor_secundaria or '#8B6914' }}" id="corSecundaria">
-            </div>
-          </div>
-          <div class="mb-3">
-            <label class="form-label fw-semibold">URL do Logo (opcional)</label>
+          <div class="col-md-6">
+            <label class="form-label">URL do Logo (opcional)</label>
             <input type="url" name="logo_url" class="form-control"
-                   placeholder="https://..." value="{{ tenant.logo_url or '' }}">
-            <div class="form-text">Cole a URL de uma imagem PNG/SVG do seu logo.</div>
-          </div>
-          <div class="mb-3">
-            <label class="form-label fw-semibold">Nome da Plataforma</label>
-            <input type="text" name="nome_plataforma" class="form-control"
-                   value="{{ tenant.nome_plataforma or 'Krylo' }}"
-                   placeholder="Ex: Acme CRM">
-          </div>
-          <!-- Live preview -->
-          <div class="border rounded p-3 mt-3" id="previewBox">
-            <small class="text-muted d-block mb-2">Preview da sidebar:</small>
-            <div class="d-flex align-items-center gap-2 p-2 rounded" id="previewSidebar" style="background:#4A3F35;width:fit-content">
-              <span id="previewName" class="fw-bold text-white">{{ tenant.nome_plataforma or 'Krylo' }}</span>
-            </div>
-            <div class="mt-2">
-              <button type="button" class="btn btn-sm" id="previewBtn"
-                      style="background:{{ tenant.cor_primaria or '#C5A089' }};color:#fff">
-                Botão principal
-              </button>
-            </div>
+                   value="{{ tenant.logo_url or '' }}"
+                   placeholder="https://...">
           </div>
         </div>
-      </div>
-    </div>
-
-    <!-- Step 5: Concluir -->
-    <div class="wizard-step d-none" data-step="5">
-      <div class="card border-0 shadow-sm">
-        <div class="card-body p-4 text-center py-5">
-          <div class="fs-1 mb-3">🎉</div>
-          <h4 class="fw-bold mb-2">Tudo pronto!</h4>
-          <p class="text-muted mb-4">
-            Sua conta está configurada. Clique em <strong>Começar a usar</strong>
-            para acessar o dashboard e começar a prospectar.
-          </p>
-          <div class="d-flex justify-content-center gap-3">
-            <button type="button" class="btn btn-outline-secondary" id="btnVoltarFinal">Revisar</button>
-            <button type="submit" class="btn btn-primary px-4">Começar a usar →</button>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Navigation -->
-    <div class="d-flex justify-content-between mt-4" id="wizardNav">
-      <button type="button" class="btn btn-outline-secondary" id="btnAnterior" style="display:none!important">
-        ← Anterior
-      </button>
-      <div class="ms-auto">
-        <button type="button" class="btn btn-primary" id="btnProximo">
-          Próximo →
+        <button type="submit" class="btn btn-primary mt-3">
+          {% if steps[1] %}<i class="bi bi-arrow-repeat me-1"></i>Atualizar{% else %}<i class="bi bi-check-lg me-1"></i>Salvar e continuar{% endif %}
         </button>
-      </div>
+      </form>
     </div>
+  </div>
 
-  </form>
+  <!-- Card 2: Produtos Ativos -->
+  <div class="card mb-3 {% if steps[2] %}border-success{% endif %}">
+    <div class="card-header d-flex align-items-center gap-2">
+      <span class="badge rounded-pill {% if steps[2] %}bg-success{% else %}bg-primary{% endif %}">2</span>
+      <strong>Produtos Ativos</strong>
+      {% if steps[2] %}<i class="bi bi-check-circle-fill text-success ms-auto"></i>{% endif %}
+    </div>
+    <div class="card-body">
+      <p class="text-muted small mb-3">Selecione os produtos que sua empresa oferece. A IA usará esses dados nos pitches.</p>
+      <form method="post" action="{{ url_for('setup_step2') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        {% set produtos_atuais = (tc.produtos_texto or '') %}
+        <div class="row g-2 mb-3">
+          {% for p in ['Cartão Alimentação (VR)', 'Cartão Refeição (VA)', 'Cartão Combustível',
+                       'Cartão Multibenefícios', 'Premiação e Incentivo', 'Private Label',
+                       'Cartão de Crédito Empresarial', 'Gestão de Benefícios'] %}
+          <div class="col-md-6">
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" name="produtos" value="{{ p }}"
+                     id="prod_{{ loop.index }}"
+                     {% if p in produtos_atuais %}checked{% endif %}>
+              <label class="form-check-label" for="prod_{{ loop.index }}">{{ p }}</label>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+        <div class="mb-3">
+          <label class="form-label text-muted small">Outros produtos (separados por vírgula)</label>
+          <input type="text" name="produtos_custom" class="form-control form-control-sm"
+                 placeholder="Ex: Cartão Farmácia, Vale Cultura...">
+        </div>
+        <button type="submit" class="btn btn-primary">
+          {% if steps[2] %}<i class="bi bi-arrow-repeat me-1"></i>Atualizar{% else %}<i class="bi bi-check-lg me-1"></i>Salvar e continuar{% endif %}
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Card 3: Importar Leads -->
+  <div class="card mb-3 {% if steps[3] %}border-success{% endif %}">
+    <div class="card-header d-flex align-items-center gap-2">
+      <span class="badge rounded-pill {% if steps[3] %}bg-success{% else %}bg-primary{% endif %}">3</span>
+      <strong>Importar Primeiros Leads</strong>
+      {% if steps[3] %}<i class="bi bi-check-circle-fill text-success ms-auto"></i>{% endif %}
+    </div>
+    <div class="card-body">
+      {% if steps[3] %}
+      <p class="text-success mb-2"><i class="bi bi-check-circle-fill me-1"></i>Leads importados com sucesso.</p>
+      <a href="{{ url_for('leads_importar_form') }}" class="btn btn-outline-success btn-sm">
+        <i class="bi bi-upload me-1"></i>Importar mais leads
+      </a>
+      {% else %}
+      <p class="text-muted mb-3">Importe sua base de contatos em CSV, Excel ou use a prospecção automática.</p>
+      <div class="d-flex gap-2 flex-wrap">
+        <a href="{{ url_for('leads_importar_form') }}" class="btn btn-primary">
+          <i class="bi bi-upload me-1"></i>Importar CSV / Excel
+        </a>
+        <form method="post" action="{{ url_for('setup_step3') }}" class="d-inline">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button type="submit" class="btn btn-outline-secondary">
+            <i class="bi bi-skip-forward me-1"></i>Pular por agora
+          </button>
+        </form>
+      </div>
+      <p class="text-muted small mt-2 mb-0">Este passo é marcado automaticamente quando você importar seu primeiro lead.</p>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Card 4: Configurar SDR -->
+  <div class="card mb-4 {% if steps[4] %}border-success{% endif %}">
+    <div class="card-header d-flex align-items-center gap-2">
+      <span class="badge rounded-pill {% if steps[4] %}bg-success{% else %}bg-primary{% endif %}">4</span>
+      <strong>Configurar e Ativar SDR</strong>
+      {% if steps[4] %}<i class="bi bi-check-circle-fill text-success ms-auto"></i>{% endif %}
+    </div>
+    <div class="card-body">
+      {% if steps[4] %}
+      <p class="text-success mb-2"><i class="bi bi-check-circle-fill me-1"></i>SDR configurado! Configuração concluída.</p>
+      {% else %}
+      <p class="text-muted mb-3">Configure o SDR Evolutivo para começar a prospectar automaticamente com IA.</p>
+      <div class="d-flex gap-2 flex-wrap">
+        <a href="{{ url_for('sdr_evolutivo.sdr_evolutivo_configurar') }}" class="btn btn-primary">
+          <i class="bi bi-gear me-1"></i>Configurar SDR
+        </a>
+        <form method="post" action="{{ url_for('setup_step4') }}" class="d-inline">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button type="submit" class="btn btn-outline-secondary">
+            <i class="bi bi-skip-forward me-1"></i>Pular e ir para o dashboard
+          </button>
+        </form>
+      </div>
+      <p class="text-muted small mt-2 mb-0">Ao concluir a configuração do SDR, este passo é marcado automaticamente.</p>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Final action -->
+  {% if progress == 100 %}
+  <div class="text-center">
+    <form method="post" action="{{ url_for('setup_step4') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button type="submit" class="btn btn-success btn-lg px-5">
+        <i class="bi bi-rocket-takeoff me-2"></i>Ir para o Dashboard →
+      </button>
+    </form>
+  </div>
+  {% endif %}
+
 </div>
-
-<script>
-(function(){
-  const totalSteps = 5;
-  let current = 1;
-
-  function showStep(n) {
-    document.querySelectorAll('.wizard-step').forEach(el => {
-      el.classList.add('d-none');
-      if (parseInt(el.dataset.step) === n) el.classList.remove('d-none');
-    });
-    // Update dots
-    for (let i = 1; i <= totalSteps; i++) {
-      const dot = document.getElementById('step-dot-' + i);
-      if (i < n) {
-        dot.style.background = '#22c55e'; dot.style.color = '#fff'; dot.textContent = '✓';
-      } else if (i === n) {
-        dot.style.background = 'var(--tenant-primary,#C5A089)'; dot.style.color = '#fff'; dot.textContent = i;
-      } else {
-        dot.style.background = '#e2e8f0'; dot.style.color = '#94a3b8'; dot.textContent = i;
-      }
-    }
-    document.getElementById('progressBar').style.width = ((n - 1) / (totalSteps - 1) * 100) + '%';
-    const btnPrev = document.getElementById('btnAnterior');
-    const btnNext = document.getElementById('btnProximo');
-    btnPrev.style.display = n > 1 ? '' : 'none';
-    if (n === totalSteps) {
-      btnNext.style.display = 'none';
-    } else {
-      btnNext.style.display = '';
-    }
-    current = n;
-  }
-
-  document.getElementById('btnProximo').addEventListener('click', function() {
-    if (current < totalSteps) showStep(current + 1);
-  });
-  document.getElementById('btnAnterior').addEventListener('click', function() {
-    if (current > 1) showStep(current - 1);
-  });
-  document.getElementById('btnVoltarFinal') && document.getElementById('btnVoltarFinal').addEventListener('click', function(){
-    showStep(4);
-  });
-
-  // Live preview
-  const corP = document.getElementById('corPrimaria');
-  const previewBtn = document.getElementById('previewBtn');
-  const previewName = document.getElementById('previewName');
-  const nomePlat = document.querySelector('[name="nome_plataforma"]');
-  if (corP) corP.addEventListener('input', function() {
-    if (previewBtn) previewBtn.style.background = this.value;
-  });
-  if (nomePlat) nomePlat.addEventListener('input', function() {
-    if (previewName) previewName.textContent = this.value || 'Krylo';
-  });
-
-  showStep(1);
-})();
-</script>
 {% endblock %}

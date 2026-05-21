@@ -190,7 +190,8 @@ def salvar_setup(tenant_id: int, dados: dict):
         """UPDATE tenant_config SET ramo_principal=?, produtos_texto=?,
            diferenciais=?, historico=?, concorrentes=?, personalidade_ia=?,
            tom_ia=?, whatsapp=?, email_contato=?,
-           site=?, configurado_em=? WHERE tenant_id=?""",
+           site=?, email_remetente=?, nome_vendedor=?,
+           configurado_em=? WHERE tenant_id=?""",
         (dados.get("ramo_principal", ""),
          dados.get("produtos_texto", ""),
          dados.get("diferenciais", ""),
@@ -201,6 +202,8 @@ def salvar_setup(tenant_id: int, dados: dict):
          dados.get("whatsapp", ""),
          dados.get("email_contato", ""),
          dados.get("site", ""),
+         dados.get("email_remetente", ""),
+         dados.get("nome_vendedor", ""),
          agora,
          tenant_id),
     )

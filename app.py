@@ -164,6 +164,9 @@ def inject_tenant():
 def check_tenant_setup():
     _bypass = {
         "login", "logout", "static", "setup_wizard", "setup_salvar",
+        "setup_step1", "setup_step2", "setup_step3", "setup_step4",
+        "leads_importar_form", "leads_importar_preview", "leads_importar_confirmar",
+        "sdr_evolutivo.sdr_evolutivo_configurar",
         "ajuda_index", "ajuda_kia",
         "login_2fa", "login_2fa_reenviar", "recuperar_senha", "nova_senha",
         "auth.login", "auth.logout", "auth.login_2fa", "auth.login_2fa_reenviar",
@@ -3880,6 +3883,25 @@ def admin_tenant_novo():
             return redirect(url_for("admin_tenants"))
         tenant_id = tenant_model.criar_tenant(dados)
         flash(f"Tenant #{tenant_id} criado. Usuário: {dados['admin_usuario']} / Senha: {dados['senha_admin']}", "success")
+        if dados.get("admin_email"):
+            try:
+                import models.brevo as _brevo_mod
+                _plat = dados.get("nome_plataforma", "Krylo")
+                _brevo_mod.enviar_email(
+                    para_email=dados["admin_email"],
+                    para_nome=dados.get("admin_nome", "Admin"),
+                    assunto=f"Bem-vindo ao {_plat} CRM — suas credenciais",
+                    corpo=(
+                        f"<h2>Bem-vindo ao {_plat}!</h2>"
+                        f"<p>Olá {dados.get('admin_nome', 'Admin')}, sua conta foi criada com sucesso.</p>"
+                        f"<p><strong>Usuário:</strong> {dados['admin_usuario']}<br>"
+                        f"<strong>Senha:</strong> {dados['senha_admin']}</p>"
+                        f"<p>Acesse o sistema e complete o wizard de configuração inicial.</p>"
+                        f"<p>Atenciosamente,<br>Equipe {_plat}</p>"
+                    ),
+                )
+            except Exception as _e_mail:
+                print(f"[ONBOARDING] Email boas-vindas falhou: {_e_mail}")
     except Exception as e:
         flash(f"Erro ao criar tenant: {e}", "danger")
     return redirect(url_for("admin_tenants"))
@@ -4065,7 +4087,22 @@ def admin_enriquecer_cnae():
 def setup_wizard():
     t = tenant_model.get_tenant_atual()
     tc = tenant_model.get_tenant_config(t["id"]) if t else {}
-    return render_template("setup_wizard.html", tenant=t, tc=tc)
+    tid = int(t["id"]) if t else 1
+    try:
+        _db = database.get_connection()
+        step3_done = (_db.execute(
+            "SELECT COUNT(*) AS n FROM empresas WHERE tenant_id=?", (tid,)
+        ).fetchone()["n"] or 0) > 0
+        _db.close()
+    except Exception:
+        step3_done = False
+    step1_done = bool(tc.get("email_remetente") or tc.get("email_contato"))
+    step2_done = bool(tc.get("produtos_texto"))
+    step4_done = bool(t and t.get("configurado"))
+    steps = {1: step1_done, 2: step2_done, 3: step3_done, 4: step4_done}
+    progress = int(sum(steps.values()) / 4 * 100)
+    return render_template("setup_wizard.html", tenant=t, tc=tc,
+                           steps=steps, progress=progress)
 
 
 @app.route("/setup/salvar", methods=["POST"])
@@ -4101,6 +4138,89 @@ def setup_salvar():
         flash("Configuração salva! Bem-vindo ao seu CRM.", "success")
     except Exception as e:
         flash(f"Erro ao salvar configuração: {e}", "danger")
+    return redirect(url_for("dashboard"))
+
+
+@app.route("/setup/step1", methods=["POST"])
+@login_required
+def setup_step1():
+    t = tenant_model.get_tenant_atual()
+    if not t:
+        return redirect(url_for("setup_wizard"))
+    tid = int(t["id"])
+    nome_empresa = request.form.get("nome_empresa", "").strip() or t["nome_empresa"]
+    logo_url = request.form.get("logo_url", "").strip() or None
+    email_remetente = request.form.get("email_remetente", "").strip()
+    nome_vendedor = request.form.get("nome_vendedor", "").strip()
+    try:
+        db = database.get_connection()
+        db.execute("UPDATE tenants SET nome_empresa=?, logo_url=? WHERE id=?",
+                   (nome_empresa, logo_url, tid))
+        db.execute("INSERT OR IGNORE INTO tenant_config (tenant_id) VALUES (?)", (tid,))
+        db.execute(
+            "UPDATE tenant_config SET email_remetente=?, nome_vendedor=? WHERE tenant_id=?",
+            (email_remetente, nome_vendedor, tid),
+        )
+        db.commit()
+        db.close()
+        if hasattr(g, "tenant"):
+            del g.tenant
+        flash("Dados da empresa salvos!", "success")
+    except Exception as e:
+        flash(f"Erro ao salvar: {e}", "danger")
+    return redirect(url_for("setup_wizard"))
+
+
+@app.route("/setup/step2", methods=["POST"])
+@login_required
+def setup_step2():
+    t = tenant_model.get_tenant_atual()
+    if not t:
+        return redirect(url_for("setup_wizard"))
+    tid = int(t["id"])
+    produtos = request.form.getlist("produtos")
+    custom = request.form.get("produtos_custom", "").strip()
+    partes = [p for p in produtos if p] + ([custom] if custom else [])
+    produtos_texto = ", ".join(partes)
+    try:
+        db = database.get_connection()
+        db.execute("INSERT OR IGNORE INTO tenant_config (tenant_id) VALUES (?)", (tid,))
+        db.execute("UPDATE tenant_config SET produtos_texto=? WHERE tenant_id=?",
+                   (produtos_texto, tid))
+        db.commit()
+        db.close()
+        flash("Produtos configurados!", "success")
+    except Exception as e:
+        flash(f"Erro ao salvar produtos: {e}", "danger")
+    return redirect(url_for("setup_wizard"))
+
+
+@app.route("/setup/step3", methods=["POST"])
+@login_required
+def setup_step3():
+    flash("Passo de leads marcado como concluído!", "success")
+    return redirect(url_for("setup_wizard"))
+
+
+@app.route("/setup/step4", methods=["POST"])
+@login_required
+def setup_step4():
+    t = tenant_model.get_tenant_atual()
+    if not t:
+        return redirect(url_for("setup_wizard"))
+    tid = int(t["id"])
+    try:
+        db = database.get_connection()
+        db.execute("UPDATE tenants SET configurado=1 WHERE id=?", (tid,))
+        db.commit()
+        db.close()
+        if hasattr(g, "tenant"):
+            del g.tenant
+        session["tenant_id"] = tid
+        flash("Configuração concluída! Bem-vindo ao Krylo CRM.", "success")
+    except Exception as e:
+        flash(f"Erro: {e}", "danger")
+        return redirect(url_for("setup_wizard"))
     return redirect(url_for("dashboard"))
 
 

@@ -714,6 +714,9 @@ def run_migrations(conn) -> None:
         f"ALTER TABLE cqa_config ADD COLUMN{_ifne} tenant_id INTEGER DEFAULT 1",
         "CREATE INDEX IF NOT EXISTS idx_cqa_alertas_tenant ON cqa_alertas (tenant_id)",
         "CREATE INDEX IF NOT EXISTS idx_cqa_config_tenant ON cqa_config (tenant_id)",
+        # Bloco 3 — onboarding wizard
+        f"ALTER TABLE tenant_config ADD COLUMN{_ifne} email_remetente TEXT",
+        f"ALTER TABLE tenant_config ADD COLUMN{_ifne} nome_vendedor TEXT",
     ]
 
     _CREATE = [
@@ -1056,6 +1059,7 @@ def run_migrations(conn) -> None:
         "CREATE INDEX IF NOT EXISTS idx_cadencias_tenant_status ON cadencias(tenant_id, status)",
         "CREATE INDEX IF NOT EXISTS idx_oportunidades_tenant ON oportunidades(tenant_id)",
         "CREATE INDEX IF NOT EXISTS idx_contatos_empresa ON contatos(empresa_id)",
+        "CREATE INDEX IF NOT EXISTS idx_usuarios_tenant ON usuarios(tenant_id)",
         # Base local Receita Federal
         """CREATE TABLE IF NOT EXISTS rf_empresas (
             id            INTEGER PRIMARY KEY AUTOINCREMENT,
