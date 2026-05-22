@@ -10,7 +10,7 @@ import threading
 import atexit
 from datetime import timedelta
 from dotenv import load_dotenv
-load_dotenv(override=True)
+load_dotenv()  # sem override — Railway env vars têm precedência sobre .env local
 
 logging.basicConfig(
     level=logging.INFO,
@@ -3265,6 +3265,7 @@ def central_ia_chat():
 
         import anthropic as _ant
         _key = os.getenv("ANTHROPIC_API_KEY") or ""
+        print(f"[DEBUG-IA] chave presente: {bool(_key)} | primeiros 10 chars: {_key[:10]!r}", flush=True)
         logger.info("[IA DIAG] ANTHROPIC_API_KEY presente=%s tamanho=%d", bool(_key), len(_key))
         client   = _ant.Anthropic(api_key=_key if _key else None)
         response = client.messages.create(
