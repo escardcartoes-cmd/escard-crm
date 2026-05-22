@@ -34,7 +34,7 @@
   {% elif enviado %}
     <span style="color:#16A34A;font-size:11px" title="Enviado em {{ data or '' }}">✅ {{ data or '' }}</span>
   {% else %}
-    <span style="color:#94A3B8;font-size:11px">⏳</span>
+    <span style="color:#94A3B8;font-size:11px" title="Pendente — e-mail ainda não enviado (verifique se há endereço cadastrado)">⏳</span>
   {% endif %}
 {% endmacro %}
 
@@ -71,6 +71,17 @@
           {{ email_badge(item.email_status or 'sem_email') }}
           {% if item.canal_whatsapp %}<span style="font-size:10px;color:#64748B">📱</span>{% endif %}
           {% if item.canal_email %}<span style="font-size:10px;color:#64748B">📧</span>{% endif %}
+        </div>
+        <div style="font-size:11px;color:#94A3B8;margin-top:2px">
+          {% set _email = item.email_empresa or item.contato_email %}
+          {% if _email %}
+            📧 {{ _email }}
+          {% else %}
+            <span style="color:#EF4444">⚠ Sem e-mail — apenas WhatsApp</span>
+          {% endif %}
+          {% if item.contato_whatsapp %}
+            &nbsp;· 📱 {{ item.contato_whatsapp }}
+          {% endif %}
         </div>
         {% if item.mensagem_whatsapp %}
         <p class="cad-preview">{{ item.mensagem_whatsapp[:120] }}{% if item.mensagem_whatsapp|length > 120 %}…{% endif %}</p>
