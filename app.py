@@ -3819,6 +3819,7 @@ def sdr_fila_aprovacao():
                  AND (whatsapp_status IS NULL OR whatsapp_status = 'pendente'
                       OR whatsapp_status = 'aguardando_aprovacao')
                  AND mensagem_whatsapp IS NOT NULL AND mensagem_whatsapp != ''
+                 AND contato_whatsapp IS NOT NULL AND contato_whatsapp != ''
                ORDER BY data_acao ASC LIMIT 100""",
             (tid,)
         ).fetchall()]
