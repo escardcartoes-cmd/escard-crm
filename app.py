@@ -3239,6 +3239,7 @@ def central_ia():
 
 
 @app.route("/central-ia/chat", methods=["POST"])
+@csrf.exempt
 @login_required
 @require_perfil('vendedor')
 def central_ia_chat():
