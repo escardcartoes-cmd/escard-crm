@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="csrf-token" content="{{ csrf_token() }}">
-  <title>{% block title %}Krylo CRM{% endblock %}</title>
+  <title>{% block title %}{{ tenant.nome_plataforma if tenant else 'Krylo CRM' }}{% endblock %}</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -1269,7 +1269,7 @@ tbody tr:hover { background: var(--color-primary-subtle); }
   <div class="main-content">
     <header class="topbar">
       <span class="topbar-title">
-        {% block topbar_title %}{% block page_title %}Krylo CRM{% endblock %}{% endblock %}
+        {% block topbar_title %}{% block page_title %}{{ tenant.nome_plataforma if tenant else 'Krylo CRM' }}{% endblock %}{% endblock %}
       </span>
       <div class="topbar-spacer"></div>
       <div class="topbar-actions">{% block topbar_actions %}{% endblock %}</div>
@@ -1442,7 +1442,7 @@ document.getElementById('cadenciaModal').addEventListener('click', function(e) {
     <div class="modal-body" id="modalBody">
       <div class="loading-state">
         <div class="spinner"></div>
-        <p>Consultando IA Krylo…</p>
+        <p>Consultando IA {{ tenant.nome_plataforma if tenant else 'Krylo' }}…</p>
       </div>
     </div>
   </div>

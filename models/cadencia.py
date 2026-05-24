@@ -371,10 +371,12 @@ def criar_etapa(dados: dict) -> int:
             except Exception:
                 pass
 
-    email_empresa = (dados.get("email_empresa") or dados.get("contato_email") or "").strip()
-    canal_email   = 1 if dados.get("canal_email", True) else 0
-    canal_whatsapp = 1 if dados.get("canal_whatsapp", True) else 0
-    tenant_id     = dados.get("tenant_id", 1)
+    email_empresa  = (dados.get("email_empresa") or dados.get("contato_email") or "").strip()
+    has_email      = bool(email_empresa and "@" in email_empresa)
+    has_whatsapp   = bool((dados.get("contato_whatsapp") or "").strip())
+    canal_email    = 1 if dados.get("canal_email", has_email) else 0
+    canal_whatsapp = 1 if dados.get("canal_whatsapp", has_whatsapp) else 0
+    tenant_id      = dados.get("tenant_id", 1)
 
     conn = get_connection()
     cur = conn.execute(
