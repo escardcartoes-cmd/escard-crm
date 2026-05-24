@@ -62,6 +62,9 @@ if not app.secret_key:
     app.secret_key = _sec.token_hex(32)
     print("[AVISO] SECRET_KEY não configurada - usando chave temporária")
 app.permanent_session_lifetime = timedelta(hours=8)
+app.config["SESSION_COOKIE_SECURE"] = True
+app.config["SESSION_COOKIE_HTTPONLY"] = True
+app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 app.config["JSON_AS_ASCII"] = False
 app.config["WTF_CSRF_ENABLED"] = True
 
@@ -592,23 +595,19 @@ def erro_500(e):
     if request.path.startswith('/api/') or request.is_json:
         return jsonify({"error": "Erro interno do servidor"}), 500
     try:
-        return redirect(url_for("dashboard"))
+        return render_template("erro.html", mensagem="Erro interno. Tente novamente em instantes.", codigo=500), 500
     except Exception:
         return """<!DOCTYPE html>
 <html>
 <head>
   <meta charset="UTF-8">
-  <meta http-equiv="refresh" content="3;url=/">
   <style>
     body{background:#0A0A0F;color:#F0F0F5;font-family:Inter,sans-serif;
          display:flex;align-items:center;justify-content:center;height:100vh;
          flex-direction:column;gap:16px}
-    .spinner{width:32px;height:32px;border:2px solid #333;border-top-color:#C5A089;
-             border-radius:50%;animation:spin 1s linear infinite}
-    @keyframes spin{to{transform:rotate(360deg)}}
   </style>
 </head>
-<body><div class="spinner"></div><p>Reconectando... Aguarde.</p></body>
+<body><p>Erro interno. <a href="/" style="color:#C5A089">Voltar</a></p></body>
 </html>""", 500
 
 
@@ -617,9 +616,9 @@ def erro_404(e):
     if request.path.startswith('/api/') or request.is_json:
         return jsonify({"error": "Rota não encontrada"}), 404
     try:
-        return redirect(url_for("dashboard"))
+        return render_template("erro.html", mensagem="Página não encontrada.", codigo=404), 404
     except Exception:
-        return redirect("/")
+        return "<h1>404</h1><a href='/'>Voltar</a>", 404
 
 
 @app.errorhandler(Exception)
@@ -629,9 +628,9 @@ def erro_geral(e):
     if request.path.startswith('/api/') or request.is_json:
         return jsonify({"error": "Erro interno do servidor"}), 500
     try:
-        return redirect(url_for("dashboard"))
+        return render_template("erro.html", mensagem="Algo deu errado. Tente novamente.", codigo=500), 500
     except Exception:
-        return redirect("/")
+        return "<h1>Erro</h1><a href='/'>Voltar</a>", 500
 
 
 # ── Metas ─────────────────────────────────────────────────────────────────────
@@ -4126,7 +4125,7 @@ def admin_importar_rf_status():
 def admin_limpar_cache_dashboard():
     _DASHBOARD_CACHE.clear()
     flash("Cache do dashboard limpo.", "success")
-    return redirect(url_for("admin"))
+    return redirect(url_for("admin_tenants"))
 
 
 @app.route("/admin/enriquecer-cnae", methods=["POST"])
@@ -4142,7 +4141,7 @@ def admin_enriquecer_cnae():
         f"(de {resultado['total']} pendentes).",
         "success" if resultado["atualizadas"] > 0 else "warning",
     )
-    return redirect(url_for("admin"))
+    return redirect(url_for("admin_tenants"))
 
 
 # ── Setup Wizard — Onboarding Multi-tenant ────────────────────────────────────
@@ -4565,6 +4564,6 @@ if __name__ == "__main__":
 
             threading.Thread(target=_start_livereload, daemon=True).start()
 
-        app.run(debug=True, host="0.0.0.0", port=port, use_reloader=True)
+        app.run(debug=os.environ.get("FLASK_DEBUG", "0") == "1", host="0.0.0.0", port=port, use_reloader=True)
     else:
         app.run(host="0.0.0.0", port=port)
