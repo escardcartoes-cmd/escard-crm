@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% block title %}Painel de IA — Krylo CRM{% endblock %}
+{% block title %}Painel de IA — {{ tenant.nome_plataforma if tenant else "Krylo CRM" }}{% endblock %}
 {% block topbar_title %}Central de Inteligência Artificial{% endblock %}
 {% block topbar_actions %}
   <span id="ia-status-badge" style="display:inline-flex;align-items:center;gap:6px;padding:4px 12px;border-radius:99px;font-size:12px;font-weight:700;background:#F0FDF4;color:#16A34A;border:1px solid #BBF7D0">
@@ -107,7 +107,7 @@
       </div>
       <div>
         <label class="ia-form-label">Contexto da empresa</label>
-        <textarea name="contexto_empresa" class="ia-textarea" rows="3" placeholder="Produtos, diferencial e missão da Krylo">{{ cfg.contexto_empresa or '' }}</textarea>
+        <textarea name="contexto_empresa" class="ia-textarea" rows="3" placeholder="Produtos, diferencial e missão da {{ tenant.nome_plataforma if tenant else "Krylo" }}">{{ cfg.contexto_empresa or '' }}</textarea>
       </div>
     </div>
   </div>

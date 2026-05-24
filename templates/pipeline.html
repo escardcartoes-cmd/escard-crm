@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% block title %}Pipeline Inteligente — Krylo CRM{% endblock %}
+{% block title %}Pipeline Inteligente — {{ tenant.nome_plataforma if tenant else "Krylo CRM" }}{% endblock %}
 {% block topbar_title %}🎯 Pipeline Inteligente{% endblock %}
 {% block topbar_actions %}
   <a href="{{ url_for('oportunidades_nova') }}" class="btn btn-primary">+ Nova Oportunidade</a>

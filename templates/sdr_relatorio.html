@@ -195,7 +195,7 @@
 
 <!-- Rodapé -->
 <div style="text-align:center;color:var(--muted);font-size:12px;padding:20px 0">
-  Sessão gerada pelo SDR Autônomo Krylo em {{ sessao.iniciado_em or '' }}
+  Sessão gerada pelo SDR Autônomo {{ tenant.nome_plataforma if tenant else "Krylo" }} em {{ sessao.iniciado_em or '' }}
 </div>
 
 {% endblock %}

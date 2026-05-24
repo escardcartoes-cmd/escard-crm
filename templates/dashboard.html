@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% block title %}Dashboard — Krylo CRM{% endblock %}
+{% block title %}Dashboard — {{ tenant.nome_plataforma if tenant else "Krylo CRM" }}{% endblock %}
 {% block topbar_title %}Dashboard{% endblock %}
 {% block topbar_actions %}
   <a href="{{ url_for('empresas_nova') }}" class="btn btn-secondary btn-sm">+ Empresa</a>

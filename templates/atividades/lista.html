@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% block title %}Atividades — Krylo CRM{% endblock %}
+{% block title %}Atividades — {{ tenant.nome_plataforma if tenant else "Krylo CRM" }}{% endblock %}
 {% block topbar_title %}✅ Atividades{% endblock %}
 {% block topbar_actions %}
   <a href="{{ url_for('atividades_nova') }}" class="btn btn-primary">+ Registrar</a>

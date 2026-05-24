@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% block title %}SDR Autônomo — Krylo CRM{% endblock %}
+{% block title %}SDR Autônomo — {{ tenant.nome_plataforma if tenant else "Krylo CRM" }}{% endblock %}
 {% block topbar_title %}SDR Autônomo{% endblock %}
 
 {% block topbar_actions %}

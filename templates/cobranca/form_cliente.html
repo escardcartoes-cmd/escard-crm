@@ -1,6 +1,6 @@
 {% extends 'base.html' %}
 {% set editing = cliente is not none %}
-{% block title %}{{ 'Editar' if editing else 'Novo' }} Cliente de Cobrança — Krylo CRM{% endblock %}
+{% block title %}{{ 'Editar' if editing else 'Novo' }} Cliente de Cobrança — {{ tenant.nome_plataforma if tenant else "Krylo CRM" }}{% endblock %}
 {% block topbar_title %}{{ 'Editar Cliente de Cobrança' if editing else 'Novo Cliente de Cobrança' }}{% endblock %}
 {% block topbar_actions %}
   <a href="{{ url_for('cobranca_index') }}" class="btn btn-outline btn-sm">← Voltar</a>
@@ -53,7 +53,7 @@
         <div class="form-section-title">Comercial</div>
         <div class="form-row">
           <div class="form-group">
-            <label>Comissão Krylo (%)</label>
+            <label>Comissão {{ tenant.nome_plataforma if tenant else "Krylo" }} (%)</label>
             <input type="number" name="comissao_pct" step="0.1" min="0" max="100"
                    value="{{ cliente.comissao_pct if editing else '10' }}">
           </div>

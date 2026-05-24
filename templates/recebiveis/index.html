@@ -1,6 +1,6 @@
 {% extends 'base.html' %}
-{% block title %}Recebíveis — Krylo CRM{% endblock %}
-{% block topbar_title %}Recebíveis da Krylo{% endblock %}
+{% block title %}Recebíveis — {{ tenant.nome_plataforma if tenant else "Krylo CRM" }}{% endblock %}
+{% block topbar_title %}Recebíveis da {{ tenant.nome_plataforma if tenant else "Krylo" }}{% endblock %}
 {% block topbar_actions %}
   <form method="post" action="{{ url_for('recebiveis_gerar') }}" style="display:inline">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">

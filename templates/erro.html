@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% block title %}{{ titulo or 'Erro' }} — Krylo CRM{% endblock %}
+{% block title %}{{ titulo or 'Erro' }} — {{ tenant.nome_plataforma if tenant else "Krylo CRM" }}{% endblock %}
 {% block topbar_title %}{{ titulo or 'Erro' }}{% endblock %}
 
 {% block content %}

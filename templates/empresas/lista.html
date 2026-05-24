@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% block title %}Empresas — Krylo CRM{% endblock %}
+{% block title %}Empresas — {{ tenant.nome_plataforma if tenant else "Krylo CRM" }}{% endblock %}
 {% block topbar_title %}Empresas{% endblock %}
 {% block topbar_actions %}
   <a href="{{ url_for('empresas_nova') }}" class="btn btn-primary">+ Nova Empresa</a>
@@ -239,7 +239,7 @@ function copiarPortal(token, btn) {
 
 function enviarPortal(token, empresaNome, telefone) {
   const link = _portalLink(token);
-  const msg = `Olá! Preparei seu portal exclusivo Krylo para acompanhar os benefícios da ${empresaNome}. Acesse aqui: ${link} — É só clicar, sem precisar de login! Qualquer dúvida estou à disposição 😊`;
+  const msg = `Olá! Preparei seu portal exclusivo {{ tenant.nome_plataforma if tenant else "Krylo" }} para acompanhar os benefícios da ${empresaNome}. Acesse aqui: ${link} — É só clicar, sem precisar de login! Qualquer dúvida estou à disposição 😊`;
   const tel = (telefone || '').replace(/\D/g, '');
   const waUrl = tel
     ? `https://wa.me/55${tel}?text=${encodeURIComponent(msg)}`

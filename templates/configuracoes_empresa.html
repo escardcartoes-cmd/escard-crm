@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% block title %}Minha Empresa — Krylo CRM{% endblock %}
+{% block title %}Minha Empresa — {{ tenant.nome_plataforma if tenant else "Krylo CRM" }}{% endblock %}
 {% block topbar_title %}Configurações — Minha Empresa{% endblock %}
 
 {% block topbar_actions %}
@@ -23,7 +23,7 @@
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
       <div>
         <label class="form-label">Nome da empresa</label>
-        <input type="text" id="nome" class="form-input" value="{{ cfg.get('nome','Krylo') }}"
+        <input type="text" id="nome" class="form-input" value="{{ cfg.get('nome','{{ tenant.nome_plataforma if tenant else "Krylo" }}') }}"
                placeholder="Ex: Krylo">
         <div style="font-size:11px;color:var(--muted);margin-top:3px">Substitui "Krylo" em todo o sistema</div>
       </div>

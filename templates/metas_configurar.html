@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% block title %}Configurar Meta — Krylo CRM{% endblock %}
+{% block title %}Configurar Meta — {{ tenant.nome_plataforma if tenant else "Krylo CRM" }}{% endblock %}
 {% block topbar_title %}🎯 Metas{% endblock %}
 
 {% block content %}

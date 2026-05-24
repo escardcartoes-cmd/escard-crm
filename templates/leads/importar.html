@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% block title %}Importar Leads — Krylo CRM{% endblock %}
+{% block title %}Importar Leads — {{ tenant.nome_plataforma if tenant else "Krylo CRM" }}{% endblock %}
 {% block topbar_title %}Importar Leads{% endblock %}
 {% block topbar_actions %}
   <a href="{{ url_for('prospeccao_lista') }}" class="btn btn-outline btn-sm">← Prospecção</a>

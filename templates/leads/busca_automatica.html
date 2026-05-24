@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% block title %}Busca Automática de Leads — Krylo CRM{% endblock %}
+{% block title %}Busca Automática de Leads — {{ tenant.nome_plataforma if tenant else "Krylo CRM" }}{% endblock %}
 {% block topbar_title %}Prospecção{% endblock %}
 {% block topbar_actions %}
   <a href="{{ url_for('leads_importar_form') }}" class="btn btn-outline btn-sm">+ Importar CSV</a>

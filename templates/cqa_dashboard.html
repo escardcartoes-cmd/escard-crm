@@ -1,7 +1,7 @@
 {% extends 'base.html' %}
 {%- set _rodar = (cqa_rodar_endpoint if cqa_rodar_endpoint is defined else 'cqa_rodar') -%}
 {%- set _fixall = (cqa_fix_all_endpoint if cqa_fix_all_endpoint is defined else 'cqa_fix_all') -%}
-{% block title %}CQA — Krylo CRM{% endblock %}
+{% block title %}CQA — {{ tenant.nome_plataforma if tenant else "Krylo CRM" }}{% endblock %}
 {% block topbar_title %}🛡️ Central de Qualidade Automática{% endblock %}
 {% block topbar_actions %}
   <form method="post" action="{{ url_for(_rodar) }}" style="display:inline">

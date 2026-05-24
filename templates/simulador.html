@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% block title %}Simulador de Proposta — Krylo CRM{% endblock %}
+{% block title %}Simulador de Proposta — {{ tenant.nome_plataforma if tenant else "Krylo CRM" }}{% endblock %}
 {% block topbar_title %}📋 Simulador de Proposta{% endblock %}
 {% block topbar_actions %}
   <span class="text-muted text-sm">Gere propostas comerciais em segundos</span>
@@ -15,7 +15,7 @@
       <div style="font-size:15px;font-weight:700;color:#fff;margin-bottom:3px">Gere uma proposta comercial em 60 segundos</div>
       <div style="font-size:12px;color:rgba(255,255,255,.75)">
         Preencha os dados da empresa, selecione os produtos e clique em <strong>Gerar Proposta</strong>.
-        A IA Krylo monta o texto personalizado para você.
+        A IA {{ tenant.nome_plataforma if tenant else "Krylo" }} monta o texto personalizado para você.
       </div>
     </div>
   </div>

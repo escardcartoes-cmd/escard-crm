@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% block title %}Módulo de Cobrança — Krylo CRM{% endblock %}
+{% block title %}Módulo de Cobrança — {{ tenant.nome_plataforma if tenant else "Krylo CRM" }}{% endblock %}
 {% block topbar_title %}Módulo de Cobrança{% endblock %}
 {% block topbar_actions %}
   <a href="{{ url_for('cobranca_cliente_novo') }}" class="btn btn-outline btn-sm">+ Cliente</a>
@@ -178,7 +178,7 @@
         <th>Cliente</th>
         <th style="text-align:right">Cobrado</th>
         <th style="text-align:right">Recuperado</th>
-        <th style="text-align:right">Comissão Krylo</th>
+        <th style="text-align:right">Comissão {{ tenant.nome_plataforma if tenant else "Krylo" }}</th>
         <th style="text-align:center">Status</th>
         <th></th>
       </tr>

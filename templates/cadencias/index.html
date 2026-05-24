@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% block title %}Cadências SDR — Krylo CRM{% endblock %}
+{% block title %}Cadências SDR — {{ tenant.nome_plataforma if tenant else "Krylo CRM" }}{% endblock %}
 {% block topbar_title %}SDR Automático — Cadências{% endblock %}
 {% block topbar_actions %}
   <span class="text-muted text-sm" style="padding:6px 10px">

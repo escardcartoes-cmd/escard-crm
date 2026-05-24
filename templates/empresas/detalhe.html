@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% block title %}{{ empresa.nome }} — Krylo CRM{% endblock %}
+{% block title %}{{ empresa.nome }} — {{ tenant.nome_plataforma if tenant else "Krylo CRM" }}{% endblock %}
 {% block topbar_title %}{{ empresa.nome }}{% endblock %}
 {% block topbar_actions %}
   <button class="btn btn-ai btn-sm" onclick="aiScore({{ empresa.id }}, {{ empresa.nome | tojson }})">

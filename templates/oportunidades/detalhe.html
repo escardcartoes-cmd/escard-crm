@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% block title %}{{ op.titulo }} — Krylo CRM{% endblock %}
+{% block title %}{{ op.titulo }} — {{ tenant.nome_plataforma if tenant else "Krylo CRM" }}{% endblock %}
 {% block topbar_title %}{{ op.titulo }}{% endblock %}
 {% block topbar_actions %}
   <button class="btn btn-ai btn-sm"

@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% block title %}Central de IA — Krylo CRM{% endblock %}
+{% block title %}Central de IA — {{ tenant.nome_plataforma if tenant else "Krylo CRM" }}{% endblock %}
 {% block topbar_title %}Central de IA{% endblock %}
 {% block topbar_actions %}
   <button class="btn btn-outline btn-sm" onclick="novaConversa()">+ Nova Conversa</button>
@@ -148,7 +148,7 @@
   <div id="panel-chat" class="ia-panel active" style="flex:1;overflow:hidden">
     <div class="chat-header">
       <h2>Central de IA 🤖</h2>
-      <p>Sua consultora especialista em benefícios Krylo</p>
+      <p>Sua consultora especialista em benefícios {{ tenant.nome_plataforma if tenant else "Krylo" }}</p>
     </div>
 
     <div class="quick-btns">

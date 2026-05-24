@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% block title %}Relatório Semanal — Krylo CRM{% endblock %}
+{% block title %}Relatório Semanal — {{ tenant.nome_plataforma if tenant else "Krylo CRM" }}{% endblock %}
 {% block topbar_title %}Relatório Executivo Semanal{% endblock %}
 {% block topbar_actions %}
   <button onclick="window.print()" class="btn btn-outline btn-sm no-print">🖨 Imprimir / PDF</button>
@@ -170,7 +170,7 @@
 <!-- Próximos passos — IA -->
 <div class="card" style="margin-bottom:20px">
   <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px">
-    <p class="card-title" style="margin-bottom:0">✦ Próximos Passos — IA Krylo</p>
+    <p class="card-title" style="margin-bottom:0">✦ Próximos Passos — IA {{ tenant.nome_plataforma if tenant else "Krylo" }}</p>
     <span style="font-size:11px;padding:2px 8px;background:#F4F0EB;color:#4A3F35;border-radius:99px;font-weight:600">gerado por IA</span>
   </div>
   <div class="rel-proximos">{{ proximos_passos }}</div>

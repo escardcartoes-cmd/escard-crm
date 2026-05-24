@@ -1,6 +1,6 @@
 {% extends 'base.html' %}
 {%- set _lista = (lista_endpoint if lista_endpoint is defined else 'usuarios_lista') -%}
-{% block title %}{{ 'Editar' if usuario else 'Novo' }} Usuário — Krylo CRM{% endblock %}
+{% block title %}{{ 'Editar' if usuario else 'Novo' }} Usuário — {{ tenant.nome_plataforma if tenant else "Krylo CRM" }}{% endblock %}
 {% block topbar_title %}{{ 'Editar Usuário' if usuario else 'Novo Usuário' }}{% endblock %}
 {% block topbar_actions %}
   <a href="{{ url_for(_lista) }}" class="btn btn-outline btn-sm">← Voltar</a>

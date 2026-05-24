@@ -1,6 +1,6 @@
 {% extends 'base.html' %}
 {% set editing = op is not none %}
-{% block title %}{{ 'Editar' if editing else 'Nova' }} Oportunidade — Krylo CRM{% endblock %}
+{% block title %}{{ 'Editar' if editing else 'Nova' }} Oportunidade — {{ tenant.nome_plataforma if tenant else "Krylo CRM" }}{% endblock %}
 {% block topbar_title %}{{ 'Editar Oportunidade' if editing else 'Nova Oportunidade' }}{% endblock %}
 {% block topbar_actions %}
   <a href="{{ url_for('oportunidades_kanban') }}" class="btn btn-outline btn-sm">← Voltar</a>

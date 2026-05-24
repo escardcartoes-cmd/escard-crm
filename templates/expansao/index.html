@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% block title %}Motor de Expansão — Krylo CRM{% endblock %}
+{% block title %}Motor de Expansão — {{ tenant.nome_plataforma if tenant else "Krylo CRM" }}{% endblock %}
 {% block topbar_title %}Motor de Expansão{% endblock %}
 {% block topbar_actions %}
   <span class="text-muted text-sm">Potencial total:</span>
@@ -10,7 +10,7 @@
 
 <div class="exp-intro card" style="margin-bottom:20px;padding:16px 20px">
   <p style="font-size:13px;color:var(--muted);line-height:1.6;margin:0">
-    O <strong>Motor de Expansão</strong> identifica clientes ativos com produtos Krylo ainda não contratados
+    O <strong>Motor de Expansão</strong> identifica clientes ativos com produtos {{ tenant.nome_plataforma if tenant else "Krylo" }} ainda não contratados
     e estima o potencial de receita incremental por empresa, com base no número de funcionários.
     Use o botão <em>Gerar Pitch</em> para criar um argumento de upsell personalizado com IA.
   </p>

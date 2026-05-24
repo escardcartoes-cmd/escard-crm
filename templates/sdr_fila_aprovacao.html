@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% block title %}Fila de Aprovação WhatsApp — Krylo CRM{% endblock %}
+{% block title %}Fila de Aprovação WhatsApp — {{ tenant.nome_plataforma if tenant else "Krylo CRM" }}{% endblock %}
 {% block topbar_title %}Fila de Aprovação WhatsApp{% endblock %}
 
 {% block topbar_actions %}

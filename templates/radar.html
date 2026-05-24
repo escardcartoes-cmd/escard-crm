@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% block title %}Radar de Mercado — Krylo CRM{% endblock %}
+{% block title %}Radar de Mercado — {{ tenant.nome_plataforma if tenant else "Krylo CRM" }}{% endblock %}
 {% block topbar_title %}📡 Radar de Mercado{% endblock %}
 {% block topbar_actions %}
   {% if nao_lidos > 0 %}

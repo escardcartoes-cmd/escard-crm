@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% block title %}Ramos de Atividade — Krylo CRM{% endblock %}
+{% block title %}Ramos de Atividade — {{ tenant.nome_plataforma if tenant else "Krylo CRM" }}{% endblock %}
 {% block topbar_title %}Configurações — Ramos de Atividade{% endblock %}
 {% block topbar_actions %}
   <button class="btn btn-primary btn-sm" onclick="document.getElementById('form-novo-ramo').scrollIntoView({behavior:'smooth'})">
@@ -100,7 +100,7 @@
       <div style="grid-column:1/-1">
         <label class="form-label">Pitch de abordagem</label>
         <textarea name="pitch" class="form-control" rows="3"
-                  placeholder="Ex: A Krylo oferece Vale Refeição, VA e Combustível sem taxa de adesão"></textarea>
+                  placeholder="Ex: A {{ tenant.nome_plataforma if tenant else "Krylo" }} oferece Vale Refeição, VA e Combustível sem taxa de adesão"></textarea>
       </div>
 
       <div>

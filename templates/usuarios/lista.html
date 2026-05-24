@@ -2,7 +2,7 @@
 {%- set _novo = (novo_endpoint if novo_endpoint is defined else 'usuarios_novo') -%}
 {%- set _editar = (editar_endpoint if editar_endpoint is defined else 'usuarios_editar') -%}
 {%- set _excluir = (excluir_endpoint if excluir_endpoint is defined else 'usuarios_excluir') -%}
-{% block title %}Usuários — Krylo CRM{% endblock %}
+{% block title %}Usuários — {{ tenant.nome_plataforma if tenant else "Krylo CRM" }}{% endblock %}
 {% block topbar_title %}Usuários{% endblock %}
 {% block topbar_actions %}
   {% if novo_url is defined and novo_url %}

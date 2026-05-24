@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% block title %}Financeiro — Krylo CRM{% endblock %}
+{% block title %}Financeiro — {{ tenant.nome_plataforma if tenant else "Krylo CRM" }}{% endblock %}
 {% block topbar_title %}💰 Financeiro{% endblock %}
 {% block topbar_actions %}
   <span class="text-muted text-sm">Comissão mês: <strong style="color:#16A34A">R$&nbsp;{{ '{:,.0f}'.format(cob_resumo.comissao_mes or 0) }}</strong></span>

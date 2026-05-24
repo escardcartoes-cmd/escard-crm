@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% block title %}Termômetro de Clientes — Krylo CRM{% endblock %}
+{% block title %}Termômetro de Clientes — {{ tenant.nome_plataforma if tenant else "Krylo CRM" }}{% endblock %}
 {% block topbar_title %}🌡️ Termômetro de Clientes{% endblock %}
 {% block topbar_actions %}
   <span class="text-muted text-sm">Saúde da base de clientes</span>
