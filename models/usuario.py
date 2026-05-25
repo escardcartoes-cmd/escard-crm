@@ -349,7 +349,7 @@ def criar_admin_se_necessario():
     try:
         if _USE_PG:
             conn.execute(
-                "UPDATE usuarios SET tentativas_login=0, bloqueado_ate=NULL, ativo=TRUE"
+                "UPDATE usuarios SET tentativas_login=0, bloqueado_ate=NULL, ativo=1"
                 " WHERE usuario='administrador' AND perfil='super_admin'",
             )
         else:
