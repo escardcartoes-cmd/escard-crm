@@ -88,14 +88,14 @@ app.register_blueprint(sdr_evolutivo_bp)
 
 @app.context_processor
 def _inject_cadencias_badge():
+    tid = session.get("tenant_id", 1)
     try:
-        radar_nao_lidos = radar_model.contar_nao_lidos()
+        radar_nao_lidos = radar_model.contar_nao_lidos(tid)
     except Exception:
         radar_nao_lidos = {"editais": 0, "concorrentes": 0, "total": 0}
     wa_pendentes = 0
     try:
         conn = database.get_connection()
-        tid = session.get("tenant_id", 1)
         row = conn.execute(
             """SELECT COUNT(*) AS cnt FROM cadencias
                WHERE tenant_id = ? AND canal_whatsapp = 1
@@ -110,7 +110,7 @@ def _inject_cadencias_badge():
         pass
     try:
         return {
-            "cadencias_hoje_count": cad_model.contar_hoje(),
+            "cadencias_hoje_count": cad_model.contar_hoje(tid),
             "radar_nao_lidos": radar_nao_lidos,
             "wa_pendentes": wa_pendentes,
         }

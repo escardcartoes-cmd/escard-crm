@@ -507,12 +507,12 @@ def listar_proximos_dias(n: int = 7, tenant_id=None) -> list:
     return [dict(r) for r in rows]
 
 
-def contar_hoje() -> int:
+def contar_hoje(tenant_id: int = 1) -> int:
     today = str(date.today())
     conn = get_connection()
     row = conn.execute(
-        "SELECT COUNT(*) AS n FROM cadencias WHERE data_acao = ? AND status='pendente'",
-        (today,),
+        "SELECT COUNT(*) AS n FROM cadencias WHERE data_acao = ? AND status='pendente' AND tenant_id = ?",
+        (today, tenant_id),
     ).fetchone()
     conn.close()
     return int(row["n"]) if row else 0

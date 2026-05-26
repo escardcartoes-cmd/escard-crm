@@ -7,12 +7,13 @@ from database import get_connection, get_new_db_connection
 
 # ── helpers antigos mantidos (contar_nao_lidos é chamado pelo context processor) ──
 
-def contar_nao_lidos() -> dict:
+def contar_nao_lidos(tenant_id: int = 1) -> dict:
     try:
         conn = get_connection()
         try:
             total = conn.execute(
-                "SELECT COUNT(*) AS n FROM radar_alertas WHERE lido=0 AND arquivado=0"
+                "SELECT COUNT(*) AS n FROM radar_alertas WHERE lido=0 AND arquivado=0 AND tenant_id = ?",
+                (tenant_id,)
             ).fetchone()["n"]
         except Exception:
             total = 0
