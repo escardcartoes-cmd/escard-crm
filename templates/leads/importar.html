@@ -95,6 +95,7 @@ function previewCSV() {
 
   const fd = new FormData();
   fd.append('arquivo', file);
+  fd.append('csrf_token', '{{ csrf_token() }}');
 
   fetch('/leads/importar/preview', { method: 'POST', body: fd })
     .then(r => r.json())
