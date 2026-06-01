@@ -533,6 +533,177 @@ def usuarios_list():
     return jsonify(items=[dict(r) for r in rows])
 
 
+@api_bp.post("/usuarios")
+@login_required
+def usuario_create():
+    tid = session.get("tenant_id", 1)
+    data = request.get_json() or {}
+    required = ["nome", "email", "usuario", "senha", "perfil"]
+    for f in required:
+        if not data.get(f):
+            return jsonify(error=f"Campo obrigatório: {f}"), 400
+    if data["perfil"] not in ("admin", "gerente", "vendedor", "visualizador"):
+        return jsonify(error="Perfil inválido"), 400
+
+    import bcrypt
+    senha_hash = bcrypt.hashpw(data["senha"].encode(), bcrypt.gensalt()).decode()
+    conn = database.get_connection()
+    try:
+        conn.execute(
+            "INSERT INTO usuarios (nome, email, usuario, senha_hash, perfil, ativo, tenant_id) "
+            "VALUES (?,?,?,?,?,?,?)",
+            (data["nome"], data["email"], data["usuario"], senha_hash,
+             data["perfil"], 1 if data.get("ativo", 1) else 0, tid)
+        )
+        conn.commit()
+        uid = conn.execute("SELECT last_insert_rowid() id").fetchone()["id"]
+        row = conn.execute(
+            "SELECT id, nome, email, usuario, perfil, ativo FROM usuarios WHERE id=?", (uid,)
+        ).fetchone()
+        return jsonify(dict(row)), 201
+    except Exception as e:
+        msg = str(e)
+        if "UNIQUE" in msg.upper() or "unique" in msg:
+            return jsonify(error="Usuário ou e-mail já existe"), 409
+        return jsonify(error=msg), 500
+
+
+@api_bp.put("/usuarios/<int:uid>")
+@login_required
+def usuario_update(uid):
+    tid = session.get("tenant_id", 1)
+    data = request.get_json() or {}
+    conn = database.get_connection()
+    if not conn.execute("SELECT id FROM usuarios WHERE id=? AND tenant_id=?", (uid, tid)).fetchone():
+        return jsonify(error="Não encontrado"), 404
+
+    fields = ["nome", "email", "usuario", "perfil", "ativo"]
+    updates = {f: data[f] for f in fields if f in data}
+
+    # Senha opcional
+    if data.get("senha"):
+        import bcrypt
+        updates["senha_hash"] = bcrypt.hashpw(data["senha"].encode(), bcrypt.gensalt()).decode()
+
+    if not updates:
+        return jsonify(error="Nada para atualizar"), 400
+
+    set_clause = ", ".join(f"{k}=?" for k in updates)
+    try:
+        conn.execute(f"UPDATE usuarios SET {set_clause} WHERE id=? AND tenant_id=?",
+                     list(updates.values()) + [uid, tid])
+        conn.commit()
+        row = conn.execute(
+            "SELECT id, nome, email, usuario, perfil, ativo FROM usuarios WHERE id=?", (uid,)
+        ).fetchone()
+        return jsonify(dict(row))
+    except Exception as e:
+        msg = str(e)
+        if "UNIQUE" in msg.upper():
+            return jsonify(error="Usuário ou e-mail já existe"), 409
+        return jsonify(error=msg), 500
+
+
+@api_bp.delete("/usuarios/<int:uid>")
+@login_required
+def usuario_delete(uid):
+    tid = session.get("tenant_id", 1)
+    if uid == getattr(current_user, "id", None):
+        return jsonify(error="Não é possível excluir o próprio usuário"), 400
+    conn = database.get_connection()
+    if not conn.execute("SELECT id FROM usuarios WHERE id=? AND tenant_id=?", (uid, tid)).fetchone():
+        return jsonify(error="Não encontrado"), 404
+    # Soft delete via ativo=0
+    conn.execute("UPDATE usuarios SET ativo=0 WHERE id=? AND tenant_id=?", (uid, tid))
+    conn.commit()
+    return jsonify(ok=True)
+
+
+# ── PROFILE / TENANT ─────────────────────────────────────────────────────────
+
+@api_bp.put("/me")
+@login_required
+def me_update():
+    """Usuário atualiza próprio perfil."""
+    data = request.get_json() or {}
+    uid = current_user.id
+    conn = database.get_connection()
+
+    fields = ["nome", "email"]
+    updates = {f: data[f] for f in fields if f in data}
+
+    if data.get("nova_senha"):
+        if not data.get("senha_atual"):
+            return jsonify(error="Senha atual obrigatória"), 400
+        import bcrypt
+        row = conn.execute("SELECT senha_hash FROM usuarios WHERE id=?", (uid,)).fetchone()
+        if not bcrypt.checkpw(data["senha_atual"].encode(), dict(row)["senha_hash"].encode()):
+            return jsonify(error="Senha atual incorreta"), 401
+        updates["senha_hash"] = bcrypt.hashpw(data["nova_senha"].encode(), bcrypt.gensalt()).decode()
+
+    if not updates:
+        return jsonify(error="Nada para atualizar"), 400
+
+    set_clause = ", ".join(f"{k}=?" for k in updates)
+    try:
+        conn.execute(f"UPDATE usuarios SET {set_clause} WHERE id=?",
+                     list(updates.values()) + [uid])
+        conn.commit()
+        return jsonify(ok=True)
+    except Exception as e:
+        return jsonify(error=str(e)), 500
+
+
+@api_bp.get("/tenant")
+@login_required
+def tenant_get():
+    tid = session.get("tenant_id", 1)
+    conn = database.get_connection()
+    row = conn.execute("SELECT * FROM tenants WHERE id=?", (tid,)).fetchone()
+    if not row:
+        return jsonify(error="Tenant não encontrado"), 404
+    return jsonify(dict(row))
+
+
+@api_bp.put("/tenant")
+@login_required
+def tenant_update():
+    tid = session.get("tenant_id", 1)
+    data = request.get_json() or {}
+    conn = database.get_connection()
+    fields = ["nome_empresa", "nome_plataforma", "cor_primaria", "cor_secundaria", "logo_url"]
+    updates = {f: data[f] for f in fields if f in data}
+    if not updates:
+        return jsonify(error="Nada para atualizar"), 400
+    set_clause = ", ".join(f"{k}=?" for k in updates)
+    conn.execute(f"UPDATE tenants SET {set_clause} WHERE id=?",
+                 list(updates.values()) + [tid])
+    conn.commit()
+    row = conn.execute("SELECT * FROM tenants WHERE id=?", (tid,)).fetchone()
+    return jsonify(dict(row))
+
+
+# ── SIDEBAR COUNTS ───────────────────────────────────────────────────────────
+
+@api_bp.get("/sidebar/counts")
+@login_required
+def sidebar_counts():
+    tid = session.get("tenant_id", 1)
+    conn = database.get_connection()
+    def c(sql, *p):
+        r = conn.execute(sql, p).fetchone()
+        return (dict(r) or {}).get("c", 0) or 0
+    return jsonify({
+        "fila_whatsapp": c(
+            "SELECT COUNT(*) c FROM cadencias WHERE tenant_id=? AND canal_whatsapp=1 "
+            "AND (whatsapp_aprovado_em IS NULL AND (whatsapp_status IS NULL OR whatsapp_status<>'rejeitado'))", tid),
+        "cadencias_hoje": c(
+            "SELECT COUNT(*) c FROM cadencias WHERE tenant_id=? AND DATE(data_acao)<=DATE('now')", tid),
+        "atividades_pendentes": c(
+            "SELECT COUNT(*) c FROM atividades WHERE tenant_id=? AND DATE(data)<=DATE('now')", tid),
+    })
+
+
 # ── SDR ──────────────────────────────────────────────────────────────────────
 
 # ── LEADS IMPORT ─────────────────────────────────────────────────────────────
