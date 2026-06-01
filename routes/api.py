@@ -535,6 +535,248 @@ def usuarios_list():
 
 # ── SDR ──────────────────────────────────────────────────────────────────────
 
+# ── LEADS IMPORT ─────────────────────────────────────────────────────────────
+
+@api_bp.post("/leads/importar/preview")
+@login_required
+def leads_preview():
+    """Preview de mapeamento de CSV/XLSX."""
+    arquivo = request.files.get("arquivo")
+    if not arquivo or not arquivo.filename:
+        return jsonify(error="Nenhum arquivo enviado."), 400
+
+    # Importa funções helper do app.py
+    from app import _EXTS_ACEITAS, _ler_arquivo, _auto_mapear
+    ext = arquivo.filename.lower().rsplit(".", 1)[-1] if "." in arquivo.filename else ""
+    if ext not in _EXTS_ACEITAS:
+        return jsonify(error=f"Formato .{ext} não suportado. Use .csv, .xlsx ou .xls."), 400
+    try:
+        raw = arquivo.stream.read()
+        colunas, linhas = _ler_arquivo(raw, arquivo.filename)
+        mapa = _auto_mapear(colunas)
+        return jsonify(colunas=colunas, preview=linhas[:10], mapeamento_sugerido=mapa)
+    except Exception as e:
+        return jsonify(error=str(e)), 500
+
+
+@api_bp.post("/leads/importar/confirmar")
+@login_required
+def leads_confirmar():
+    """Importa leads do arquivo com mapeamento informado."""
+    arquivo = request.files.get("arquivo")
+    if not arquivo or not arquivo.filename:
+        return jsonify(error="Arquivo não encontrado."), 400
+    from app import _ler_arquivo, _processar_linhas
+    mapa = {
+        "nome":     request.form.get("map_nome", ""),
+        "empresa":  request.form.get("map_empresa", ""),
+        "cargo":    request.form.get("map_cargo", ""),
+        "telefone": request.form.get("map_telefone", ""),
+        "email":    request.form.get("map_email", ""),
+        "cidade":   request.form.get("map_cidade", ""),
+    }
+    try:
+        raw = arquivo.stream.read()
+        _, linhas = _ler_arquivo(raw, arquivo.filename)
+        tid = session.get("tenant_id", 1)
+        importados, ignorados = _processar_linhas(linhas, mapa, tenant_id=tid)
+        return jsonify(
+            ok=True, importados=importados, ignorados=ignorados,
+            mensagem=f"{importados} lead(s) importado(s)." + (f" {ignorados} ignorado(s)." if ignorados else "")
+        )
+    except Exception as e:
+        return jsonify(error=str(e)), 500
+
+
+# ── CADÊNCIAS ────────────────────────────────────────────────────────────────
+
+@api_bp.post("/cadencias/iniciar")
+@login_required
+def cadencia_iniciar():
+    """Cria nova cadência para uma empresa."""
+    tid = session.get("tenant_id", 1)
+    data = request.get_json() or {}
+    empresa_id = data.get("empresa_id")
+    if not empresa_id:
+        return jsonify(error="empresa_id obrigatório"), 400
+
+    conn = database.get_connection()
+    emp = conn.execute("SELECT * FROM empresas WHERE id=? AND tenant_id=?", (empresa_id, tid)).fetchone()
+    if not emp:
+        return jsonify(error="Empresa não encontrada"), 404
+    emp_dict = dict(emp)
+
+    try:
+        conn.execute(
+            "INSERT INTO cadencias (empresa_id, empresa_nome, contato_whatsapp, contato_email, "
+            "etapa, data_acao, status, canal_email, canal_whatsapp, tenant_id) "
+            "VALUES (?,?,?,?,?,DATE('now'),?,?,?,?)",
+            (
+                empresa_id,
+                emp_dict["nome"],
+                data.get("whatsapp", emp_dict.get("telefone", "")),
+                data.get("email", emp_dict.get("email", "")),
+                data.get("etapa", "D0"),
+                "pendente",
+                1 if data.get("canal_email", True) else 0,
+                1 if data.get("canal_whatsapp", True) else 0,
+                tid,
+            )
+        )
+        conn.commit()
+        cid = conn.execute("SELECT last_insert_rowid() id").fetchone()["id"]
+        return jsonify(ok=True, id=cid, mensagem="Cadência iniciada"), 201
+    except Exception as e:
+        return jsonify(error=str(e)), 500
+
+
+@api_bp.post("/cadencias/<int:cid>/concluir")
+@login_required
+def cadencia_concluir(cid):
+    tid = session.get("tenant_id", 1)
+    conn = database.get_connection()
+    conn.execute("UPDATE cadencias SET status='concluida' WHERE id=? AND tenant_id=?", (cid, tid))
+    conn.commit()
+    return jsonify(ok=True)
+
+
+@api_bp.post("/cadencias/<int:cid>/cancelar")
+@login_required
+def cadencia_cancelar(cid):
+    tid = session.get("tenant_id", 1)
+    conn = database.get_connection()
+    conn.execute("UPDATE cadencias SET status='cancelada' WHERE id=? AND tenant_id=?", (cid, tid))
+    conn.commit()
+    return jsonify(ok=True)
+
+
+# ── WHATSAPP APPROVAL ────────────────────────────────────────────────────────
+
+@api_bp.post("/whatsapp/<int:cid>/aprovar")
+@login_required
+def whatsapp_aprovar(cid):
+    """Aprova mensagem WhatsApp da fila de aprovação."""
+    tid = session.get("tenant_id", 1)
+    conn = database.get_connection()
+    row = conn.execute("SELECT id FROM cadencias WHERE id=? AND tenant_id=?", (cid, tid)).fetchone()
+    if not row:
+        return jsonify(error="Não encontrada"), 404
+    conn.execute(
+        "UPDATE cadencias SET whatsapp_status='aprovado', whatsapp_aprovado_em=datetime('now') "
+        "WHERE id=? AND tenant_id=?", (cid, tid)
+    )
+    conn.commit()
+    return jsonify(ok=True)
+
+
+@api_bp.post("/whatsapp/<int:cid>/rejeitar")
+@login_required
+def whatsapp_rejeitar(cid):
+    """Rejeita mensagem WhatsApp."""
+    tid = session.get("tenant_id", 1)
+    conn = database.get_connection()
+    row = conn.execute("SELECT id FROM cadencias WHERE id=? AND tenant_id=?", (cid, tid)).fetchone()
+    if not row:
+        return jsonify(error="Não encontrada"), 404
+    conn.execute(
+        "UPDATE cadencias SET whatsapp_status='rejeitado' WHERE id=? AND tenant_id=?", (cid, tid)
+    )
+    conn.commit()
+    return jsonify(ok=True)
+
+
+# ── METAS ────────────────────────────────────────────────────────────────────
+
+@api_bp.get("/metas")
+@login_required
+def metas_list():
+    tid = session.get("tenant_id", 1)
+    conn = database.get_connection()
+    rows = conn.execute(
+        "SELECT * FROM metas WHERE tenant_id=? ORDER BY ativo DESC, id DESC", (tid,)
+    ).fetchall()
+    return jsonify(items=[dict(r) for r in rows])
+
+
+@api_bp.post("/metas")
+@login_required
+def meta_create():
+    tid = session.get("tenant_id", 1)
+    data = request.get_json() or {}
+    if not data.get("nome") or not data.get("valor_meta"):
+        return jsonify(error="nome e valor_meta obrigatórios"), 400
+    conn = database.get_connection()
+    # Desativa metas atuais se esta é a nova ativa
+    if data.get("ativo", 1):
+        conn.execute("UPDATE metas SET ativo=0 WHERE tenant_id=?", (tid,))
+    conn.execute(
+        "INSERT INTO metas (tenant_id, nome, valor_meta, data_inicio, data_fim, tipo, ativo) "
+        "VALUES (?,?,?,?,?,?,?)",
+        (tid, data["nome"], float(data["valor_meta"]),
+         data.get("data_inicio"), data.get("data_fim"),
+         data.get("tipo", "receita"), 1 if data.get("ativo", 1) else 0)
+    )
+    conn.commit()
+    mid = conn.execute("SELECT last_insert_rowid() id").fetchone()["id"]
+    return jsonify(ok=True, id=mid), 201
+
+
+@api_bp.put("/metas/<int:mid>")
+@login_required
+def meta_update(mid):
+    tid = session.get("tenant_id", 1)
+    data = request.get_json() or {}
+    conn = database.get_connection()
+    if not conn.execute("SELECT id FROM metas WHERE id=? AND tenant_id=?", (mid, tid)).fetchone():
+        return jsonify(error="Não encontrada"), 404
+    if data.get("ativo"):
+        conn.execute("UPDATE metas SET ativo=0 WHERE tenant_id=? AND id<>?", (tid, mid))
+    fields = ["nome", "valor_meta", "data_inicio", "data_fim", "tipo", "ativo"]
+    updates = {f: data[f] for f in fields if f in data}
+    if updates:
+        set_clause = ", ".join(f"{k}=?" for k in updates)
+        conn.execute(f"UPDATE metas SET {set_clause} WHERE id=? AND tenant_id=?",
+                     list(updates.values()) + [mid, tid])
+        conn.commit()
+    return jsonify(ok=True)
+
+
+# ── BULK OPERATIONS ──────────────────────────────────────────────────────────
+
+@api_bp.post("/empresas/excluir-lote")
+@login_required
+def empresas_excluir_lote():
+    tid = session.get("tenant_id", 1)
+    ids = (request.get_json() or {}).get("ids", [])
+    if not ids:
+        return jsonify(error="ids obrigatórios"), 400
+    conn = database.get_connection()
+    placeholders = ",".join("?" * len(ids))
+    conn.execute(
+        f"DELETE FROM empresas WHERE id IN ({placeholders}) AND tenant_id=?",
+        list(ids) + [tid]
+    )
+    conn.commit()
+    return jsonify(ok=True, excluidos=len(ids))
+
+
+@api_bp.post("/oportunidades/excluir-lote")
+@login_required
+def oportunidades_excluir_lote():
+    tid = session.get("tenant_id", 1)
+    ids = (request.get_json() or {}).get("ids", [])
+    if not ids:
+        return jsonify(error="ids obrigatórios"), 400
+    conn = database.get_connection()
+    placeholders = ",".join("?" * len(ids))
+    conn.execute(
+        f"DELETE FROM oportunidades WHERE id IN ({placeholders}) AND tenant_id=?",
+        list(ids) + [tid]
+    )
+    conn.commit()
+    return jsonify(ok=True, excluidos=len(ids))
+
+
 @api_bp.post("/sdr/rodar")
 @login_required
 def sdr_rodar():
