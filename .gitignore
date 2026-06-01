@@ -2,3 +2,5 @@
 escard.db
 __pycache__/
 *.pyc
+escard.db-shm
+escard.db-wal

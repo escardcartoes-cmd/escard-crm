@@ -24,6 +24,7 @@ from datetime import date
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, Response, session
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
 from flask_wtf.csrf import CSRFProtect
+from flask_cors import CORS
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 import database
@@ -51,6 +52,7 @@ from routes.auth import auth_bp
 from routes.empresas import empresas_bp
 from routes.contatos import contatos_bp
 from routes.sdr_evolutivo import sdr_evolutivo_bp
+from routes.api import api_bp
 
 from werkzeug.middleware.proxy_fix import ProxyFix
 
@@ -62,13 +64,16 @@ if not app.secret_key:
     app.secret_key = _sec.token_hex(32)
     print("[AVISO] SECRET_KEY não configurada - usando chave temporária")
 app.permanent_session_lifetime = timedelta(hours=8)
-app.config["SESSION_COOKIE_SECURE"] = True
+app.config["SESSION_COOKIE_SECURE"] = False   # proxy handles HTTPS in prod
 app.config["SESSION_COOKIE_HTTPONLY"] = True
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 app.config["JSON_AS_ASCII"] = False
 app.config["WTF_CSRF_ENABLED"] = True
 
 csrf = CSRFProtect(app)
+
+CORS(app, resources={r"/api/*": {"origins": ["http://localhost:3000", "http://localhost:3001"]}},
+     supports_credentials=True)
 
 limiter = Limiter(
     get_remote_address,
@@ -85,6 +90,8 @@ app.register_blueprint(auth_bp)
 app.register_blueprint(empresas_bp)
 app.register_blueprint(contatos_bp)
 app.register_blueprint(sdr_evolutivo_bp)
+app.register_blueprint(api_bp)
+csrf.exempt(api_bp)
 
 @app.context_processor
 def _inject_cadencias_badge():

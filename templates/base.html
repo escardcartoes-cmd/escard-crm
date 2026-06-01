@@ -2,13 +2,20 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="csrf-token" content="{{ csrf_token() }}">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="{{ tenant.nome_plataforma if tenant else 'Krylo CRM' }}">
+  <meta name="theme-color" content="#2563EB">
   <title>{% block title %}{{ tenant.nome_plataforma if tenant else 'Krylo CRM' }}{% endblock %}</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" crossorigin="anonymous">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  {% block extra_css %}{% endblock %}
   <style>
 /* ============================================
    KRYLO DESIGN SYSTEM 2026
@@ -313,10 +320,16 @@ body::after {
 /* MAIN CONTENT */
 .main-content, .main {
   margin-left: var(--sidebar-width);
-  flex: 1;
+  width: calc(100vw - var(--sidebar-width));
   min-height: 100vh;
   display: flex;
   flex-direction: column;
+}
+@media (max-width: 768px) {
+  .main-content, .main {
+    margin-left: 0;
+    width: 100vw;
+  }
 }
 
 /* TOPBAR */
@@ -361,9 +374,50 @@ body::after {
 .page-content {
   flex: 1;
   padding: var(--space-6);
-  max-width: 1400px;
   width: 100%;
-  margin: 0 auto;
+}
+
+/* HAMBURGER — só aparece no mobile */
+.hamburger-btn {
+  display: none;
+  align-items: center; justify-content: center;
+  width: 36px; height: 36px;
+  background: none; border: none; cursor: pointer;
+  color: var(--text-primary); font-size: 20px;
+  border-radius: var(--radius-sm); flex-shrink: 0;
+}
+.hamburger-btn:hover { background: var(--glass-hover); }
+
+/* SIDEBAR BACKDROP (mobile) */
+.sidebar-backdrop {
+  display: none;
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.45);
+  z-index: 199;
+}
+.sidebar-backdrop.visible { display: block; }
+
+/* ── RESPONSIVE ───────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .sidebar {
+    position: fixed;
+    left: calc(-1 * var(--sidebar-width));
+    top: 0; height: 100vh;
+    z-index: 200;
+    transition: left 0.25s ease;
+  }
+  .sidebar.open { left: 0; }
+  .main-content, .main { margin-left: 0; }
+  .hamburger-btn { display: flex; }
+  .page-content { padding: var(--space-4); }
+  .topbar { padding: 0 var(--space-4); }
+  .topbar-search { display: none; }
+}
+
+@media (max-width: 480px) {
+  .page-content { padding: var(--space-3); }
+  .page-title { font-size: 18px; }
+  .metric-card { padding: var(--space-3); }
 }
 
 /* PAGE HEADER */
@@ -1266,8 +1320,12 @@ tbody tr:hover { background: var(--color-primary-subtle); }
   </aside>
 
   <!-- ── Main ─────────────────────────────────────────────────────────────── -->
+  <!-- Backdrop mobile -->
+  <div class="sidebar-backdrop" id="sidebarBackdrop" onclick="closeSidebar()"></div>
+
   <div class="main-content">
     <header class="topbar">
+      <button class="hamburger-btn" id="hamburgerBtn" onclick="toggleSidebar()" aria-label="Menu">☰</button>
       <span class="topbar-title">
         {% block topbar_title %}{% block page_title %}{{ tenant.nome_plataforma if tenant else "Krylo CRM" }}{% endblock %}{% endblock %}
       </span>
@@ -1462,6 +1520,24 @@ function showToast(msg, type) {
 }
 </script>
 
+<script>
+function toggleSidebar() {
+  var s = document.querySelector('.sidebar');
+  var b = document.getElementById('sidebarBackdrop');
+  s.classList.toggle('open');
+  b.classList.toggle('visible');
+}
+function closeSidebar() {
+  document.querySelector('.sidebar').classList.remove('open');
+  document.getElementById('sidebarBackdrop').classList.remove('visible');
+}
+// Fecha sidebar ao navegar (mobile)
+document.querySelectorAll('.nav-item, .nav-link').forEach(function(el) {
+  el.addEventListener('click', function() {
+    if (window.innerWidth <= 768) closeSidebar();
+  });
+});
+</script>
 <script src="{{ url_for('static', filename='js/app.js') }}?v=20260516"></script>
 {% block scripts %}{% endblock %}
 

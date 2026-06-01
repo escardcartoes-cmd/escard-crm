@@ -1,22 +1,34 @@
 {
   "rotas": [
     {
-      "path": "/login",
-      "methods": [
-        "GET",
-        "POST"
-      ]
-    },
-    {
-      "path": "/logout",
-      "methods": [
-        "GET"
-      ]
-    },
-    {
       "path": "/",
       "methods": [
         "GET"
+      ]
+    },
+    {
+      "path": "/dashboard",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "path": "/v2/dashboard",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "path": "/v2/sdr",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "path": "/metas/configurar",
+      "methods": [
+        "GET",
+        "POST"
       ]
     },
     {
@@ -125,6 +137,24 @@
       "path": "/oportunidades/radar",
       "methods": [
         "GET"
+      ]
+    },
+    {
+      "path": "/pipeline",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "path": "/pipeline/mover",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "path": "/pipeline/proxima-acao/<int:op_id>",
+      "methods": [
+        "POST"
       ]
     },
     {
@@ -255,6 +285,25 @@
       ]
     },
     {
+      "path": "/cron/executar-sdr",
+      "methods": [
+        "GET",
+        "POST"
+      ]
+    },
+    {
+      "path": "/cron/backup",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "path": "/brevo/webhook",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
       "path": "/ai/leads/pontuar/<int:id>",
       "methods": [
         "POST"
@@ -327,31 +376,25 @@
       ]
     },
     {
-      "path": "/radar/buscar",
+      "path": "/radar/rodar",
       "methods": [
         "POST"
       ]
     },
     {
-      "path": "/radar/<int:id>/lido",
+      "path": "/radar/marcar-lido/<int:alerta_id>",
       "methods": [
         "POST"
       ]
     },
     {
-      "path": "/radar/<int:id>",
-      "methods": [
-        "DELETE"
-      ]
-    },
-    {
-      "path": "/radar/analisar-oportunidades",
+      "path": "/radar/arquivar/<int:alerta_id>",
       "methods": [
         "POST"
       ]
     },
     {
-      "path": "/radar/<int:id>/mensagem",
+      "path": "/radar/config/salvar",
       "methods": [
         "POST"
       ]
@@ -715,6 +758,30 @@
       ]
     },
     {
+      "path": "/sdr/fila-aprovacao",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "path": "/sdr/aprovar/<int:cad_id>",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "path": "/sdr/rejeitar/<int:cad_id>",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "path": "/sdr/fila-whatsapp",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
       "path": "/admin",
       "methods": [
         "GET"
@@ -733,7 +800,44 @@
       ]
     },
     {
+      "path": "/admin/tenant/sair",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
       "path": "/admin/tenant/<int:tenant_id>/toggle",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "path": "/admin/tenant/<int:tenant_id>/excluir",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "path": "/admin/importar-rf",
+      "methods": [
+        "GET",
+        "POST"
+      ]
+    },
+    {
+      "path": "/admin/importar-rf/status",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "path": "/admin/limpar-cache-dashboard",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "path": "/admin/enriquecer-cnae",
       "methods": [
         "POST"
       ]
@@ -748,6 +852,42 @@
       "path": "/setup/salvar",
       "methods": [
         "POST"
+      ]
+    },
+    {
+      "path": "/setup/step1",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "path": "/setup/step2",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "path": "/setup/step3",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "path": "/setup/step4",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "path": "/krylo",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "path": "/planos",
+      "methods": [
+        "GET"
       ]
     },
     {
@@ -787,13 +927,14 @@
       ]
     },
     {
-      "path": "/dev/ping",
+      "path": "/cqa/toggle-autonomo",
       "methods": [
-        "GET"
+        "POST"
       ]
     }
   ],
   "templates": [
+    "admin_importar_rf.html",
     "admin_tenants.html",
     "ajuda.html",
     "atividades/form.html",
@@ -813,21 +954,34 @@
     "empresas/detalhe.html",
     "empresas/form.html",
     "empresas/lista.html",
+    "erro.html",
     "expansao/index.html",
+    "fila_whatsapp.html",
     "financeiro.html",
     "ia_painel.html",
+    "krylo_landing.html",
     "leads/busca_automatica.html",
     "leads/importar.html",
     "leads/prospeccao.html",
     "login.html",
+    "login_2fa.html",
+    "metas_configurar.html",
+    "nova_senha.html",
     "oportunidades/detalhe.html",
     "oportunidades/form.html",
     "oportunidades/kanban.html",
+    "pipeline.html",
+    "planos.html",
     "portal_cliente.html",
     "portal_erro.html",
-    "radar/index.html",
+    "radar.html",
     "recebiveis/index.html",
+    "recuperar_senha.html",
     "relatorio_semanal.html",
+    "sdr_evolutivo/configurar.html",
+    "sdr_evolutivo/dashboard.html",
+    "sdr_evolutivo/radar.html",
+    "sdr_fila_aprovacao.html",
     "sdr_painel.html",
     "sdr_relatorio.html",
     "setup_wizard.html",
@@ -843,6 +997,7 @@
     "cnaes",
     "cobranca",
     "contato",
+    "email_service",
     "empresa",
     "expansao",
     "ia_config",
@@ -855,6 +1010,7 @@
     "radar",
     "recebivel",
     "relatorio",
+    "sdr_evolutivo",
     "tenant",
     "usuario"
   ],
@@ -865,23 +1021,32 @@
     "cnae_cache",
     "contatos",
     "cqa_alertas",
+    "cqa_config",
     "cqa_resultados",
     "documentos_ia",
+    "email_fila",
     "empresa_config",
     "empresas",
     "ia_config",
     "kia_historico",
+    "metas",
     "oportunidades",
     "portal_acessos",
     "produtos_krylo",
     "prospeccao",
     "prospeccao_automatica",
+    "radar_alertas",
     "radar_analises",
+    "radar_config",
+    "radar_insights",
+    "radar_intent",
     "radar_mercado",
     "ramos_atividade",
     "recebiveis_krylo",
     "relatorios_cobranca",
+    "rf_empresas",
     "sdr_config",
+    "sdr_evolutivo_config",
     "sdr_execucoes",
     "sdr_log_ao_vivo",
     "sdr_sessoes",
