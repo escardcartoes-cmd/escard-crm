@@ -683,6 +683,29 @@ def tenant_update():
     return jsonify(dict(row))
 
 
+# ── IA ───────────────────────────────────────────────────────────────────────
+
+@api_bp.post("/ia/chat")
+@login_required
+def api_ia_chat():
+    """Wrapper para /ia/chat fora do CSRF."""
+    try:
+        import models.ia_config as ia_mod
+        body = request.get_json() or {}
+        mensagem = (body.get("mensagem") or "").strip()
+        historico = body.get("historico") or []
+        contexto = (body.get("contexto") or "").strip()
+        if not mensagem:
+            return jsonify(error="Mensagem vazia"), 400
+        conn = database.get_connection()
+        tid = session.get("tenant_id", 1)
+        resposta = ia_mod.chat_com_ia(conn, mensagem, historico, contexto, tid)
+        return jsonify(resposta=resposta)
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        return jsonify(error=str(e)), 500
+
+
 # ── SIDEBAR COUNTS ───────────────────────────────────────────────────────────
 
 @api_bp.get("/sidebar/counts")
