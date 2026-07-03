@@ -125,8 +125,10 @@ csrf.exempt(api_bp)
 
 # Stricter rate limits on sensitive endpoints (anti brute-force / abuse).
 for _endpoint, _rule in [
-    ("api.auth_login",       "10 per minute; 30 per hour"),
-    ("api.api_ia_chat",      "60 per hour"),
+    ("api.auth_login",           "10 per minute; 30 per hour"),
+    ("api.auth_forgot_password", "3 per hour; 10 per day"),
+    ("api.auth_reset_password",  "5 per hour; 20 per day"),
+    ("api.api_ia_chat",          "60 per hour"),
     ("api.leads_importar_confirmar", "20 per hour"),
 ]:
     _fn = app.view_functions.get(_endpoint)

@@ -66,6 +66,38 @@ def auth_logout():
     return jsonify(ok=True)
 
 
+@api_bp.post("/auth/forgot-password")
+def auth_forgot_password():
+    """Kick off password recovery. Always returns ok — never leaks account existence."""
+    data = request.get_json(silent=True) or {}
+    contato = (data.get("contato") or "").strip()
+    if not contato:
+        return jsonify(error="Informe e-mail ou telefone."), 400
+    try:
+        user_model.iniciar_recuperacao_senha(contato)
+    except Exception:
+        current_app.logger.exception("forgot-password failed")
+    # Uniform response prevents enumeration
+    return jsonify(ok=True, message="Se a conta existe, um código foi enviado.")
+
+
+@api_bp.post("/auth/reset-password")
+def auth_reset_password():
+    """Complete password recovery with the code delivered to the user."""
+    data = request.get_json(silent=True) or {}
+    email = (data.get("email") or "").strip()
+    codigo = (data.get("codigo") or "").strip()
+    nova_senha = data.get("nova_senha") or ""
+    if not (email and codigo and nova_senha):
+        return jsonify(error="Campos obrigatórios: email, codigo, nova_senha"), 400
+    if len(nova_senha) < 6:
+        return jsonify(error="Senha deve ter pelo menos 6 caracteres."), 400
+    ok, msg = user_model.verificar_recuperacao_e_trocar_senha(email, codigo, nova_senha)
+    if not ok:
+        return jsonify(error=msg), 400
+    return jsonify(ok=True, message="Senha alterada. Faça login com a nova senha.")
+
+
 @api_bp.get("/me")
 @login_required
 def me():
