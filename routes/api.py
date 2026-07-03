@@ -2,7 +2,7 @@
 REST API — consumed by the Next.js frontend.
 All routes return JSON. CSRF exempt (protected by CORS + SameSite cookies).
 """
-from flask import Blueprint, jsonify, request, session
+from flask import Blueprint, jsonify, request, session, current_app
 from flask_login import login_user, logout_user, login_required, current_user
 import models.usuario as user_model
 import models.empresa as emp_model
@@ -15,6 +15,11 @@ import models.tenant as tenant_model
 import database
 
 api_bp = Blueprint("api", __name__, url_prefix="/api")
+
+
+def _login_rate_limit():
+    """Per-endpoint stricter limit for authentication attempts (anti brute-force)."""
+    return "10 per minute; 30 per hour"
 
 
 def _user_dict(u) -> dict:
@@ -214,11 +219,13 @@ def empresa_create():
         if not data.get(f):
             return jsonify(error=f"Campo obrigatório: {f}"), 400
     conn = database.get_connection()
+    # Unique fields must be NULL when empty (empty string violates UNIQUE across rows)
+    cnpj_val = (data.get("cnpj") or "").strip() or None
     conn.execute(
         "INSERT INTO empresas (nome, cnpj, segmento, porte, status, telefone, email, cidade, estado, "
         "tipo_cartao, nome_private_label, num_funcionarios, valor_mensal, produtos_ativos, cliente_ativo, tenant_id) "
         "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-        (data["nome"], data.get("cnpj",""), data.get("segmento",""), data.get("porte",""),
+        (data["nome"], cnpj_val, data.get("segmento",""), data.get("porte",""),
          data.get("status","prospect"), data.get("telefone",""), data.get("email",""),
          data.get("cidade",""), data.get("estado",""),
          data.get("tipo_cartao",""), data.get("nome_private_label",""),
@@ -244,6 +251,9 @@ def empresa_update(eid):
     updates = {f: data[f] for f in fields if f in data}
     if not updates:
         return jsonify(error="Nenhum campo para atualizar"), 400
+    # Empty CNPJ must be NULL (UNIQUE constraint)
+    if "cnpj" in updates:
+        updates["cnpj"] = (updates["cnpj"] or "").strip() or None
     set_clause = ", ".join(f"{k}=?" for k in updates)
     conn.execute(f"UPDATE empresas SET {set_clause} WHERE id=? AND tenant_id=?",
                  list(updates.values()) + [eid, tid])
@@ -685,6 +695,37 @@ def tenant_update():
 
 # ── IA ───────────────────────────────────────────────────────────────────────
 
+def _build_crm_snapshot(conn, tid: int) -> str:
+    """Live snapshot of the tenant's CRM state, injected into the IA system prompt."""
+    def scalar(sql, *params):
+        row = conn.execute(sql, params).fetchone()
+        if row is None:
+            return 0
+        return list(dict(row).values())[0] or 0
+
+    stats = {
+        "empresas_total":     scalar("SELECT COUNT(*) c FROM empresas WHERE tenant_id=?", tid),
+        "empresas_clientes":  scalar("SELECT COUNT(*) c FROM empresas WHERE tenant_id=? AND status='cliente'", tid),
+        "empresas_prospects": scalar("SELECT COUNT(*) c FROM empresas WHERE tenant_id=? AND status='prospect'", tid),
+        "contatos":           scalar("SELECT COUNT(*) c FROM contatos WHERE tenant_id=?", tid),
+        "oportunidades_ativas": scalar(
+            "SELECT COUNT(*) c FROM oportunidades WHERE tenant_id=? AND etapa NOT IN ('fechado','perdido','fechado_ganho','fechado_perdido')", tid),
+        "pipeline_valor": scalar(
+            "SELECT COALESCE(SUM(valor_estimado),0) v FROM oportunidades WHERE tenant_id=? AND etapa NOT IN ('fechado','perdido','fechado_ganho','fechado_perdido')", tid),
+        "cadencias_ativas": scalar(
+            "SELECT COUNT(*) c FROM cadencias WHERE tenant_id=? AND status='pendente'", tid),
+    }
+    return (
+        "SNAPSHOT DO CRM (dados reais do tenant, use como fonte de verdade):\n"
+        f"- Empresas cadastradas: {stats['empresas_total']} "
+        f"(clientes: {stats['empresas_clientes']}, prospects: {stats['empresas_prospects']})\n"
+        f"- Contatos: {stats['contatos']}\n"
+        f"- Oportunidades ativas: {stats['oportunidades_ativas']} "
+        f"(valor total no pipeline: R$ {stats['pipeline_valor']:,.2f})\n"
+        f"- Cadências pendentes: {stats['cadencias_ativas']}\n"
+    )
+
+
 @api_bp.post("/ia/chat")
 @login_required
 def api_ia_chat():
@@ -694,11 +735,13 @@ def api_ia_chat():
         body = request.get_json() or {}
         mensagem = (body.get("mensagem") or "").strip()
         historico = body.get("historico") or []
-        contexto = (body.get("contexto") or "").strip()
+        contexto_extra = (body.get("contexto") or "").strip()
         if not mensagem:
             return jsonify(error="Mensagem vazia"), 400
         conn = database.get_connection()
         tid = session.get("tenant_id", 1)
+        snapshot = _build_crm_snapshot(conn, tid)
+        contexto = snapshot + ("\n\n" + contexto_extra if contexto_extra else "")
         resposta = ia_mod.chat_com_ia(conn, mensagem, historico, contexto, tid)
         return jsonify(resposta=resposta)
     except Exception as e:

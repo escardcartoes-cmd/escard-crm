@@ -48,6 +48,8 @@ import models.planos as planos_model
 from models.usuario import require_perfil, PERFIS, PERFIL_LABELS
 import ai
 
+# Legacy Jinja blueprints — kept while the templates/ folder is still referenced by
+# app.py's own route handlers. Purging them is a separate refactor task.
 from routes.auth import auth_bp
 from routes.empresas import empresas_bp
 from routes.contatos import contatos_bp
@@ -58,28 +60,56 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 
 app = Flask(__name__)
 app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
+IS_PROD = bool(os.environ.get("RAILWAY_ENVIRONMENT") or os.environ.get("VERCEL") or os.environ.get("PRODUCTION"))
+
 app.secret_key = os.environ.get("SECRET_KEY")
 if not app.secret_key:
+    if IS_PROD:
+        raise RuntimeError("SECRET_KEY environment variable must be set in production")
     import secrets as _sec
     app.secret_key = _sec.token_hex(32)
-    print("[AVISO] SECRET_KEY não configurada - usando chave temporária")
+    print("[AVISO] SECRET_KEY não configurada - usando chave temporária (dev only)")
+
 app.permanent_session_lifetime = timedelta(hours=8)
-app.config["SESSION_COOKIE_SECURE"] = False   # proxy handles HTTPS in prod
+app.config["SESSION_COOKIE_SECURE"] = IS_PROD   # HTTPS-only cookies in prod
 app.config["SESSION_COOKIE_HTTPONLY"] = True
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 app.config["JSON_AS_ASCII"] = False
 app.config["WTF_CSRF_ENABLED"] = True
+app.config["MAX_CONTENT_LENGTH"] = 16 * 1024 * 1024  # 16MB upload cap
 
 csrf = CSRFProtect(app)
 
-CORS(app, resources={r"/api/*": {"origins": ["http://localhost:3000", "http://localhost:3001"]}},
-     supports_credentials=True)
+# CORS: allow same-origin + explicit prod origins. Never wildcard with credentials.
+_cors_origins = [
+    "http://localhost:3000",
+    "http://localhost:3001",
+    "https://krylo-crm.vercel.app",
+    "https://www.krylo.com.br",
+    "https://krylo.com.br",
+]
+_extra = os.environ.get("CORS_EXTRA_ORIGINS", "")
+if _extra:
+    _cors_origins.extend([o.strip() for o in _extra.split(",") if o.strip()])
+CORS(app, resources={r"/api/*": {"origins": _cors_origins}}, supports_credentials=True)
 
 limiter = Limiter(
     get_remote_address,
     app=app,
-    default_limits=["200 per day", "50 per hour"]
+    default_limits=["2000 per day", "300 per hour"],
+    headers_enabled=True,
 )
+
+# Security headers on every response.
+@app.after_request
+def _security_headers(resp):
+    resp.headers.setdefault("X-Content-Type-Options", "nosniff")
+    resp.headers.setdefault("X-Frame-Options", "DENY")
+    resp.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    resp.headers.setdefault("Permissions-Policy", "geolocation=(), microphone=(), camera=()")
+    if IS_PROD:
+        resp.headers.setdefault("Strict-Transport-Security", "max-age=63072000; includeSubDomains; preload")
+    return resp
 
 login_manager = LoginManager(app)
 login_manager.login_view = "auth.login"
@@ -92,6 +122,16 @@ app.register_blueprint(contatos_bp)
 app.register_blueprint(sdr_evolutivo_bp)
 app.register_blueprint(api_bp)
 csrf.exempt(api_bp)
+
+# Stricter rate limits on sensitive endpoints (anti brute-force / abuse).
+for _endpoint, _rule in [
+    ("api.auth_login",       "10 per minute; 30 per hour"),
+    ("api.api_ia_chat",      "60 per hour"),
+    ("api.leads_importar_confirmar", "20 per hour"),
+]:
+    _fn = app.view_functions.get(_endpoint)
+    if _fn:
+        app.view_functions[_endpoint] = limiter.limit(_rule)(_fn)
 
 @app.context_processor
 def _inject_cadencias_badge():
@@ -492,9 +532,15 @@ def dashboard():
 
         # QUERY 6: cadências paradas há 3+ dias (real-time — alertas operacionais)
         limite_3d = (date.today() - timedelta(days=3)).isoformat()
-        cad_paradas = [dict(r) for r in conn.execute("""
+        # Postgres uses EXTRACT/NOW(); SQLite uses julianday. Detect by DB driver.
+        is_pg = bool(database.DATABASE_URL)
+        if is_pg:
+            dias_expr = "CAST(EXTRACT(EPOCH FROM (NOW() - CAST(data_acao AS TIMESTAMP)))/86400 AS INTEGER)"
+        else:
+            dias_expr = "CAST(julianday('now') - julianday(data_acao) AS INTEGER)"
+        cad_paradas = [dict(r) for r in conn.execute(f"""
             SELECT empresa_nome, data_acao, etapa, id,
-                   CAST(EXTRACT(EPOCH FROM (NOW() - CAST(data_acao AS TIMESTAMP)))/86400 AS INTEGER) AS dias_parada
+                   {dias_expr} AS dias_parada
             FROM cadencias
             WHERE tenant_id=? AND status='pendente' AND data_acao < ?
             ORDER BY data_acao ASC LIMIT 10
@@ -630,8 +676,16 @@ def erro_404(e):
 
 @app.errorhandler(Exception)
 def erro_geral(e):
+    from werkzeug.exceptions import HTTPException
+    # Let Flask handle HTTP exceptions (4xx, rate-limit 429, etc.) with their real status
+    if isinstance(e, HTTPException):
+        if request.path.startswith('/api/') or request.is_json:
+            return jsonify(error=e.description), e.code
+        return e
     import traceback
-    print(f"[ERRO GERAL] {traceback.format_exc()}")
+    app.logger.exception("Unhandled exception")
+    if not IS_PROD:
+        print(f"[ERRO GERAL] {traceback.format_exc()}")
     if request.path.startswith('/api/') or request.is_json:
         return jsonify({"error": "Erro interno do servidor"}), 500
     try:

@@ -1,0 +1,45 @@
+name: Deploy (Railway prod)
+
+# Railway auto-deploys on push to master via its GitHub integration.
+# This workflow is a manual escape hatch + gate for CI success.
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    branches: [master, main]
+    types: [completed]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-prod
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Railway CLI
+        run: |
+          curl -fsSL https://railway.com/install.sh | sh
+          echo "$HOME/.railway/bin" >> $GITHUB_PATH
+
+      - name: Deploy
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: railway up --service escard-crm --detach
+
+      - name: Smoke test
+        run: |
+          sleep 30
+          curl --fail --retry 5 --retry-delay 10 https://web-production-7599a.up.railway.app/api/me -o /dev/null || {
+            echo "Health check failed (expected 401 without auth)";
+            code=$(curl -s -o /dev/null -w "%{http_code}" https://web-production-7599a.up.railway.app/api/me);
+            [ "$code" = "401" ] || exit 1;
+          }

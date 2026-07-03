@@ -1,0 +1,68 @@
+name: CI
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+    branches: [master, main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install ruff pytest pip-audit
+
+      - name: Lint (ruff)
+        run: ruff check . --output-format=github
+        continue-on-error: true
+
+      - name: Static syntax check
+        run: python -m compileall -q .
+
+      - name: Boot check (import app)
+        env:
+          SECRET_KEY: ci-dummy-secret-for-boot-check-only
+          DATABASE_URL: ""
+        run: python -c "import app; print('app imports ok')"
+
+      - name: Pytest
+        env:
+          SECRET_KEY: ci-dummy-secret-for-tests
+          SCHEDULER_OFF: "1"
+        run: pytest tests/ -v --tb=short
+
+      - name: pip-audit (vulnerable deps)
+        run: pip-audit --strict --disable-pip
+        continue-on-error: true
+
+  security:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Detect leaked secrets
+        uses: trufflesecurity/trufflehog@main
+        with:
+          path: ./
+          base: ${{ github.event.repository.default_branch }}
+          extra_args: --only-verified
+
+      - name: Bandit (Python security linter)
+        run: |
+          python -m pip install bandit
+          bandit -r . -x tests,venv,.venv,migrations -ll
+        continue-on-error: true
