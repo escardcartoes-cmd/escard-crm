@@ -17,6 +17,7 @@ logging.basicConfig(
     format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     datefmt="%Y-%m-%dT%H:%M:%S",
 )
+logger = logging.getLogger("krylo")
 
 from apscheduler.schedulers.background import BackgroundScheduler
 
@@ -68,8 +69,7 @@ if not app.secret_key:
         raise RuntimeError("SECRET_KEY environment variable must be set in production")
     import secrets as _sec
     app.secret_key = _sec.token_hex(32)
-    print("[AVISO] SECRET_KEY não configurada - usando chave temporária (dev only)")
-
+    logger.info("[AVISO] SECRET_KEY não configurada - usando chave temporária (dev only)")
 app.permanent_session_lifetime = timedelta(hours=8)
 app.config["SESSION_COOKIE_SECURE"] = IS_PROD   # HTTPS-only cookies in prod
 app.config["SESSION_COOKIE_HTTPONLY"] = True
@@ -267,14 +267,11 @@ _START_TIME = str(time.time())
 try:
     database.init_db()
 except Exception as _e:
-    print(f"[STARTUP] init_db error (non-fatal): {_e}")
-
+    logger.error(f"[STARTUP] init_db error (non-fatal): {_e}")
 try:
     user_model.criar_admin_se_necessario()
 except Exception as _e:
-    print(f"[STARTUP] criar_admin error (non-fatal): {_e}")
-
-
+    logger.error(f"[STARTUP] criar_admin error (non-fatal): {_e}")
 # ── APScheduler — SDR Autônomo ────────────────────────────────────────────────
 
 def _job_prospeccao_autonoma():
@@ -288,7 +285,7 @@ def _job_prospeccao_autonoma():
         ).fetchall()
         _c.close()
     except Exception as _e:
-        print(f"[SCHEDULER] Erro ao listar tenants SDR: {_e}")
+        logger.error(f"[SCHEDULER] Erro ao listar tenants SDR: {_e}")
         return
 
     for _trow in _tenant_rows:
@@ -299,7 +296,7 @@ def _job_prospeccao_autonoma():
             _db_sdr = database.get_new_db_connection()
             _cfg = get_sdr_config(_db_sdr, tenant_id=_tid)
             if not _cfg.get("ativo", 1):
-                print(f"[SCHEDULER] tenant {_tid}: SDR pausado, pulando")
+                logger.info(f"[SCHEDULER] tenant {_tid}: SDR pausado, pulando")
                 _db_sdr.close(); _db_sdr = None
                 continue
             _hora = _dt2.now(_tz(_td(hours=-3))).hour
@@ -307,13 +304,13 @@ def _job_prospeccao_autonoma():
                 _hora < int(_cfg.get("horario_inicio") or 8) or
                 _hora >= int(_cfg.get("horario_fim") or 18)
             ):
-                print(f"[SCHEDULER] tenant {_tid}: Fora do horário ({_hora}h), pulando")
+                logger.info(f"[SCHEDULER] tenant {_tid}: Fora do horário ({_hora}h), pulando")
                 _db_sdr.close(); _db_sdr = None
                 continue
             resultado = rodar_prospeccao_autonoma(_db_sdr, config_override=_cfg)
-            print(f"[SCHEDULER] tenant {_tid} resultado: {resultado}")
+            logger.info(f"[SCHEDULER] tenant {_tid} resultado: {resultado}")
         except Exception as e:
-            print(f"[SCHEDULER] tenant {_tid} ERRO: {e}")
+            logger.error(f"[SCHEDULER] tenant {_tid} ERRO: {e}")
             _tb.print_exc()
             if _db_sdr:
                 try: _db_sdr.rollback()
@@ -336,9 +333,7 @@ def _job_cqa():
         from scripts.run_cqa import rodar_cqa_completo
         rodar_cqa_completo(aplicar_fixes=True, verbose=False)
     except Exception as _e:
-        print(f"[SCHEDULER CQA] Erro: {_e}")
-
-
+        logger.error(f"[SCHEDULER CQA] Erro: {_e}")
 def _job_processar_cadencias():
     try:
         from models.cadencia import processar_cadencias_pendentes, processar_fila_email
@@ -350,14 +345,12 @@ def _job_processar_cadencias():
         for _tid in _tids:
             n = processar_cadencias_pendentes(tenant_id=_tid)
             if n:
-                print(f"[SCHEDULER] tenant {_tid}: Cadências processadas: {n}")
+                logger.info(f"[SCHEDULER] tenant {_tid}: Cadências processadas: {n}")
             e = processar_fila_email(tenant_id=_tid)
             if e:
-                print(f"[SCHEDULER] tenant {_tid}: Emails da fila enviados: {e}")
+                logger.info(f"[SCHEDULER] tenant {_tid}: Emails da fila enviados: {e}")
     except Exception as _e:
-        print(f"[SCHEDULER CADENCIAS] Erro: {_e}")
-
-
+        logger.error(f"[SCHEDULER CADENCIAS] Erro: {_e}")
 scheduler = BackgroundScheduler(timezone="America/Sao_Paulo")
 scheduler.add_job(
     func=_job_prospeccao_autonoma,
@@ -646,7 +639,7 @@ def sdr_v2():
 @app.errorhandler(500)
 def erro_500(e):
     import traceback
-    print(f"[500] {traceback.format_exc()}")
+    logger.error(f"[500] {traceback.format_exc()}")
     if request.path.startswith('/api/') or request.is_json:
         return jsonify({"error": "Erro interno do servidor"}), 500
     try:
@@ -687,7 +680,7 @@ def erro_geral(e):
     import traceback
     app.logger.exception("Unhandled exception")
     if not IS_PROD:
-        print(f"[ERRO GERAL] {traceback.format_exc()}")
+        logger.error(f"[ERRO GERAL] {traceback.format_exc()}")
     if request.path.startswith('/api/') or request.is_json:
         return jsonify({"error": "Erro interno do servidor"}), 500
     try:
@@ -1760,9 +1753,9 @@ def prospeccao_autonoma_rodar():
         try:
             _db = database.get_new_db_connection()
             resultado = rodar_prospeccao_autonoma(_db)
-            print(f"[SDR-MANUAL] resultado: {resultado}")
+            logger.info(f"[SDR-MANUAL] resultado: {resultado}")
         except Exception as e:
-            print(f"[SDR-MANUAL] ERRO: {e}")
+            logger.error(f"[SDR-MANUAL] ERRO: {e}")
             traceback.print_exc()
             if _db:
                 try: _db.rollback()
@@ -3328,7 +3321,7 @@ def central_ia_chat():
 
         import anthropic as _ant
         _key = os.getenv("ANTHROPIC_API_KEY") or ""
-        print(f"[DEBUG-IA] chave presente: {bool(_key)} | primeiros 10 chars: {_key[:10]!r}", flush=True)
+        logger.info(f"[DEBUG-IA] chave presente: {bool(_key)} | primeiros 10 chars: {_key[:10]!r}", flush=True)
         logger.info("[IA DIAG] ANTHROPIC_API_KEY presente=%s tamanho=%d", bool(_key), len(_key))
         client   = _ant.Anthropic(api_key=_key if _key else None)
         response = client.messages.create(
@@ -4028,7 +4021,7 @@ def admin_tenant_novo():
                     ),
                 )
             except Exception as _e_mail:
-                print(f"[ONBOARDING] Email boas-vindas falhou: {_e_mail}")
+                logger.info(f"[ONBOARDING] Email boas-vindas falhou: {_e_mail}")
     except Exception as e:
         flash(f"Erro ao criar tenant: {e}", "danger")
     return redirect(url_for("admin_tenants"))
@@ -4132,13 +4125,12 @@ def admin_importar_rf():
                     if resultado == 0:
                         raise Exception("RF retornou 0 empresas — servidores indisponíveis")
                 except Exception as e:
-                    print(f"[RF] Fallback BrasilAPI: {e}")
+                    logger.info(f"[RF] Fallback BrasilAPI: {e}")
                     try:
                         from scripts.importar_receita_federal import importar_via_brasilapi
                         importar_via_brasilapi(uf_filtro=uf, limite=limite)
                     except Exception as e2:
-                        print(f"[RF] Erro no fallback BrasilAPI: {e2}")
-
+                        logger.error(f"[RF] Erro no fallback BrasilAPI: {e2}")
             t = threading.Thread(target=_importar, daemon=True)
             t.start()
             return jsonify({
@@ -4540,7 +4532,7 @@ def cqa_rodar():
             from scripts.run_cqa import rodar_cqa_completo
             rodar_cqa_completo(aplicar_fixes=False, verbose=False)
         except Exception as e:
-            print(f"[CQA] Erro ao rodar: {e}")
+            logger.error(f"[CQA] Erro ao rodar: {e}")
     _th.Thread(target=_run, daemon=True).start()
     flash("CQA iniciado em background. Aguarde alguns segundos e atualize a página.", "success")
     return redirect(url_for("cqa_dashboard"))
@@ -4574,7 +4566,7 @@ def cqa_fix_all():
             from scripts.run_cqa import rodar_cqa_completo
             rodar_cqa_completo(aplicar_fixes=True, verbose=False)
         except Exception as e:
-            print(f"[CQA] Erro ao rodar fix: {e}")
+            logger.error(f"[CQA] Erro ao rodar fix: {e}")
     _th.Thread(target=_run, daemon=True).start()
     flash("CQA + Auto-Fix iniciado. Aguarde e atualize a página.", "success")
     return redirect(url_for("cqa_dashboard"))

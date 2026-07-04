@@ -101,7 +101,44 @@ def auth_reset_password():
 @api_bp.get("/me")
 @login_required
 def me():
-    return jsonify(_user_dict(current_user))
+    d = _user_dict(current_user)
+    # Include 2FA + security fields for the profile screen
+    tid = session.get("tenant_id", 1)
+    conn = database.get_connection()
+    row = conn.execute(
+        "SELECT dois_fatores_ativo, dois_fatores_canal, telefone FROM usuarios WHERE id=?",
+        (current_user.id,),
+    ).fetchone()
+    if row:
+        r = dict(row)
+        d["dois_fatores_ativo"] = bool(r.get("dois_fatores_ativo"))
+        d["dois_fatores_canal"] = r.get("dois_fatores_canal") or "email"
+        d["telefone"] = r.get("telefone") or ""
+    return jsonify(d)
+
+
+@api_bp.put("/me/security")
+@login_required
+def me_security_update():
+    """Toggle 2FA + pick delivery channel (email or whatsapp)."""
+    data = request.get_json(silent=True) or {}
+    ativo = 1 if data.get("dois_fatores_ativo") else 0
+    canal = (data.get("dois_fatores_canal") or "email").strip().lower()
+    if canal not in ("email", "whatsapp"):
+        return jsonify(error="Canal inválido. Use 'email' ou 'whatsapp'."), 400
+    conn = database.get_connection()
+    if ativo and canal == "whatsapp":
+        row = conn.execute(
+            "SELECT telefone FROM usuarios WHERE id=?", (current_user.id,)
+        ).fetchone()
+        if not row or not (dict(row).get("telefone") or "").strip():
+            return jsonify(error="Cadastre um telefone antes de habilitar 2FA via WhatsApp."), 400
+    conn.execute(
+        "UPDATE usuarios SET dois_fatores_ativo=?, dois_fatores_canal=? WHERE id=?",
+        (ativo, canal, current_user.id),
+    )
+    conn.commit()
+    return jsonify(ok=True, dois_fatores_ativo=bool(ativo), dois_fatores_canal=canal)
 
 
 # ── DASHBOARD ────────────────────────────────────────────────────────────────
