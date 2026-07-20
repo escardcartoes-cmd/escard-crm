@@ -130,6 +130,8 @@ for _endpoint, _rule in [
     ("api.auth_reset_password",  "5 per hour; 20 per day"),
     ("api.api_ia_chat",          "60 per hour"),
     ("api.leads_importar_confirmar", "20 per hour"),
+    ("api.integracoes_testar_email", "5 per hour"),
+    ("api.integracoes_testar_ia",    "10 per hour"),
 ]:
     _fn = app.view_functions.get(_endpoint)
     if _fn:
@@ -1434,12 +1436,78 @@ def _ler_xls_bytes(raw: bytes) -> tuple:
     return colunas, linhas
 
 
+def _detectar_formato_real(raw: bytes) -> str:
+    """Detecta o formato real pelos magic bytes, ignora a extensão do arquivo."""
+    head = raw[:8].lstrip(b"\xef\xbb\xbf")  # skip UTF-8 BOM
+    if head.startswith(b"PK\x03\x04"):          # ZIP → XLSX
+        return "xlsx"
+    if head.startswith(b"\xd0\xcf\x11\xe0"):    # OLE2 → XLS legado real
+        return "xls"
+    if head[:6].lower().startswith((b"<html", b"<!doct", b"<meta", b"<?xml")):
+        return "html"
+    return "csv"
+
+
+def _ler_html_bytes(raw: bytes) -> tuple:
+    """Fallback: alguns exports do Google Sheets/Excel Online salvam HTML com extensão .xls."""
+    try:
+        from html.parser import HTMLParser
+    except ImportError:
+        raise ValueError("Não foi possível ler o arquivo HTML.")
+    rows = []
+    class TableExtractor(HTMLParser):
+        def __init__(self):
+            super().__init__()
+            self.current_row = None
+            self.current_cell = []
+            self.in_cell = False
+        def handle_starttag(self, tag, _attrs):
+            if tag == "tr":
+                self.current_row = []
+            elif tag in ("td", "th"):
+                self.in_cell = True
+                self.current_cell = []
+        def handle_endtag(self, tag):
+            if tag in ("td", "th") and self.current_row is not None:
+                self.current_row.append("".join(self.current_cell).strip())
+                self.in_cell = False
+            elif tag == "tr" and self.current_row is not None:
+                rows.append(self.current_row)
+                self.current_row = None
+        def handle_data(self, data):
+            if self.in_cell:
+                self.current_cell.append(data)
+    p = TableExtractor()
+    p.feed(raw.decode("utf-8", errors="replace"))
+    if not rows:
+        raise ValueError("Nenhuma tabela encontrada no HTML.")
+    colunas = rows[0]
+    linhas = [dict(zip(colunas, r)) for r in rows[1:]]
+    return colunas, linhas
+
+
 def _ler_arquivo(raw: bytes, nome: str) -> tuple:
     ext = nome.lower().rsplit(".", 1)[-1] if "." in nome else "csv"
-    if ext == "xlsx":
+    real = _detectar_formato_real(raw)
+
+    # Google Sheets / Excel Online salvos como HTML com extensão .xls
+    if real == "html":
+        return _ler_html_bytes(raw)
+    # Extensão mente → usa formato real
+    if real == "xlsx":
         return _ler_xlsx_bytes(raw)
-    if ext == "xls":
+    if real == "xls":
         return _ler_xls_bytes(raw)
+    if ext == "xlsx" and real != "xlsx":
+        raise ValueError(
+            "Arquivo com extensão .xlsx mas o conteúdo não é um Excel válido. "
+            "Se veio do Google Sheets, use Arquivo → Baixar → Excel (.xlsx) ou CSV (.csv)."
+        )
+    if ext == "xls" and real not in ("xls", "xlsx"):
+        raise ValueError(
+            "Arquivo com extensão .xls mas o conteúdo não é um Excel válido. "
+            "Reabra no Excel e salve como .xlsx, ou exporte como CSV."
+        )
     return _ler_csv_bytes(raw)
 
 
