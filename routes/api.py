@@ -762,6 +762,156 @@ def tenant_update():
     return jsonify(dict(row))
 
 
+# ── INTEGRAÇÕES por tenant (Brevo + WhatsApp) ────────────────────────────────
+
+INTEG_FIELDS = [
+    "brevo_api_key", "brevo_sender_email", "brevo_sender_nome",
+    "whatsapp_provider", "whatsapp_api_key", "whatsapp_instance_id", "whatsapp_sender_numero",
+]
+
+WHATSAPP_PROVIDERS = ["", "zapi", "meta_cloud", "twilio", "evolution", "360dialog"]
+
+
+def _mask(v):
+    if not v: return None
+    s = str(v)
+    if len(s) < 8: return "•" * len(s)
+    return s[:4] + "•" * (len(s) - 8) + s[-4:]
+
+
+@api_bp.get("/integracoes")
+@login_required
+def integracoes_get():
+    tid = session.get("tenant_id", 1)
+    conn = database.get_connection()
+    row = conn.execute("SELECT * FROM tenant_config WHERE tenant_id=?", (tid,)).fetchone()
+    d = dict(row) if row else {}
+    out = {}
+    for f in INTEG_FIELDS:
+        v = d.get(f)
+        # Mascara credenciais no retorno; frontend recebe preview mas nunca a key real
+        if f in ("brevo_api_key", "whatsapp_api_key", "whatsapp_instance_id"):
+            out[f] = _mask(v)
+            out[f + "_configured"] = bool(v)
+        else:
+            out[f] = v
+    return jsonify(out)
+
+
+@api_bp.put("/integracoes")
+@login_required
+def integracoes_update():
+    tid = session.get("tenant_id", 1)
+    data = request.get_json() or {}
+    updates = {}
+    for f in INTEG_FIELDS:
+        if f in data:
+            v = (data[f] or "").strip()
+            # Preserva credencial existente se frontend enviar string mascarada (contém •)
+            if f in ("brevo_api_key", "whatsapp_api_key", "whatsapp_instance_id") and "•" in v:
+                continue
+            updates[f] = v or None
+    if updates.get("whatsapp_provider") and updates["whatsapp_provider"] not in WHATSAPP_PROVIDERS:
+        return jsonify(error=f"Provider inválido. Use um de: {', '.join(WHATSAPP_PROVIDERS[1:])}"), 400
+    if not updates:
+        return jsonify(error="Nada para atualizar"), 400
+
+    conn = database.get_connection()
+    # Garante linha em tenant_config
+    conn.execute("INSERT OR IGNORE INTO tenant_config (tenant_id) VALUES (?)", (tid,))
+    set_clause = ", ".join(f"{k}=?" for k in updates)
+    conn.execute(f"UPDATE tenant_config SET {set_clause} WHERE tenant_id=?",
+                 list(updates.values()) + [tid])
+    conn.commit()
+    return jsonify(ok=True, message="Integrações salvas.")
+
+
+@api_bp.get("/integracoes/status")
+@login_required
+def integracoes_status():
+    """Status das credenciais globais (env vars) + preview mascarado."""
+    import os
+    def _preview(v: str) -> str | None:
+        if not v: return None
+        if len(v) <= 8: return "•" * len(v)
+        return v[:4] + "•••" + v[-4:]
+
+    def _card(name: str, servico: str) -> dict:
+        v = os.environ.get(name, "")
+        return {"configurada": bool(v), "servico": servico, "preview": _preview(v)}
+
+    return jsonify(
+        anthropic=_card("ANTHROPIC_API_KEY", "IA Claude (chat + geração de emails)"),
+        brevo=_card("BREVO_API_KEY", "Envio de emails transacionais"),
+        cron_token=_card("CRON_TOKEN", "Autenticação do scheduler"),
+        brevo_webhook=_card("BREVO_WEBHOOK_SECRET", "Verificação de webhooks Brevo"),
+        whatsapp=_card("KRYLO_WHATSAPP", "Número remetente (E.164)"),
+        email_remetente=_card("EMAIL_ONBOARDING", "Endereço de remetente padrão"),
+    )
+
+
+@api_bp.post("/integracoes/testar/email")
+@login_required
+def integracoes_testar_email():
+    """Envia email de teste para o usuário logado."""
+    import os
+    dest = getattr(current_user, "email", None)
+    if not dest:
+        return jsonify(error="Usuário sem email cadastrado."), 400
+    tid = session.get("tenant_id", 1)
+    try:
+        from models.cadencia import enviar_email_brevo
+        r = enviar_email_brevo(
+            destinatario_email=dest,
+            destinatario_nome=getattr(current_user, "nome", "") or "Usuário",
+            assunto="Teste de integração Krylo",
+            corpo="Este é um email de teste enviado pelo Krylo CRM.\n\nSe você recebeu, a integração com Brevo está funcionando.",
+            tenant_id=tid,
+        )
+        if r.get("status") == "enviado":
+            return jsonify(ok=True, destinatario=dest, message_id=r.get("id"))
+        return jsonify(ok=False, error=f"Falhou: {r.get('status')}", destinatario=dest), 400
+    except Exception as e:
+        current_app.logger.exception("email test failed")
+        return jsonify(error=str(e)), 500
+
+
+@api_bp.post("/integracoes/testar/ia")
+@login_required
+def integracoes_testar_ia():
+    """Ping mínimo pra Claude."""
+    try:
+        import models.ia_config as ia_mod
+        conn = database.get_connection()
+        tid = session.get("tenant_id", 1)
+        resposta = ia_mod.chat_com_ia(conn, "Responda apenas: OK", [], "", tid)
+        return jsonify(ok=True, resposta=(resposta or "")[:100])
+    except Exception as e:
+        current_app.logger.exception("IA test failed")
+        return jsonify(error=str(e)), 500
+
+
+@api_bp.post("/integracoes/brevo/testar")
+@login_required
+def integracoes_brevo_testar():
+    """Valida credencial Brevo consultando /v3/account."""
+    tid = session.get("tenant_id", 1)
+    import os, requests
+    conn = database.get_connection()
+    row = conn.execute("SELECT brevo_api_key FROM tenant_config WHERE tenant_id=?", (tid,)).fetchone()
+    key = (dict(row).get("brevo_api_key") if row else None) or os.environ.get("BREVO_API_KEY", "")
+    if not key:
+        return jsonify(ok=False, error="Nenhuma chave Brevo configurada."), 400
+    try:
+        r = requests.get("https://api.brevo.com/v3/account", headers={"api-key": key}, timeout=10)
+        if r.status_code != 200:
+            return jsonify(ok=False, error=f"Brevo respondeu {r.status_code}: {r.text[:200]}"), 400
+        acc = r.json()
+        return jsonify(ok=True, email=acc.get("email"), plano=acc.get("plan", [{}])[0].get("type"))
+    except Exception as e:
+        return jsonify(ok=False, error=str(e)), 500
+
+
 # ── IA ───────────────────────────────────────────────────────────────────────
 
 def _build_crm_snapshot(conn, tid: int) -> str:
@@ -1119,3 +1269,117 @@ def sdr_stats():
         "reuniao": count("SELECT COUNT(*) c FROM oportunidades WHERE tenant_id=? AND etapa='negociacao'", tid),
         "fechou": count("SELECT COUNT(*) c FROM oportunidades WHERE tenant_id=? AND etapa='fechado'", tid),
     })
+
+
+# ── INTEGRAÇÕES ──────────────────────────────────────────────────────────────
+
+def _mask(val: str) -> str:
+    """Return masked preview of a secret so admins can identify without exposing it."""
+    if not val:
+        return ""
+    if len(val) <= 8:
+        return "•" * len(val)
+    return f"{val[:4]}…{val[-4:]}"
+
+
+@api_bp.get("/integracoes/status")
+@login_required
+def integracoes_status():
+    """Report which integrations are configured. Never leaks secrets."""
+    import os
+    keys = {
+        "anthropic": os.environ.get("ANTHROPIC_API_KEY", ""),
+        "brevo":     os.environ.get("BREVO_API_KEY", ""),
+        "cron_token":       os.environ.get("CRON_TOKEN", ""),
+        "brevo_webhook":    os.environ.get("BREVO_WEBHOOK_SECRET", ""),
+    }
+    return jsonify({
+        "anthropic": {
+            "configurada": bool(keys["anthropic"]),
+            "preview":     _mask(keys["anthropic"]),
+            "servico":     "Anthropic Claude (Central de IA + SDR + sugestões)",
+        },
+        "brevo": {
+            "configurada": bool(keys["brevo"]),
+            "preview":     _mask(keys["brevo"]),
+            "servico":     "Brevo (envio de e-mail transacional + cadências)",
+        },
+        "cron_token": {
+            "configurada": bool(keys["cron_token"]),
+            "servico":     "Token do agendador de cadências",
+        },
+        "brevo_webhook": {
+            "configurada": bool(keys["brevo_webhook"]),
+            "servico":     "Assinatura de webhooks Brevo (tracking de entrega)",
+        },
+        "whatsapp": {
+            "configurada": bool(os.environ.get("KRYLO_WHATSAPP", "")),
+            "preview":     os.environ.get("KRYLO_WHATSAPP", ""),
+            "servico":     "Número WhatsApp que envia as mensagens",
+        },
+        "email_remetente": {
+            "configurada": bool(os.environ.get("EMAIL_ONBOARDING", "")),
+            "preview":     os.environ.get("EMAIL_ONBOARDING", ""),
+            "servico":     "E-mail remetente das cadências e boas-vindas",
+        },
+    })
+
+
+@api_bp.post("/integracoes/testar/email")
+@login_required
+def integracoes_testar_email():
+    """Envia um e-mail de teste pro usuário logado para validar a integração Brevo."""
+    import os
+    try:
+        from models.cadencia import _brevo_disponivel, enviar_email_brevo
+    except Exception:
+        return jsonify(ok=False, error="Módulo Brevo não disponível."), 500
+
+    if not _brevo_disponivel():
+        return jsonify(
+            ok=False,
+            error="BREVO_API_KEY não configurada no ambiente. Defina em Railway → Variables."
+        ), 400
+
+    destinatario = current_user.email
+    if not destinatario:
+        return jsonify(ok=False, error="Seu usuário não tem e-mail cadastrado."), 400
+
+    remetente = os.environ.get("EMAIL_ONBOARDING", "no-reply@krylo.com.br")
+    try:
+        resultado = enviar_email_brevo(
+            destinatario=destinatario,
+            assunto="Teste de integração — Krylo",
+            corpo_html="<p>Este é um e-mail de teste enviado pela integração Brevo do Krylo. Se você recebeu, está tudo funcionando.</p>",
+            remetente_email=remetente,
+            remetente_nome="Krylo",
+        )
+        return jsonify(ok=True, destinatario=destinatario, resultado=resultado)
+    except Exception as e:
+        current_app.logger.exception("brevo test failed")
+        return jsonify(ok=False, error=str(e)), 500
+
+
+@api_bp.post("/integracoes/testar/ia")
+@login_required
+def integracoes_testar_ia():
+    """Faz uma call rápida no Claude para validar ANTHROPIC_API_KEY."""
+    import os
+    if not os.environ.get("ANTHROPIC_API_KEY"):
+        return jsonify(
+            ok=False,
+            error="ANTHROPIC_API_KEY não configurada no ambiente. Defina em Railway → Variables."
+        ), 400
+    try:
+        from anthropic import Anthropic
+        client = Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
+        resp = client.messages.create(
+            model="claude-sonnet-4-5",
+            max_tokens=40,
+            messages=[{"role": "user", "content": "Responda apenas: OK"}],
+        )
+        texto = "".join(getattr(b, "text", "") for b in resp.content)
+        return jsonify(ok=True, resposta=texto.strip())
+    except Exception as e:
+        current_app.logger.exception("anthropic test failed")
+        return jsonify(ok=False, error=str(e)), 500

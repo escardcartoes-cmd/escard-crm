@@ -86,6 +86,22 @@ _SENDER_EMAIL = "executivo.vendas@escardcartoes.com.br"
 _SENDER_NAME  = "Executivo de Vendas Escard"
 
 
+def _tenant_brevo_config(tenant_id: int | None):
+    """Read per-tenant Brevo credentials from tenant_config; None if missing."""
+    if not tenant_id:
+        return None
+    try:
+        import database as _db
+        conn = _db.get_connection()
+        row = conn.execute(
+            "SELECT brevo_api_key, brevo_sender_email, brevo_sender_nome "
+            "FROM tenant_config WHERE tenant_id=?", (tenant_id,)
+        ).fetchone()
+        return dict(row) if row else None
+    except Exception:
+        return None
+
+
 def enviar_email_brevo(
     destinatario_email: str,
     destinatario_nome: str,
@@ -94,9 +110,24 @@ def enviar_email_brevo(
     nome_remetente: str = _SENDER_NAME,
     email_remetente: str = _SENDER_EMAIL,
     reply_to: str = _SENDER_EMAIL,
+    tenant_id: int | None = None,
 ) -> dict:
-    """Envia e-mail transacional via Brevo (requests). Retorna status e message_id."""
-    api_key = os.getenv("BREVO_API_KEY", "")
+    """Envia e-mail transacional via Brevo (requests). Retorna status e message_id.
+
+    Credenciais: prioriza tenant_config; fallback env BREVO_API_KEY.
+    """
+    api_key = ""
+    cfg = _tenant_brevo_config(tenant_id)
+    if cfg:
+        api_key = cfg.get("brevo_api_key") or ""
+        # Só sobrescreve remetente se tenant NÃO passou explícito
+        if nome_remetente == _SENDER_NAME and cfg.get("brevo_sender_nome"):
+            nome_remetente = cfg["brevo_sender_nome"]
+        if email_remetente == _SENDER_EMAIL and cfg.get("brevo_sender_email"):
+            email_remetente = cfg["brevo_sender_email"]
+            reply_to = email_remetente
+    if not api_key:
+        api_key = os.getenv("BREVO_API_KEY", "")
     if not api_key:
         _salvar_email_na_fila(destinatario_email, destinatario_nome, assunto, corpo)
         return {"status": "enfileirado", "id": None}

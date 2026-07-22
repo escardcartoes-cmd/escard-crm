@@ -718,6 +718,14 @@ def run_migrations(conn) -> None:
         # Bloco 3 — onboarding wizard
         f"ALTER TABLE tenant_config ADD COLUMN{_ifne} email_remetente TEXT",
         f"ALTER TABLE tenant_config ADD COLUMN{_ifne} nome_vendedor TEXT",
+        # Bloco 4 — integrações por tenant (Brevo + WhatsApp)
+        f"ALTER TABLE tenant_config ADD COLUMN{_ifne} brevo_api_key TEXT",
+        f"ALTER TABLE tenant_config ADD COLUMN{_ifne} brevo_sender_email TEXT",
+        f"ALTER TABLE tenant_config ADD COLUMN{_ifne} brevo_sender_nome TEXT",
+        f"ALTER TABLE tenant_config ADD COLUMN{_ifne} whatsapp_provider TEXT",
+        f"ALTER TABLE tenant_config ADD COLUMN{_ifne} whatsapp_api_key TEXT",
+        f"ALTER TABLE tenant_config ADD COLUMN{_ifne} whatsapp_instance_id TEXT",
+        f"ALTER TABLE tenant_config ADD COLUMN{_ifne} whatsapp_sender_numero TEXT",
     ]
 
     _CREATE = [
