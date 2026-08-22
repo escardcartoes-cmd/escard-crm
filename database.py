@@ -726,6 +726,10 @@ def run_migrations(conn) -> None:
         f"ALTER TABLE tenant_config ADD COLUMN{_ifne} whatsapp_api_key TEXT",
         f"ALTER TABLE tenant_config ADD COLUMN{_ifne} whatsapp_instance_id TEXT",
         f"ALTER TABLE tenant_config ADD COLUMN{_ifne} whatsapp_sender_numero TEXT",
+        # Bloco 5 — convite de usuário por email
+        f"ALTER TABLE usuarios ADD COLUMN{_ifne} convite_token TEXT",
+        f"ALTER TABLE usuarios ADD COLUMN{_ifne} convite_expira TEXT",
+        f"ALTER TABLE usuarios ADD COLUMN{_ifne} convite_aceito_em TEXT",
     ]
 
     _CREATE = [

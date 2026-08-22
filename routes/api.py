@@ -632,6 +632,130 @@ def usuarios_list():
     return jsonify(items=[dict(r) for r in rows])
 
 
+@api_bp.post("/usuarios/convidar")
+@require_perfil("admin", "super_admin")
+def usuario_convidar():
+    """Cria usuário desativado + gera token de convite + envia email com link."""
+    import secrets as _sec
+    from datetime import datetime, timedelta
+    tid = session.get("tenant_id", 1)
+    data = request.get_json() or {}
+    nome = (data.get("nome") or "").strip()
+    email = (data.get("email") or "").strip().lower()
+    usuario_str = (data.get("usuario") or "").strip().lower()
+    perfil = (data.get("perfil") or "vendedor").strip()
+
+    if not all([nome, email, usuario_str]):
+        return jsonify(error="Campos obrigatórios: nome, email, usuario"), 400
+    if perfil not in ("admin", "gerente", "vendedor", "visualizador"):
+        return jsonify(error="Perfil inválido"), 400
+
+    conn = database.get_connection()
+    if conn.execute("SELECT id FROM usuarios WHERE email=?", (email,)).fetchone():
+        return jsonify(error=f"E-mail {email} já cadastrado"), 400
+    if conn.execute("SELECT id FROM usuarios WHERE usuario=?", (usuario_str,)).fetchone():
+        return jsonify(error=f"Usuário {usuario_str} já em uso"), 400
+
+    token = _sec.token_urlsafe(32)
+    expira = (datetime.now() + timedelta(days=7)).isoformat(sep=" ", timespec="seconds")
+    # Placeholder senha_hash — obrigatória no schema mas invalidada pelo convite
+    ph = "!" + _sec.token_hex(20)
+    conn.execute(
+        "INSERT INTO usuarios (nome, email, usuario, senha_hash, perfil, ativo, tenant_id, convite_token, convite_expira) "
+        "VALUES (?,?,?,?,?, 0, ?,?,?)",
+        (nome, email, usuario_str, ph, perfil, tid, token, expira)
+    )
+    conn.commit()
+    uid = conn.execute("SELECT last_insert_rowid() id").fetchone()["id"]
+
+    import os
+    base = os.environ.get("APP_URL", "https://krylo-crm.vercel.app").rstrip("/")
+    link = f"{base}/aceitar-convite?token={token}"
+    try:
+        from models.cadencia import enviar_email_brevo
+        corpo = (
+            f"<p>Olá {nome},</p>"
+            f"<p>Você foi convidado(a) para o Krylo CRM.</p>"
+            f"<p><a href=\"{link}\" style=\"background:#4F46E5;color:#fff;padding:10px 18px;"
+            f"border-radius:8px;text-decoration:none;\">Aceitar convite</a></p>"
+            f"<p>Link válido por 7 dias. Se não funcionar, cole no navegador:<br>{link}</p>"
+        )
+        r = enviar_email_brevo(
+            destinatario_email=email,
+            destinatario_nome=nome,
+            assunto=f"Convite para Krylo CRM",
+            corpo=corpo,
+            tenant_id=tid,
+        )
+        email_status = r.get("status", "unknown")
+    except Exception as e:
+        current_app.logger.exception("send invite email failed")
+        email_status = "erro"
+
+    audit.log("usuario.convidado", resource="usuario", resource_id=uid,
+              metadata={"email": email, "perfil": perfil, "email_status": email_status})
+    return jsonify(ok=True, user_id=uid, link=link, email_status=email_status), 201
+
+
+@api_bp.get("/convite/<token>")
+def convite_verify(token):
+    """Público — valida token de convite; retorna user pra frontend mostrar form."""
+    from datetime import datetime
+    conn = database.get_connection()
+    row = conn.execute(
+        "SELECT id, nome, email, usuario, perfil, convite_expira, convite_aceito_em "
+        "FROM usuarios WHERE convite_token=?", (token,)
+    ).fetchone()
+    if not row:
+        return jsonify(error="Convite inválido ou já usado"), 404
+    r = dict(row)
+    if r.get("convite_aceito_em"):
+        return jsonify(error="Convite já foi aceito. Faça login."), 400
+    try:
+        if datetime.fromisoformat(r["convite_expira"]) < datetime.now():
+            return jsonify(error="Convite expirado. Peça um novo."), 400
+    except Exception:
+        pass
+    return jsonify(nome=r["nome"], email=r["email"], usuario=r["usuario"], perfil=r["perfil"])
+
+
+@api_bp.post("/convite/<token>/aceitar")
+def convite_accept(token):
+    """Público — usuário define senha própria + ativa a conta."""
+    import bcrypt as _bc
+    from datetime import datetime
+    data = request.get_json() or {}
+    senha = data.get("senha") or ""
+    if len(senha) < 8:
+        return jsonify(error="Senha deve ter pelo menos 8 caracteres"), 400
+
+    conn = database.get_connection()
+    row = conn.execute(
+        "SELECT id, convite_expira, convite_aceito_em FROM usuarios WHERE convite_token=?",
+        (token,)
+    ).fetchone()
+    if not row:
+        return jsonify(error="Convite inválido"), 404
+    r = dict(row)
+    if r.get("convite_aceito_em"):
+        return jsonify(error="Convite já foi aceito"), 400
+    try:
+        if datetime.fromisoformat(r["convite_expira"]) < datetime.now():
+            return jsonify(error="Convite expirado"), 400
+    except Exception:
+        pass
+
+    senha_hash = _bc.hashpw(senha.encode(), _bc.gensalt()).decode()
+    conn.execute(
+        "UPDATE usuarios SET senha_hash=?, ativo=1, convite_aceito_em=?, "
+        "convite_token=NULL, tentativas_login=0, bloqueado_ate=NULL WHERE id=?",
+        (senha_hash, datetime.now().isoformat(sep=" ", timespec="seconds"), r["id"])
+    )
+    conn.commit()
+    audit.log("usuario.convite_aceito", resource="usuario", resource_id=r["id"])
+    return jsonify(ok=True, message="Conta ativada. Faça login com sua nova senha.")
+
+
 @api_bp.post("/usuarios")
 @require_perfil("admin", "super_admin")
 def usuario_create():
@@ -1412,3 +1536,82 @@ def admin_audit():
         tid = session.get("tenant_id", 1)
 
     return jsonify(items=audit.query(tenant_id=tid, action_prefix=action, limit=limit))
+
+
+# ── LGPD ─────────────────────────────────────────────────────────────────────
+
+_LGPD_TABLES = [
+    ("tenants",       "id=?"),
+    ("tenant_config", "tenant_id=?"),
+    ("usuarios",      "tenant_id=?"),
+    ("empresas",      "tenant_id=?"),
+    ("contatos",      "tenant_id=?"),
+    ("oportunidades", "tenant_id=?"),
+    ("cadencias",     "tenant_id=?"),
+    ("atividades",    "tenant_id=?"),
+    ("prospeccao",    "tenant_id=?"),
+    ("metas",         "tenant_id=?"),
+    ("audit_log",     "tenant_id=?"),
+]
+
+
+@api_bp.get("/lgpd/export")
+@require_perfil("admin", "super_admin")
+def lgpd_export():
+    """LGPD art. 18 — retorna todos os dados do tenant em um único JSON."""
+    tid = session.get("tenant_id", 1)
+    # super_admin pode passar ?tenant_id=X pra baixar de outro tenant
+    if getattr(current_user, "perfil", "") == "super_admin":
+        tid_q = request.args.get("tenant_id", type=int)
+        if tid_q:
+            tid = tid_q
+    conn = database.get_connection()
+    dump = {}
+    for tbl, where in _LGPD_TABLES:
+        try:
+            rows = conn.execute(f"SELECT * FROM {tbl} WHERE {where}", (tid,)).fetchall()
+            dump[tbl] = [dict(r) for r in rows]
+        except Exception as e:
+            dump[tbl] = {"error": str(e)}
+    audit.log("lgpd.export", resource="tenant", resource_id=tid,
+              metadata={"rows": {k: (len(v) if isinstance(v, list) else 0) for k, v in dump.items()}})
+    from flask import Response
+    import json as _json
+    body = _json.dumps({"tenant_id": tid, "generated_at": __import__("datetime").datetime.now().isoformat(), "data": dump},
+                        indent=2, ensure_ascii=False, default=str)
+    return Response(
+        body, mimetype="application/json",
+        headers={"Content-Disposition": f'attachment; filename="lgpd-export-tenant-{tid}.json"'},
+    )
+
+
+@api_bp.delete("/lgpd/tenant/<int:tid>")
+@require_perfil("super_admin")
+def lgpd_tenant_delete(tid):
+    """LGPD art. 18 — remove PERMANENTEMENTE todos os dados de um tenant.
+
+    Requer confirmação explícita: body JSON { "confirmar": "<slug do tenant>" }.
+    Não é reversível.
+    """
+    data = request.get_json() or {}
+    conn = database.get_connection()
+    t = conn.execute("SELECT * FROM tenants WHERE id=?", (tid,)).fetchone()
+    if not t:
+        return jsonify(error="Tenant não encontrado"), 404
+    t = dict(t)
+    if data.get("confirmar") != t.get("slug"):
+        return jsonify(error=f'Envie {{"confirmar":"{t.get("slug")}"}} para confirmar.'), 400
+    if tid == 1:
+        return jsonify(error="Tenant #1 é protegido"), 400
+
+    counts = {}
+    for tbl, where in _LGPD_TABLES:
+        try:
+            r = conn.execute(f"DELETE FROM {tbl} WHERE {where}", (tid,))
+            counts[tbl] = getattr(r, "rowcount", -1)
+        except Exception as e:
+            counts[tbl] = f"error: {e}"
+    conn.commit()
+    audit.log("lgpd.tenant_delete", resource="tenant", resource_id=tid,
+              metadata={"slug": t.get("slug"), "nome": t.get("nome_empresa"), "counts": counts})
+    return jsonify(ok=True, tenant=t.get("slug"), counts=counts)
