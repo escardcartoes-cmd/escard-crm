@@ -729,6 +729,23 @@ def run_migrations(conn) -> None:
     ]
 
     _CREATE = [
+        # Audit log — quem fez o quê, quando, de onde
+        """CREATE TABLE IF NOT EXISTS audit_log (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            tenant_id   INTEGER,
+            user_id     INTEGER,
+            user_email  TEXT,
+            action      TEXT NOT NULL,
+            resource    TEXT,
+            resource_id INTEGER,
+            metadata    TEXT,
+            ip          TEXT,
+            user_agent  TEXT,
+            created_at  TEXT DEFAULT (datetime('now', 'localtime'))
+        )""",
+        "CREATE INDEX IF NOT EXISTS idx_audit_tenant ON audit_log(tenant_id, created_at DESC)",
+        "CREATE INDEX IF NOT EXISTS idx_audit_user   ON audit_log(user_id, created_at DESC)",
+        "CREATE INDEX IF NOT EXISTS idx_audit_action ON audit_log(action)",
         """CREATE TABLE IF NOT EXISTS clientes_cobranca (
             id              INTEGER PRIMARY KEY AUTOINCREMENT,
             nome            TEXT    NOT NULL,

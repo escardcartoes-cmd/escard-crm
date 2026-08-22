@@ -57,6 +57,22 @@ app = Flask(__name__)
 app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
 IS_PROD = bool(os.environ.get("RAILWAY_ENVIRONMENT") or os.environ.get("VERCEL") or os.environ.get("PRODUCTION"))
 
+# Sentry — carrega apenas se SENTRY_DSN configurada; falha silenciosa se pacote ausente
+_sentry_dsn = os.environ.get("SENTRY_DSN", "").strip()
+if _sentry_dsn:
+    try:
+        import sentry_sdk
+        from sentry_sdk.integrations.flask import FlaskIntegration
+        sentry_sdk.init(
+            dsn=_sentry_dsn,
+            integrations=[FlaskIntegration()],
+            traces_sample_rate=float(os.environ.get("SENTRY_TRACES_SAMPLE_RATE", "0.1")),
+            environment="production" if IS_PROD else "development",
+            send_default_pii=False,
+        )
+    except Exception as _e:
+        print(f"[SENTRY] init falhou (não fatal): {_e}", flush=True)
+
 app.secret_key = os.environ.get("SECRET_KEY")
 if not app.secret_key:
     if IS_PROD:

@@ -12,7 +12,25 @@ import models.atividade as atv_model
 import models.cadencia as cad_model
 import models.prospeccao as prosp_model
 import models.tenant as tenant_model
+import models.audit as audit
 import database
+from functools import wraps
+
+
+def require_perfil(*perfis):
+    """Decorator: bloqueia acesso se current_user não tiver um dos perfis exigidos."""
+    def deco(fn):
+        @wraps(fn)
+        def wrapper(*a, **kw):
+            if not current_user.is_authenticated:
+                return jsonify(error="Autenticação necessária"), 401
+            user_perfil = getattr(current_user, "perfil", None)
+            if user_perfil not in perfis:
+                audit.log("access.denied", resource=fn.__name__, metadata={"required": list(perfis), "got": user_perfil})
+                return jsonify(error="Permissão insuficiente"), 403
+            return fn(*a, **kw)
+        return wrapper
+    return deco
 
 api_bp = Blueprint("api", __name__, url_prefix="/api")
 
@@ -51,11 +69,13 @@ def auth_login():
     if not u:
         if u_raw and u_raw.get("ativo"):
             user_model.registrar_tentativa_falha(u_raw["id"])
+        audit.log("auth.login_failed", metadata={"usuario": usuario_str})
         return jsonify(error="Usuário ou senha incorretos."), 401
 
     user_model.resetar_tentativas(u.id)
     login_user(u, remember=True)
     session["tenant_id"] = getattr(u, "tenant_id", 1) or 1
+    audit.log("auth.login_success", user_id=u.id, user_email=u.email, tenant_id=session["tenant_id"])
     return jsonify(user=_user_dict(u))
 
 
@@ -613,7 +633,7 @@ def usuarios_list():
 
 
 @api_bp.post("/usuarios")
-@login_required
+@require_perfil("admin", "super_admin")
 def usuario_create():
     tid = session.get("tenant_id", 1)
     data = request.get_json() or {}
@@ -648,7 +668,7 @@ def usuario_create():
 
 
 @api_bp.put("/usuarios/<int:uid>")
-@login_required
+@require_perfil("admin", "super_admin")
 def usuario_update(uid):
     tid = session.get("tenant_id", 1)
     data = request.get_json() or {}
@@ -684,7 +704,7 @@ def usuario_update(uid):
 
 
 @api_bp.delete("/usuarios/<int:uid>")
-@login_required
+@require_perfil("admin", "super_admin")
 def usuario_delete(uid):
     tid = session.get("tenant_id", 1)
     if uid == getattr(current_user, "id", None):
@@ -1271,3 +1291,124 @@ def sdr_stats():
     })
 
 
+
+
+# ── ADMIN KRYLO (super_admin apenas) ─────────────────────────────────────────
+
+@api_bp.get("/admin/tenants")
+@require_perfil("super_admin")
+def admin_tenants_list():
+    """Lista todos os tenants com contagens rápidas."""
+    conn = database.get_connection()
+    rows = conn.execute("""
+        SELECT t.*,
+               (SELECT COUNT(*) FROM usuarios  WHERE tenant_id=t.id) AS usuarios_count,
+               (SELECT COUNT(*) FROM empresas  WHERE tenant_id=t.id) AS empresas_count,
+               (SELECT COUNT(*) FROM oportunidades WHERE tenant_id=t.id AND etapa NOT IN ('fechado','perdido','fechado_ganho','fechado_perdido')) AS oport_ativas
+        FROM tenants t
+        ORDER BY t.id DESC
+    """).fetchall()
+    return jsonify(items=[dict(r) for r in rows])
+
+
+@api_bp.get("/admin/tenants/<int:tid>")
+@require_perfil("super_admin")
+def admin_tenant_get(tid):
+    conn = database.get_connection()
+    t = conn.execute("SELECT * FROM tenants WHERE id=?", (tid,)).fetchone()
+    if not t:
+        return jsonify(error="Tenant não encontrado"), 404
+    usuarios = conn.execute(
+        "SELECT id, nome, email, usuario, perfil, ativo, criado_em FROM usuarios WHERE tenant_id=? ORDER BY id",
+        (tid,)
+    ).fetchall()
+    stats = {
+        "empresas":      conn.execute("SELECT COUNT(*) c FROM empresas WHERE tenant_id=?", (tid,)).fetchone()[0],
+        "contatos":      conn.execute("SELECT COUNT(*) c FROM contatos WHERE tenant_id=?", (tid,)).fetchone()[0],
+        "oportunidades": conn.execute("SELECT COUNT(*) c FROM oportunidades WHERE tenant_id=?", (tid,)).fetchone()[0],
+        "cadencias":     conn.execute("SELECT COUNT(*) c FROM cadencias WHERE tenant_id=?", (tid,)).fetchone()[0],
+    }
+    return jsonify(tenant=dict(t), usuarios=[dict(u) for u in usuarios], stats=stats)
+
+
+@api_bp.post("/admin/tenants")
+@require_perfil("super_admin")
+def admin_tenant_create():
+    """Cria tenant + primeiro admin do cliente numa call."""
+    data = request.get_json() or {}
+    nome_empresa = (data.get("nome_empresa") or "").strip()
+    slug = (data.get("slug") or "").strip().lower()
+    plano = (data.get("plano") or "starter").strip()
+    admin_nome = (data.get("admin_nome") or "").strip()
+    admin_email = (data.get("admin_email") or "").strip().lower()
+    admin_usuario = (data.get("admin_usuario") or "").strip().lower()
+    admin_senha = data.get("admin_senha") or ""
+
+    if not all([nome_empresa, slug, admin_nome, admin_email, admin_usuario, admin_senha]):
+        return jsonify(error="Campos obrigatórios: nome_empresa, slug, admin_{nome,email,usuario,senha}"), 400
+    if len(admin_senha) < 8:
+        return jsonify(error="Senha do admin deve ter pelo menos 8 caracteres"), 400
+
+    import bcrypt as _bc
+    conn = database.get_connection()
+    # Verifica unicidade slug
+    if conn.execute("SELECT id FROM tenants WHERE slug=?", (slug,)).fetchone():
+        return jsonify(error=f"Slug '{slug}' já em uso"), 400
+    if conn.execute("SELECT id FROM usuarios WHERE email=?", (admin_email,)).fetchone():
+        return jsonify(error=f"E-mail '{admin_email}' já cadastrado"), 400
+    if conn.execute("SELECT id FROM usuarios WHERE usuario=?", (admin_usuario,)).fetchone():
+        return jsonify(error=f"Usuário '{admin_usuario}' já em uso"), 400
+
+    conn.execute(
+        "INSERT INTO tenants (slug, nome_empresa, plano, ativo) VALUES (?,?,?,1)",
+        (slug, nome_empresa, plano)
+    )
+    conn.commit()
+    tid = conn.execute("SELECT last_insert_rowid() id").fetchone()["id"]
+    senha_hash = _bc.hashpw(admin_senha.encode(), _bc.gensalt()).decode()
+    conn.execute(
+        "INSERT INTO usuarios (nome, email, usuario, senha_hash, perfil, ativo, tenant_id) "
+        "VALUES (?,?,?,?, 'admin', 1, ?)",
+        (admin_nome, admin_email, admin_usuario, senha_hash, tid)
+    )
+    conn.commit()
+    audit.log("admin.tenant_create", resource="tenant", resource_id=tid,
+              metadata={"nome_empresa": nome_empresa, "slug": slug, "plano": plano, "admin_email": admin_email})
+    row = conn.execute("SELECT * FROM tenants WHERE id=?", (tid,)).fetchone()
+    return jsonify(tenant=dict(row)), 201
+
+
+@api_bp.put("/admin/tenants/<int:tid>/suspender")
+@require_perfil("super_admin")
+def admin_tenant_suspender(tid):
+    """Suspende/reativa acesso do tenant."""
+    data = request.get_json() or {}
+    ativo = 1 if data.get("ativo", False) else 0
+    conn = database.get_connection()
+    conn.execute("UPDATE tenants SET ativo=? WHERE id=?", (ativo, tid))
+    # Também desativa/reativa todos usuários do tenant
+    conn.execute("UPDATE usuarios SET ativo=? WHERE tenant_id=?", (ativo, tid))
+    conn.commit()
+    audit.log("admin.tenant_" + ("reativar" if ativo else "suspender"),
+              resource="tenant", resource_id=tid)
+    row = conn.execute("SELECT * FROM tenants WHERE id=?", (tid,)).fetchone()
+    return jsonify(dict(row) if row else {"error": "não encontrado"})
+
+
+@api_bp.get("/admin/audit")
+@require_perfil("super_admin", "admin")
+def admin_audit():
+    """Consulta audit log (admin do tenant vê só o próprio; super_admin vê tudo se sem filtro)."""
+    perfil = getattr(current_user, "perfil", "")
+    tid_filtro = request.args.get("tenant_id", type=int)
+    action = request.args.get("action")
+    limit = min(int(request.args.get("limit", 100) or 100), 500)
+
+    if perfil == "super_admin":
+        # Se super_admin não passar tenant_id, retorna todos
+        tid = tid_filtro
+    else:
+        # admin do tenant: sempre trancado ao próprio tenant
+        tid = session.get("tenant_id", 1)
+
+    return jsonify(items=audit.query(tenant_id=tid, action_prefix=action, limit=limit))
