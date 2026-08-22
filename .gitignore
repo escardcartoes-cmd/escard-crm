@@ -4,3 +4,9 @@ __pycache__/
 *.pyc
 escard.db-shm
 escard.db-wal
+
+# SQLite temp files (WAL/SHM)
+escard*.db
+escard*.db-shm
+escard*.db-wal
+escard*.db-journal

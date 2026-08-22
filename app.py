@@ -49,12 +49,6 @@ import models.planos as planos_model
 from models.usuario import require_perfil, PERFIS, PERFIL_LABELS
 import ai
 
-# Legacy Jinja blueprints — kept while the templates/ folder is still referenced by
-# app.py's own route handlers. Purging them is a separate refactor task.
-from routes.auth import auth_bp
-from routes.empresas import empresas_bp
-from routes.contatos import contatos_bp
-from routes.sdr_evolutivo import sdr_evolutivo_bp
 from routes.api import api_bp
 
 from werkzeug.middleware.proxy_fix import ProxyFix
@@ -112,14 +106,19 @@ def _security_headers(resp):
     return resp
 
 login_manager = LoginManager(app)
-login_manager.login_view = "auth.login"
-login_manager.login_message = "Faça login para acessar o CRM."
-login_manager.login_message_category = "danger"
+# Frontend Next.js handles the login page — Flask serves only the JSON API.
+# When an unauthenticated request hits an @login_required route, return 401 JSON
+# so the SPA can react (redirect to /login on its own).
+login_manager.login_message = None
 
-app.register_blueprint(auth_bp)
-app.register_blueprint(empresas_bp)
-app.register_blueprint(contatos_bp)
-app.register_blueprint(sdr_evolutivo_bp)
+@login_manager.unauthorized_handler
+def _unauthorized():
+    from flask import request as _req, jsonify as _jsonify, redirect as _redirect
+    if _req.path.startswith("/api/") or _req.is_json or "application/json" in _req.headers.get("Accept", ""):
+        return _jsonify(error="Autenticação necessária.", login_required=True), 401
+    # Any legacy Jinja path — send the user to the Next.js frontend
+    return _redirect("https://krylo-crm.vercel.app/login", code=302)
+
 app.register_blueprint(api_bp)
 csrf.exempt(api_bp)
 
