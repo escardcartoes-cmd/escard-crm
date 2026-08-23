@@ -73,10 +73,96 @@ def auth_login():
         return jsonify(error="Usuário ou senha incorretos."), 401
 
     user_model.resetar_tentativas(u.id)
+
+    # Challenge 2FA quando ativo — senha OK mas ainda não faz login_user()
+    if u_raw and u_raw.get("dois_fatores_ativo"):
+        try:
+            user_model.enviar_codigo_2fa(u_raw)
+        except Exception:
+            current_app.logger.exception("send 2fa code failed")
+            return jsonify(error="Falha ao enviar código 2FA. Tente novamente."), 500
+        # Guarda user pendente na sessão pra passo 2
+        session["pending_2fa_user_id"] = u.id
+        session["pending_2fa_tenant_id"] = getattr(u, "tenant_id", 1) or 1
+        canal = u_raw.get("dois_fatores_canal", "email")
+        dest = u_raw.get("email") if canal == "email" else u_raw.get("telefone", "")
+        # Máscara pro frontend
+        if dest and canal == "email":
+            local, _, dom = dest.partition("@")
+            masked = f"{local[:2]}•••@{dom}"
+        elif dest:
+            masked = "•••" + str(dest)[-4:]
+        else:
+            masked = "•••"
+        audit.log("auth.2fa_challenge", user_id=u.id, user_email=u.email, metadata={"canal": canal})
+        return jsonify(needs_2fa=True, canal=canal, destino_mascarado=masked)
+
     login_user(u, remember=True)
     session["tenant_id"] = getattr(u, "tenant_id", 1) or 1
     audit.log("auth.login_success", user_id=u.id, user_email=u.email, tenant_id=session["tenant_id"])
     return jsonify(user=_user_dict(u))
+
+
+@api_bp.post("/auth/2fa/verify")
+def auth_2fa_verify():
+    """Confirma código 2FA e finaliza login."""
+    uid = session.get("pending_2fa_user_id")
+    if not uid:
+        return jsonify(error="Nenhum login 2FA pendente."), 400
+    data = request.get_json(silent=True) or {}
+    codigo = (data.get("codigo") or "").strip()
+    if not codigo:
+        return jsonify(error="Código obrigatório."), 400
+    if not user_model.verificar_codigo_2fa(uid, codigo):
+        audit.log("auth.2fa_failed", user_id=uid)
+        return jsonify(error="Código inválido ou expirado."), 401
+
+    # Carrega user e faz login
+    u_raw = None
+    try:
+        import database as _db
+        conn = _db.get_connection()
+        row = conn.execute("SELECT * FROM usuarios WHERE id=?", (uid,)).fetchone()
+        u_raw = dict(row) if row else None
+    except Exception:
+        pass
+    if not u_raw:
+        return jsonify(error="Usuário não encontrado."), 404
+    from flask_login import login_user as _login_user
+    from models.usuario import Usuario as _User
+    u = _User(u_raw)
+    _login_user(u, remember=True)
+    session["tenant_id"] = session.pop("pending_2fa_tenant_id", None) or getattr(u, "tenant_id", 1) or 1
+    session.pop("pending_2fa_user_id", None)
+    # Limpa codigo_2fa
+    try:
+        conn.execute("UPDATE usuarios SET codigo_2fa=NULL, codigo_2fa_expira=NULL WHERE id=?", (uid,))
+        conn.commit()
+    except Exception:
+        pass
+    audit.log("auth.login_success", user_id=u.id, user_email=u.email,
+              tenant_id=session["tenant_id"], metadata={"via_2fa": True})
+    return jsonify(user=_user_dict(u))
+
+
+@api_bp.post("/auth/2fa/reenviar")
+def auth_2fa_reenviar():
+    """Reenvia código 2FA (rate-limited)."""
+    uid = session.get("pending_2fa_user_id")
+    if not uid:
+        return jsonify(error="Nenhum login 2FA pendente."), 400
+    try:
+        import database as _db
+        conn = _db.get_connection()
+        row = conn.execute("SELECT * FROM usuarios WHERE id=?", (uid,)).fetchone()
+        if not row:
+            return jsonify(error="Usuário não encontrado."), 404
+        user_model.enviar_codigo_2fa(dict(row))
+        audit.log("auth.2fa_resend", user_id=uid)
+        return jsonify(ok=True)
+    except Exception as e:
+        current_app.logger.exception("2fa resend failed")
+        return jsonify(error=str(e)), 500
 
 
 @api_bp.get("/auth/logout")

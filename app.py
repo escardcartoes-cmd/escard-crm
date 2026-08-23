@@ -147,6 +147,10 @@ for _endpoint, _rule in [
     ("api.leads_importar_confirmar", "20 per hour"),
     ("api.integracoes_testar_email", "5 per hour"),
     ("api.integracoes_testar_ia",    "10 per hour"),
+    ("api.auth_2fa_verify",          "10 per minute; 30 per hour"),
+    ("api.auth_2fa_reenviar",        "3 per hour"),
+    ("api.usuario_convidar",         "20 per hour"),
+    ("api.convite_accept",           "10 per hour"),
 ]:
     _fn = app.view_functions.get(_endpoint)
     if _fn:
